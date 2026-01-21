@@ -1,0 +1,231 @@
+import { StyleSheet, Text, View, ScrollView } from 'react-native';
+import { Clock, Gauge, TrendingUp, Navigation, Calendar, Route, Activity } from 'lucide-react-native';
+import { useTrips } from '@/providers/TripProvider';
+import { useSettings } from '@/providers/SettingsProvider';
+
+export default function RecentScreen() {
+  const { trips } = useTrips();
+  const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, colors } = useSettings();
+  
+  const lastTrip = trips.length > 0 ? trips[0] : null;
+
+  const formatDuration = (seconds: number) => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    if (hrs > 0) {
+      return `${hrs}h ${mins}m`;
+    }
+    return `${mins}m`;
+  };
+
+  const formatDate = (timestamp: number) => {
+    const date = new Date(timestamp);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) {
+      return 'Today';
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday';
+    }
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const formatTime = (timestamp: number) => {
+    return new Date(timestamp).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    emptyText: {
+      fontSize: 20,
+      fontWeight: '600' as const,
+      color: colors.text,
+      marginTop: 20,
+    },
+    emptySubtext: {
+      fontSize: 14,
+      color: colors.textLight,
+      marginTop: 8,
+      textAlign: 'center',
+    },
+    headerCard: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 20,
+      padding: 20,
+      marginBottom: 20,
+    },
+    headerDate: {
+      fontSize: 15,
+      fontWeight: '600' as const,
+      color: '#FFFFFF',
+    },
+    headerTime: {
+      fontSize: 14,
+      color: 'rgba(255,255,255,0.7)',
+    },
+    headerTitle: {
+      fontSize: 28,
+      fontWeight: '700' as const,
+      color: '#FFFFFF',
+    },
+    mainStatCard: {
+      flex: 1,
+      backgroundColor: colors.cardLight,
+      borderRadius: 20,
+      padding: 20,
+      alignItems: 'center',
+    },
+    mainStatValue: {
+      fontSize: 32,
+      fontWeight: '700' as const,
+      color: colors.text,
+      marginTop: 12,
+    },
+    mainStatLabel: {
+      fontSize: 13,
+      color: colors.textLight,
+      marginTop: 4,
+    },
+    statCard: {
+      backgroundColor: colors.cardLight,
+      borderRadius: 16,
+      padding: 16,
+      flex: 1,
+      minWidth: '30%',
+      alignItems: 'center',
+    },
+    statIconWrapper: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      backgroundColor: colors.background,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 12,
+    },
+    statValue: {
+      fontSize: 24,
+      fontWeight: '700' as const,
+      color: colors.text,
+      marginBottom: 4,
+    },
+    statLabel: {
+      fontSize: 11,
+      color: colors.textLight,
+      textAlign: 'center',
+    },
+  });
+
+  if (!lastTrip) {
+    return (
+      <View style={dynamicStyles.container}>
+        <View style={styles.emptyState}>
+          <Route size={64} color={colors.textLight} />
+          <Text style={dynamicStyles.emptyText}>No recent trip</Text>
+          <Text style={dynamicStyles.emptySubtext}>Start tracking to see your last trip here</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={dynamicStyles.container}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <View style={dynamicStyles.headerCard}>
+          <View style={styles.headerRow}>
+            <Calendar size={18} color={colors.accent} />
+            <Text style={dynamicStyles.headerDate}>{formatDate(lastTrip.startTime)}</Text>
+            <Text style={dynamicStyles.headerTime}>{formatTime(lastTrip.startTime)}</Text>
+          </View>
+          <Text style={dynamicStyles.headerTitle}>Last Trip</Text>
+        </View>
+
+        <View style={styles.mainStatsRow}>
+          <View style={dynamicStyles.mainStatCard}>
+            <Navigation size={24} color={colors.accent} />
+            <Text style={dynamicStyles.mainStatValue}>{convertDistance(lastTrip.distance).toFixed(2)}</Text>
+            <Text style={dynamicStyles.mainStatLabel}>{getDistanceLabel()}</Text>
+          </View>
+          <View style={dynamicStyles.mainStatCard}>
+            <Clock size={24} color={colors.accent} />
+            <Text style={dynamicStyles.mainStatValue}>{formatDuration(lastTrip.duration)}</Text>
+            <Text style={dynamicStyles.mainStatLabel}>Duration</Text>
+          </View>
+        </View>
+
+        <View style={styles.statsGrid}>
+          <View style={dynamicStyles.statCard}>
+            <View style={dynamicStyles.statIconWrapper}>
+              <Gauge size={20} color={colors.accent} />
+            </View>
+            <Text style={dynamicStyles.statValue}>{Math.round(convertSpeed(lastTrip.topSpeed))}</Text>
+            <Text style={dynamicStyles.statLabel}>Top Speed ({getSpeedLabel()})</Text>
+          </View>
+          
+          <View style={dynamicStyles.statCard}>
+            <View style={dynamicStyles.statIconWrapper}>
+              <TrendingUp size={20} color={colors.accent} />
+            </View>
+            <Text style={dynamicStyles.statValue}>{Math.round(convertSpeed(lastTrip.avgSpeed))}</Text>
+            <Text style={dynamicStyles.statLabel}>Avg Speed ({getSpeedLabel()})</Text>
+          </View>
+          
+          <View style={dynamicStyles.statCard}>
+            <View style={dynamicStyles.statIconWrapper}>
+              <Route size={20} color={colors.accent} />
+            </View>
+            <Text style={dynamicStyles.statValue}>{lastTrip.corners}</Text>
+            <Text style={dynamicStyles.statLabel}>Corners Taken</Text>
+          </View>
+
+          <View style={dynamicStyles.statCard}>
+            <View style={dynamicStyles.statIconWrapper}>
+              <Activity size={20} color={colors.accent} />
+            </View>
+            <Text style={dynamicStyles.statValue}>{(lastTrip.maxGForce ?? 0).toFixed(2)}</Text>
+            <Text style={dynamicStyles.statLabel}>Max G-Force</Text>
+          </View>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  mainStatsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+});
