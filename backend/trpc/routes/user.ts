@@ -24,7 +24,7 @@ const getWelcomeEmailHtml = (displayName: string) => `
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Welcome to DriveTrack</title>
+  <title>Welcome to RedLine</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #0a0a0a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
   <table role="presentation" style="width: 100%; border-collapse: collapse;">
@@ -36,7 +36,7 @@ const getWelcomeEmailHtml = (displayName: string) => `
           <tr>
             <td style="padding: 40px 40px 30px; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 16px 16px 0 0;">
               <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #ffffff; text-align: center;">
-                🚗 Welcome to DriveTrack
+                🚗 Welcome to RedLine
               </h1>
             </td>
           </tr>
@@ -48,7 +48,7 @@ const getWelcomeEmailHtml = (displayName: string) => `
                 Hey ${displayName}! 👋
               </p>
               <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #b0b0b0;">
-                Thanks for joining DriveTrack! We're excited to have you on board.
+                Thanks for joining RedLine! We're excited to have you on board.
               </p>
               <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #b0b0b0;">
                 Start tracking your drives, compete on the leaderboard, and connect with fellow car enthusiasts. Every mile counts!
@@ -93,11 +93,12 @@ const getWelcomeEmailHtml = (displayName: string) => `
           <!-- Footer -->
           <tr>
             <td style="padding: 30px 40px; background-color: #141414; border-radius: 0 0 16px 16px; text-align: center;">
+              <img src="https://rork.app/pa/c5yl51k1xdx0vg395lziu/logo-white" alt="RedLine" style="height: 40px; margin-bottom: 15px;" />
               <p style="margin: 0; font-size: 14px; color: #666;">
                 Drive safe and enjoy the journey! 🛣️
               </p>
               <p style="margin: 15px 0 0; font-size: 12px; color: #444;">
-                © ${new Date().getFullYear()} DriveTrack. All rights reserved.
+                © ${new Date().getFullYear()} RedLine. All rights reserved.
               </p>
             </td>
           </tr>
@@ -124,9 +125,9 @@ async function sendWelcomeEmail(email: string, displayName: string): Promise<boo
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "DriveTrack <onboarding@resend.dev>",
+        from: "RedLine <onboarding@resend.dev>",
         to: [email],
-        subject: "Welcome to DriveTrack! 🚗",
+        subject: "Welcome to RedLine! 🚗",
         html: getWelcomeEmailHtml(displayName),
       }),
     });
