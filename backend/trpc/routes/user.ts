@@ -93,7 +93,7 @@ const getWelcomeEmailHtml = (displayName: string) => `
           <!-- Footer -->
           <tr>
             <td style="padding: 30px 40px; background-color: #141414; border-radius: 0 0 16px 16px; text-align: center;">
-              <img src="https://rork.app/pa/c5yl51k1xdx0vg395lziu/logo-white" alt="RedLine" style="height: 40px; margin-bottom: 15px;" />
+              <img src="https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/pnnoj3a6b358u5apkxo4m" alt="RedLine" style="height: 40px; margin-bottom: 15px;" />
               <p style="margin: 0; font-size: 14px; color: #666;">
                 Drive safe and enjoy the journey! 🛣️
               </p>
