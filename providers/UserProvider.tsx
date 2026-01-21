@@ -2,6 +2,7 @@ import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
 import { UserProfile, UserCar } from '@/types/user';
+import { trpcClient } from '@/lib/trpc';
 
 const USER_KEY = 'user_profile';
 
@@ -59,8 +60,9 @@ export const [UserProvider, useUser] = createContextHook(() => {
     if (additionalCars) {
       cars.push(...additionalCars);
     }
+    const userId = Date.now().toString();
     const newUser: UserProfile = {
-      id: Date.now().toString(),
+      id: userId,
       email,
       displayName,
       profilePicture,
@@ -73,6 +75,22 @@ export const [UserProvider, useUser] = createContextHook(() => {
       createdAt: Date.now(),
     };
     await saveUser(newUser);
+
+    try {
+      await trpcClient.user.register.mutate({
+        id: userId,
+        email,
+        displayName,
+        country,
+        city,
+        carBrand,
+        carModel,
+      });
+      console.log('User registered and welcome email sent');
+    } catch (error) {
+      console.error('Failed to register user on backend:', error);
+    }
+
     return newUser;
   }, []);
 
