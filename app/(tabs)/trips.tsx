@@ -1,13 +1,47 @@
-import { StyleSheet, Text, View, ScrollView } from 'react-native';
-import { Clock, Gauge, TrendingUp, Navigation, Calendar, Route, Activity } from 'lucide-react-native';
+import { StyleSheet, Text, View, ScrollView, Dimensions } from 'react-native';
+import { Clock, Gauge, TrendingUp, Navigation, Calendar, Route, Activity, Timer, Zap } from 'lucide-react-native';
+import MapView, { Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import { useMemo } from 'react';
 import { useTrips } from '@/providers/TripProvider';
 import { useSettings } from '@/providers/SettingsProvider';
 
 export default function RecentScreen() {
   const { trips } = useTrips();
   const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, colors } = useSettings();
+  const screenWidth = Dimensions.get('window').width;
   
   const lastTrip = trips.length > 0 ? trips[0] : null;
+
+  const routeCoordinates = useMemo(() => {
+    if (!lastTrip || !lastTrip.locations || lastTrip.locations.length < 2) return [];
+    return lastTrip.locations.map(loc => ({
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+    }));
+  }, [lastTrip]);
+
+  const mapRegion = useMemo(() => {
+    if (routeCoordinates.length === 0) return null;
+    const lats = routeCoordinates.map(c => c.latitude);
+    const lngs = routeCoordinates.map(c => c.longitude);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    const latDelta = Math.max((maxLat - minLat) * 1.3, 0.01);
+    const lngDelta = Math.max((maxLng - minLng) * 1.3, 0.01);
+    return {
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: latDelta,
+      longitudeDelta: lngDelta,
+    };
+  }, [routeCoordinates]);
+
+  const formatAccelTime = (time: number | undefined) => {
+    if (time === undefined || time === null) return '--';
+    return time.toFixed(1) + 's';
+  };
 
   const formatDuration = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
@@ -194,7 +228,48 @@ export default function RecentScreen() {
             <Text style={dynamicStyles.statValue}>{(lastTrip.maxGForce ?? 0).toFixed(2)}</Text>
             <Text style={dynamicStyles.statLabel}>Max G-Force</Text>
           </View>
+
+          <View style={dynamicStyles.statCard}>
+            <View style={dynamicStyles.statIconWrapper}>
+              <Timer size={20} color={colors.accent} />
+            </View>
+            <Text style={dynamicStyles.statValue}>{formatAccelTime(lastTrip.time0to100)}</Text>
+            <Text style={dynamicStyles.statLabel}>0-100 km/h</Text>
+          </View>
+
+          <View style={dynamicStyles.statCard}>
+            <View style={dynamicStyles.statIconWrapper}>
+              <Zap size={20} color={colors.accent} />
+            </View>
+            <Text style={dynamicStyles.statValue}>{formatAccelTime(lastTrip.time0to200)}</Text>
+            <Text style={dynamicStyles.statLabel}>0-200 km/h</Text>
+          </View>
         </View>
+
+        {routeCoordinates.length >= 2 && mapRegion && (
+          <View style={[styles.mapSection, { backgroundColor: colors.cardLight }]}>
+            <Text style={[styles.mapTitle, { color: colors.text }]}>Trip Route</Text>
+            <View style={styles.mapContainer}>
+              <MapView
+                provider={PROVIDER_DEFAULT}
+                style={styles.map}
+                region={mapRegion}
+                scrollEnabled={false}
+                zoomEnabled={false}
+                rotateEnabled={false}
+                pitchEnabled={false}
+              >
+                <Polyline
+                  coordinates={routeCoordinates}
+                  strokeColor={colors.accent}
+                  strokeWidth={4}
+                  lineCap="round"
+                  lineJoin="round"
+                />
+              </MapView>
+            </View>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -228,5 +303,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
+  },
+  mapSection: {
+    marginTop: 20,
+    borderRadius: 20,
+    padding: 16,
+    overflow: 'hidden',
+  },
+  mapTitle: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    marginBottom: 12,
+  },
+  mapContainer: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    height: 200,
+  },
+  map: {
+    width: '100%',
+    height: '100%',
   },
 });
