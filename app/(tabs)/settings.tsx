@@ -145,8 +145,8 @@ export default function SettingsScreen() {
       paddingTop: 20,
     },
     footerLogo: {
-      width: 48,
-      height: 48,
+      width: 144,
+      height: 144,
       marginBottom: 12,
     },
     footerText: {
