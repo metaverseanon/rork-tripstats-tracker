@@ -60,7 +60,10 @@ export default function TrackScreen() {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
-    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    if (hrs > 0) {
+      return `${hrs}h ${mins}m ${secs}s`;
+    }
+    return `${mins}m ${secs}s`;
   };
 
   const dynamicStyles = StyleSheet.create({
@@ -175,7 +178,7 @@ export default function TrackScreen() {
 
             <View style={dynamicStyles.statCard}>
               <Text style={dynamicStyles.statValue}>
-                {currentTrip ? formatDuration(currentTrip.duration) : '00:00:00'}
+                {currentTrip ? formatDuration(currentTrip.duration) : '0m 0s'}
               </Text>
               <Text style={dynamicStyles.statLabel}>Duration</Text>
             </View>
