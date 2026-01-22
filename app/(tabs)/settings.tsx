@@ -387,7 +387,7 @@ export default function SettingsScreen() {
 
         <View style={styles.footer}>
           <Image
-            source={{ uri: 'https://i.imgur.com/kWVxwyp.png' }}
+            source={{ uri: settings.theme === 'dark' ? 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/pt2pvulnkkxt2nez0x5hi' : 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/f6dxycsffzouzbzezjis9' }}
             style={styles.footerLogo}
             resizeMode="contain"
           />
