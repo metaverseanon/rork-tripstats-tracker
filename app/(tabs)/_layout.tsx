@@ -1,7 +1,6 @@
 import { Tabs } from "expo-router";
 import { Play, History, Trophy, Settings, BarChart3 } from "lucide-react-native";
 import React from "react";
-import { Image } from "react-native";
 import { useSettings } from "@/providers/SettingsProvider";
 
 export default function TabLayout() {
@@ -29,16 +28,6 @@ export default function TabLayout() {
         options={{
           title: "Track",
           tabBarIcon: ({ color }) => <Play color={color} size={24} />,
-          headerRight: () => (
-            <Image
-              source={{ uri: colors.background === '#000000'
-                ? 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/3b6m9hjk0d8m052wblrpp'
-                : 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/u0e61nd6z1z8cesg8xthm'
-              }}
-              style={{ width: 112, height: 32, marginRight: 16 }}
-              resizeMode="contain"
-            />
-          ),
         }}
       />
       <Tabs.Screen
