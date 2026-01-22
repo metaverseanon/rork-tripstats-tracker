@@ -471,9 +471,10 @@ const styles = StyleSheet.create({
   },
   carouselContainer: {
     maxHeight: 520,
+    width: CARD_WIDTH,
   },
   carouselContent: {
-    alignItems: 'center',
+    paddingRight: CARD_GAP,
   },
   viewShotContainer: {
     borderRadius: 20,
