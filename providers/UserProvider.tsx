@@ -1,6 +1,6 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { UserProfile, UserCar } from '@/types/user';
 import { trpcClient } from '@/lib/trpc';
 
@@ -9,6 +9,7 @@ const USER_KEY = 'user_profile';
 export const [UserProvider, useUser] = createContextHook(() => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const userRef = useRef<UserProfile | null>(null);
 
   useEffect(() => {
     loadUser();
@@ -18,7 +19,9 @@ export const [UserProvider, useUser] = createContextHook(() => {
     try {
       const stored = await AsyncStorage.getItem(USER_KEY);
       if (stored) {
-        setUser(JSON.parse(stored));
+        const userData = JSON.parse(stored);
+        userRef.current = userData;
+        setUser(userData);
       }
     } catch (error) {
       console.error('Failed to load user:', error);
@@ -30,6 +33,7 @@ export const [UserProvider, useUser] = createContextHook(() => {
   const saveUser = async (userData: UserProfile) => {
     try {
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(userData));
+      userRef.current = userData;
       setUser(userData);
     } catch (error) {
       console.error('Failed to save user:', error);
@@ -116,14 +120,16 @@ export const [UserProvider, useUser] = createContextHook(() => {
   }, []);
 
   const updateProfile = useCallback(async (updates: Partial<UserProfile>) => {
-    if (!user) return;
-    const updatedUser = { ...user, ...updates };
+    const currentUser = userRef.current;
+    if (!currentUser) return;
+    const updatedUser = { ...currentUser, ...updates };
     await saveUser(updatedUser);
-  }, [user]);
+  }, []);
 
   const updateCar = useCallback(async (carBrand: string, carModel: string, carPicture?: string) => {
-    if (!user) return;
-    const updatedCars = user.cars ? [...user.cars] : [];
+    const currentUser = userRef.current;
+    if (!currentUser) return;
+    const updatedCars = currentUser.cars ? [...currentUser.cars] : [];
     const primaryIndex = updatedCars.findIndex(c => c.isPrimary);
     if (primaryIndex >= 0) {
       updatedCars[primaryIndex] = { ...updatedCars[primaryIndex], brand: carBrand, model: carModel, picture: carPicture };
@@ -136,12 +142,13 @@ export const [UserProvider, useUser] = createContextHook(() => {
         isPrimary: true,
       });
     }
-    const updatedUser = { ...user, carBrand, carModel, carPicture, cars: updatedCars };
+    const updatedUser = { ...currentUser, carBrand, carModel, carPicture, cars: updatedCars };
     await saveUser(updatedUser);
-  }, [user]);
+  }, []);
 
   const addCar = useCallback(async (brand: string, model: string, picture?: string) => {
-    if (!user) return;
+    const currentUser = userRef.current;
+    if (!currentUser) return;
     const newCar: UserCar = {
       id: Date.now().toString(),
       brand,
@@ -149,58 +156,64 @@ export const [UserProvider, useUser] = createContextHook(() => {
       picture,
       isPrimary: false,
     };
-    const updatedCars = user.cars ? [...user.cars, newCar] : [newCar];
-    const updatedUser = { ...user, cars: updatedCars };
+    const updatedCars = currentUser.cars ? [...currentUser.cars, newCar] : [newCar];
+    const updatedUser = { ...currentUser, cars: updatedCars };
     await saveUser(updatedUser);
-  }, [user]);
+  }, []);
 
   const removeCar = useCallback(async (carId: string) => {
-    if (!user || !user.cars) return;
-    const updatedCars = user.cars.filter(c => c.id !== carId);
-    const updatedUser = { ...user, cars: updatedCars };
+    const currentUser = userRef.current;
+    if (!currentUser || !currentUser.cars) return;
+    const updatedCars = currentUser.cars.filter(c => c.id !== carId);
+    const updatedUser = { ...currentUser, cars: updatedCars };
     await saveUser(updatedUser);
-  }, [user]);
+  }, []);
 
   const setPrimaryCar = useCallback(async (carId: string) => {
-    if (!user || !user.cars) return;
-    const updatedCars = user.cars.map(c => ({
+    const currentUser = userRef.current;
+    if (!currentUser || !currentUser.cars) return;
+    const updatedCars = currentUser.cars.map(c => ({
       ...c,
       isPrimary: c.id === carId,
     }));
     const primaryCar = updatedCars.find(c => c.isPrimary);
     const updatedUser = {
-      ...user,
+      ...currentUser,
       cars: updatedCars,
       carBrand: primaryCar?.brand,
       carModel: primaryCar?.model,
       carPicture: primaryCar?.picture,
     };
     await saveUser(updatedUser);
-  }, [user]);
+  }, []);
 
   const updateProfilePicture = useCallback(async (profilePicture: string) => {
-    if (!user) return;
-    const updatedUser = { ...user, profilePicture };
+    const currentUser = userRef.current;
+    if (!currentUser) return;
+    const updatedUser = { ...currentUser, profilePicture };
     await saveUser(updatedUser);
-  }, [user]);
+  }, []);
 
   const updateCountry = useCallback(async (country: string) => {
-    if (!user) return;
-    const updatedUser = { ...user, country };
+    const currentUser = userRef.current;
+    if (!currentUser) return;
+    const updatedUser = { ...currentUser, country };
     await saveUser(updatedUser);
-  }, [user]);
+  }, []);
 
   const updateCity = useCallback(async (city: string) => {
-    if (!user) return;
-    const updatedUser = { ...user, city };
+    const currentUser = userRef.current;
+    if (!currentUser) return;
+    const updatedUser = { ...currentUser, city };
     await saveUser(updatedUser);
-  }, [user]);
+  }, []);
 
   const updateLocation = useCallback(async (country: string, city: string) => {
-    if (!user) return;
-    const updatedUser = { ...user, country, city };
+    const currentUser = userRef.current;
+    if (!currentUser) return;
+    const updatedUser = { ...currentUser, country, city };
     await saveUser(updatedUser);
-  }, [user]);
+  }, []);
 
   const getCarDisplayName = useCallback(() => {
     if (user?.carBrand && user?.carModel) {
