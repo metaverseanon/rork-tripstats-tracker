@@ -394,15 +394,15 @@ export default function TripShareCard({ trip, visible, onClose }: TripShareCardP
                     <Svg width={routePathData.svgWidth} height={routePathData.svgHeight}>
                       <Defs>
                         <LinearGradient id="routeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                          <Stop offset="0%" stopColor="#FF3B30" stopOpacity="1" />
-                          <Stop offset="100%" stopColor="#FF6B60" stopOpacity="1" />
+                          <Stop offset="0%" stopColor="#CC0000" stopOpacity="1" />
+                          <Stop offset="100%" stopColor="#CC0000" stopOpacity="1" />
                         </LinearGradient>
                       </Defs>
                       <Polyline
                         points={routePathData.points}
                         fill="none"
                         stroke="url(#routeGradient)"
-                        strokeWidth="3"
+                        strokeWidth="4"
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       />
