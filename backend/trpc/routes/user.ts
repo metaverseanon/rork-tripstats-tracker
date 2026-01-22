@@ -125,7 +125,7 @@ async function sendWelcomeEmail(email: string, displayName: string): Promise<boo
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "RedLine <onboarding@resend.dev>",
+        from: "RedLine <info@redlineapp.io>",
         to: [email],
         subject: "Welcome to RedLine! 🚗",
         html: getWelcomeEmailHtml(displayName),
