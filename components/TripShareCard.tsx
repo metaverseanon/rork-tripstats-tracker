@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useCallback } from 'react';
+import React, { useRef, useMemo, useCallback, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,8 +9,12 @@ import {
   Alert,
   Dimensions,
   Image,
+  ScrollView,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { X, Download, Share2 } from 'lucide-react-native';
+import Svg, { Polyline, Defs, LinearGradient, Stop } from 'react-native-svg';
 import ViewShot from 'react-native-view-shot';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
@@ -36,9 +40,45 @@ const CARD_WIDTH = Math.min(SCREEN_WIDTH - 48, 360);
 
 export default function TripShareCard({ trip, visible, onClose }: TripShareCardProps) {
   const viewShotRef = useRef<ViewShot>(null);
+  const viewShotRef2 = useRef<ViewShot>(null);
+  const [currentPage, setCurrentPage] = useState(0);
   const { trips } = useTrips();
   const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, settings } = useSettings();
   const isLight = settings.theme === 'light';
+
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const page = Math.round(offsetX / CARD_WIDTH);
+    setCurrentPage(page);
+  }, []);
+
+  const routePathData = useMemo(() => {
+    if (!trip.locations || trip.locations.length < 2) return null;
+    
+    const lats = trip.locations.map(l => l.latitude);
+    const lngs = trip.locations.map(l => l.longitude);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    
+    const padding = 30;
+    const svgWidth = CARD_WIDTH - 56;
+    const svgHeight = 180;
+    const drawWidth = svgWidth - padding * 2;
+    const drawHeight = svgHeight - padding * 2;
+    
+    const latRange = maxLat - minLat || 0.001;
+    const lngRange = maxLng - minLng || 0.001;
+    
+    const points = trip.locations.map(loc => {
+      const x = padding + ((loc.longitude - minLng) / lngRange) * drawWidth;
+      const y = padding + ((maxLat - loc.latitude) / latRange) * drawHeight;
+      return `${x},${y}`;
+    }).join(' ');
+    
+    return { points, svgWidth, svgHeight };
+  }, [trip.locations]);
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -174,8 +214,9 @@ export default function TripShareCard({ trip, visible, onClose }: TripShareCardP
         return;
       }
 
-      if (viewShotRef.current?.capture) {
-        const uri = await viewShotRef.current.capture();
+      const activeRef = currentPage === 0 ? viewShotRef : viewShotRef2;
+      if (activeRef.current?.capture) {
+        const uri = await activeRef.current.capture();
         await MediaLibrary.saveToLibraryAsync(uri);
         Alert.alert('Success', 'Trip card saved to your gallery!');
       }
@@ -183,7 +224,7 @@ export default function TripShareCard({ trip, visible, onClose }: TripShareCardP
       console.error('Failed to save image:', error);
       Alert.alert('Error', 'Failed to save image. Please try again.');
     }
-  }, []);
+  }, [currentPage]);
 
   const handleShare = useCallback(async () => {
     try {
@@ -198,8 +239,9 @@ export default function TripShareCard({ trip, visible, onClose }: TripShareCardP
         return;
       }
 
-      if (viewShotRef.current?.capture) {
-        const uri = await viewShotRef.current.capture();
+      const activeRef = currentPage === 0 ? viewShotRef : viewShotRef2;
+      if (activeRef.current?.capture) {
+        const uri = await activeRef.current.capture();
         await Sharing.shareAsync(uri, {
           mimeType: 'image/png',
           dialogTitle: 'Share your trip',
@@ -209,7 +251,7 @@ export default function TripShareCard({ trip, visible, onClose }: TripShareCardP
       console.error('Failed to share:', error);
       Alert.alert('Error', 'Failed to share. Please try again.');
     }
-  }, []);
+  }, [currentPage]);
 
   const speedValue = Math.round(convertSpeed(trip.topSpeed));
   const speedLabel = getSpeedLabel();
@@ -224,77 +266,159 @@ export default function TripShareCard({ trip, visible, onClose }: TripShareCardP
             <X size={24} color="#FFFFFF" />
           </TouchableOpacity>
 
-          <ViewShot
-            ref={viewShotRef}
-            options={{ format: 'png', quality: 1 }}
-            style={styles.viewShotContainer}
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            style={styles.carouselContainer}
+            contentContainerStyle={styles.carouselContent}
           >
-            <View style={[styles.card, isLight && styles.cardLight]}>
-              <View style={styles.cardGradientOverlay} />
-              
-              <Image
-                source={{ uri: isLight 
-                  ? 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/qrv9h3jhh7ukh7woc2r68' 
-                  : 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/9ts3c4tgfcrqhgxwwrqfk' }}
-                style={styles.logoImage}
-                resizeMode="contain"
-              />
-
-              <View style={[styles.statsGrid, isLight && styles.statsGridLight]}>
-                <View style={styles.statItem}>
-                  <Text style={[styles.statValue, isLight && styles.statValueLight]}>
-                    {distanceValue < 1 ? distanceValue.toFixed(2) : Math.round(distanceValue)} {distanceLabel === 'mi' ? 'Mi' : 'Km'}
-                  </Text>
-                  <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>Distance</Text>
-                </View>
-
-                <View style={styles.statItem}>
-                  <Text style={[styles.statValue, isLight && styles.statValueLight]}>{formatDuration(trip.duration)}</Text>
-                  <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>Total time</Text>
-                </View>
-
-                <View style={styles.statItem}>
-                  <Text style={[styles.statValue, isLight && styles.statValueLight]}>{trip.corners} time{trip.corners !== 1 ? 's' : ''}</Text>
-                  <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>Corners taken</Text>
-                </View>
-
-                <View style={styles.statItem}>
-                  <Text style={[styles.statValue, isLight && styles.statValueLight]}>{Math.round(convertSpeed(trip.avgSpeed))} {speedLabel}</Text>
-                  <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>Avg speed</Text>
-                </View>
-
-                <View style={[styles.statItem, styles.statItemCenter]}>
-                  <Text style={[styles.statValue, isLight && styles.statValueLight]}>
-                    {trip.time0to100 ? `${trip.time0to100.toFixed(1)}s` : '--'}
-                  </Text>
-                  <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>0-100 km/h</Text>
-                </View>
-              </View>
-
-              <View style={[styles.highlightBox, isLight && styles.highlightBoxLight]}>
-                <Text style={[styles.highlightLabel, isLight && styles.highlightLabelLight]}>Top speed</Text>
-                <Text style={[styles.highlightValue, isLight && styles.highlightValueLight]}>{speedValue} {speedLabel}</Text>
+            <ViewShot
+              ref={viewShotRef}
+              options={{ format: 'png', quality: 1 }}
+              style={styles.viewShotContainer}
+            >
+              <View style={[styles.card, isLight && styles.cardLight]}>
+                <View style={styles.cardGradientOverlay} />
                 
-                {rankingInfo && (
-                  <View style={styles.rankingContainer}>
-                    <Text style={styles.rankingText}>
-                      <Text style={styles.rankingNumber}>
-                        {rankingInfo.rank}{getRankSuffix(rankingInfo.rank)}
-                      </Text>
-                      {'\n'}
-                      <Text style={[styles.rankingDescription, isLight && styles.rankingDescriptionLight]}>
-                        {rankingInfo.category.toLowerCase()} {rankingInfo.scope} {rankingInfo.period}
-                      </Text>
-                    </Text>
-                  </View>
-                )}
-              </View>
+                <Image
+                  source={{ uri: isLight 
+                    ? 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/qrv9h3jhh7ukh7woc2r68' 
+                    : 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/9ts3c4tgfcrqhgxwwrqfk' }}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
 
-              <Text style={[styles.dateLocation, isLight && styles.dateLocationLight]}>
-                {formatDate(trip.startTime)} - {getLocationString()}
-              </Text>
-            </View>
-          </ViewShot>
+                <View style={[styles.statsGrid, isLight && styles.statsGridLight]}>
+                  <View style={styles.statItem}>
+                    <Text style={[styles.statValue, isLight && styles.statValueLight]}>
+                      {distanceValue < 1 ? distanceValue.toFixed(2) : Math.round(distanceValue)} {distanceLabel === 'mi' ? 'Mi' : 'Km'}
+                    </Text>
+                    <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>Distance</Text>
+                  </View>
+
+                  <View style={styles.statItem}>
+                    <Text style={[styles.statValue, isLight && styles.statValueLight]}>{formatDuration(trip.duration)}</Text>
+                    <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>Total time</Text>
+                  </View>
+
+                  <View style={styles.statItem}>
+                    <Text style={[styles.statValue, isLight && styles.statValueLight]}>{trip.corners} time{trip.corners !== 1 ? 's' : ''}</Text>
+                    <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>Corners taken</Text>
+                  </View>
+
+                  <View style={styles.statItem}>
+                    <Text style={[styles.statValue, isLight && styles.statValueLight]}>{Math.round(convertSpeed(trip.avgSpeed))} {speedLabel}</Text>
+                    <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>Avg speed</Text>
+                  </View>
+
+                  <View style={[styles.statItem, styles.statItemCenter]}>
+                    <Text style={[styles.statValue, isLight && styles.statValueLight]}>
+                      {trip.time0to100 ? `${trip.time0to100.toFixed(1)}s` : '--'}
+                    </Text>
+                    <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>0-100 km/h</Text>
+                  </View>
+                </View>
+
+                <View style={[styles.highlightBox, isLight && styles.highlightBoxLight]}>
+                  <Text style={[styles.highlightLabel, isLight && styles.highlightLabelLight]}>Top speed</Text>
+                  <Text style={[styles.highlightValue, isLight && styles.highlightValueLight]}>{speedValue} {speedLabel}</Text>
+                  
+                  {rankingInfo && (
+                    <View style={styles.rankingContainer}>
+                      <Text style={styles.rankingText}>
+                        <Text style={styles.rankingNumber}>
+                          {rankingInfo.rank}{getRankSuffix(rankingInfo.rank)}
+                        </Text>
+                        {'\n'}
+                        <Text style={[styles.rankingDescription, isLight && styles.rankingDescriptionLight]}>
+                          {rankingInfo.category.toLowerCase()} {rankingInfo.scope} {rankingInfo.period}
+                        </Text>
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                <Text style={[styles.dateLocation, isLight && styles.dateLocationLight]}>
+                  {formatDate(trip.startTime)} - {getLocationString()}
+                </Text>
+              </View>
+            </ViewShot>
+
+            <ViewShot
+              ref={viewShotRef2}
+              options={{ format: 'png', quality: 1 }}
+              style={[styles.viewShotContainer, styles.secondCard]}
+            >
+              <View style={[styles.card, styles.routeCard, isLight && styles.cardLight]}>
+                <Image
+                  source={{ uri: isLight 
+                    ? 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/qrv9h3jhh7ukh7woc2r68' 
+                    : 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/9ts3c4tgfcrqhgxwwrqfk' }}
+                  style={styles.logoImageSmall}
+                  resizeMode="contain"
+                />
+
+                <View style={styles.routeStatsRow}>
+                  <View style={styles.routeStatItem}>
+                    <Text style={[styles.routeStatValue, isLight && styles.statValueLight]}>
+                      {distanceValue < 1 ? distanceValue.toFixed(2) : Math.round(distanceValue)} {distanceLabel === 'mi' ? 'Mi' : 'Km'}
+                    </Text>
+                    <Text style={[styles.routeStatLabel, isLight && styles.statLabelLight]}>Distance</Text>
+                  </View>
+                  <View style={styles.routeStatItem}>
+                    <Text style={[styles.routeStatValue, isLight && styles.statValueLight]}>{formatDuration(trip.duration)}</Text>
+                    <Text style={[styles.routeStatLabel, isLight && styles.statLabelLight]}>Time</Text>
+                  </View>
+                </View>
+
+                <View style={styles.routeStatsRow}>
+                  <View style={styles.routeStatItem}>
+                    <Text style={[styles.routeStatValue, isLight && styles.statValueLight]}>{Math.round(convertSpeed(trip.avgSpeed))} {speedLabel}</Text>
+                    <Text style={[styles.routeStatLabel, isLight && styles.statLabelLight]}>Avg Speed</Text>
+                  </View>
+                  <View style={styles.routeStatItem}>
+                    <Text style={[styles.routeStatValue, isLight && styles.statValueLight]}>{trip.corners}</Text>
+                    <Text style={[styles.routeStatLabel, isLight && styles.statLabelLight]}>Corners</Text>
+                  </View>
+                </View>
+
+                <View style={[styles.routeMapContainer, isLight && styles.routeMapContainerLight]}>
+                  {routePathData ? (
+                    <Svg width={routePathData.svgWidth} height={routePathData.svgHeight}>
+                      <Defs>
+                        <LinearGradient id="routeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <Stop offset="0%" stopColor="#FF3B30" stopOpacity="1" />
+                          <Stop offset="100%" stopColor="#FF6B60" stopOpacity="1" />
+                        </LinearGradient>
+                      </Defs>
+                      <Polyline
+                        points={routePathData.points}
+                        fill="none"
+                        stroke="url(#routeGradient)"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </Svg>
+                  ) : (
+                    <Text style={[styles.noRouteText, isLight && styles.noRouteTextLight]}>No route data</Text>
+                  )}
+                </View>
+
+                <Text style={[styles.dateLocation, isLight && styles.dateLocationLight]}>
+                  {formatDate(trip.startTime)} - {getLocationString()}
+                </Text>
+              </View>
+            </ViewShot>
+          </ScrollView>
+
+          <View style={styles.pageIndicatorContainer}>
+            <View style={[styles.pageIndicator, currentPage === 0 && styles.pageIndicatorActive]} />
+            <View style={[styles.pageIndicator, currentPage === 1 && styles.pageIndicatorActive]} />
+          </View>
 
           <View style={styles.actionsContainer}>
             <TouchableOpacity
@@ -341,9 +465,19 @@ const styles = StyleSheet.create({
     padding: 8,
     zIndex: 10,
   },
+  carouselContainer: {
+    maxHeight: 520,
+  },
+  carouselContent: {
+    alignItems: 'center',
+  },
   viewShotContainer: {
     borderRadius: 20,
     overflow: 'hidden',
+    width: CARD_WIDTH,
+  },
+  secondCard: {
+    marginLeft: 16,
   },
   card: {
     width: CARD_WIDTH,
@@ -446,6 +580,73 @@ const styles = StyleSheet.create({
   cardLight: {
     backgroundColor: '#FFFFFF',
     borderColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  routeCard: {
+    paddingVertical: 24,
+  },
+  logoImageSmall: {
+    width: 160,
+    height: 48,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  routeStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 16,
+  },
+  routeStatItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  routeStatValue: {
+    fontFamily: 'Orbitron_700Bold',
+    fontSize: 18,
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  routeStatLabel: {
+    fontFamily: 'Orbitron_400Regular',
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.5)',
+  },
+  routeMapContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 12,
+    marginHorizontal: 0,
+    marginVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 180,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  routeMapContainerLight: {
+    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+  },
+  noRouteText: {
+    fontFamily: 'Orbitron_400Regular',
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.3)',
+  },
+  noRouteTextLight: {
+    color: 'rgba(0, 0, 0, 0.3)',
+  },
+  pageIndicatorContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 16,
+    gap: 8,
+  },
+  pageIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  pageIndicatorActive: {
+    backgroundColor: '#FF3B30',
   },
   statsGridLight: {},
   statValueLight: {
