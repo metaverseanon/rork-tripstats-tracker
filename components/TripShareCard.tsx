@@ -37,6 +37,8 @@ interface RankingInfo {
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = Math.min(SCREEN_WIDTH - 48, 360);
+const CARD_GAP = 16;
+const SNAP_INTERVAL = CARD_WIDTH + CARD_GAP;
 
 export default function TripShareCard({ trip, visible, onClose }: TripShareCardProps) {
   const viewShotRef = useRef<ViewShot>(null);
@@ -48,7 +50,7 @@ export default function TripShareCard({ trip, visible, onClose }: TripShareCardP
 
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offsetX = event.nativeEvent.contentOffset.x;
-    const page = Math.round(offsetX / CARD_WIDTH);
+    const page = Math.round(offsetX / SNAP_INTERVAL);
     setCurrentPage(page);
   }, []);
 
@@ -268,12 +270,14 @@ export default function TripShareCard({ trip, visible, onClose }: TripShareCardP
 
           <ScrollView
             horizontal
-            pagingEnabled
             showsHorizontalScrollIndicator={false}
             onScroll={handleScroll}
             scrollEventThrottle={16}
             style={styles.carouselContainer}
             contentContainerStyle={styles.carouselContent}
+            snapToInterval={SNAP_INTERVAL}
+            decelerationRate="fast"
+            snapToAlignment="start"
           >
             <ViewShot
               ref={viewShotRef}
@@ -477,7 +481,7 @@ const styles = StyleSheet.create({
     width: CARD_WIDTH,
   },
   secondCard: {
-    marginLeft: 16,
+    marginLeft: CARD_GAP,
   },
   card: {
     width: CARD_WIDTH,
