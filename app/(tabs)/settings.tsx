@@ -1,6 +1,6 @@
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Linking } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Linking, Image } from 'react-native';
 import { router } from 'expo-router';
-import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon } from 'lucide-react-native';
+import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle } from 'lucide-react-native';
 import { useSettings, SpeedUnit, DistanceUnit } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
 import { ThemeType } from '@/constants/colors';
@@ -25,11 +25,15 @@ export default function SettingsScreen() {
   ];
 
   const openPrivacyPolicy = () => {
-    Linking.openURL('https://example.com/privacy-policy');
+    Linking.openURL('https://redlineapp.io/privacy.html');
   };
 
   const openTermsOfUse = () => {
-    Linking.openURL('https://example.com/terms-of-use');
+    Linking.openURL('https://redlineapp.io/terms.html');
+  };
+
+  const openHelpCenter = () => {
+    Linking.openURL('https://redlineapp.io/help.html');
   };
 
   const openProfile = () => {
@@ -139,6 +143,11 @@ export default function SettingsScreen() {
     footer: {
       alignItems: 'center',
       paddingTop: 20,
+    },
+    footerLogo: {
+      width: 48,
+      height: 48,
+      marginBottom: 12,
     },
     footerText: {
       fontSize: 13,
@@ -362,9 +371,26 @@ export default function SettingsScreen() {
             </View>
             <ChevronRight size={20} color={colors.textLight} />
           </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity style={styles.linkItem} onPress={openHelpCenter} activeOpacity={0.7}>
+            <View style={styles.linkContent}>
+              <View style={styles.settingIconContainer}>
+                <HelpCircle size={20} color={colors.accent} />
+              </View>
+              <Text style={styles.linkText}>Help Center</Text>
+            </View>
+            <ChevronRight size={20} color={colors.textLight} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.footer}>
+          <Image
+            source={{ uri: 'https://i.imgur.com/kWVxwyp.png' }}
+            style={styles.footerLogo}
+            resizeMode="contain"
+          />
           <Text style={styles.footerText}>RedLine v1.0.0</Text>
         </View>
       </ScrollView>
