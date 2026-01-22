@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#00C853',
   },
   stopButton: {
-    backgroundColor: '#FF4757',
+    backgroundColor: '#CC0000',
   },
   buttonText: {
     color: '#FFFFFF',
