@@ -66,7 +66,7 @@ export default function TripShareCard({ trip, visible, onClose }: TripShareCardP
     
     const padding = 30;
     const svgWidth = CARD_WIDTH - 56;
-    const svgHeight = 180;
+    const svgHeight = 260;
     const drawWidth = svgWidth - padding * 2;
     const drawHeight = svgHeight - padding * 2;
     
@@ -622,7 +622,7 @@ const styles = StyleSheet.create({
     marginVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 180,
+    minHeight: 260,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
   },
