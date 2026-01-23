@@ -35,7 +35,7 @@ export default function LeaderboardScreen() {
     { key: 'gForce' as LeaderboardCategory, label: 'Max G-Force', icon: <Activity size={16} color={colors.danger} /> },
     { key: 'zeroToHundred' as LeaderboardCategory, label: getAccelerationLabel('0-100'), icon: <Timer size={16} color={colors.primary} /> },
     { key: 'zeroToTwoHundred' as LeaderboardCategory, label: getAccelerationLabel('0-200'), icon: <Timer size={16} color={colors.accent} /> },
-  ], [colors]);
+  ], [colors, getAccelerationLabel]);
 
   const activeCategory_data = useMemo(() => {
     return CATEGORIES.find(c => c.key === activeCategory);
