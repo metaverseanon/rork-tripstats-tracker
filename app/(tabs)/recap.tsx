@@ -16,6 +16,10 @@ import {
   TrendingUp,
   Car,
   Calendar,
+  Timer,
+  Activity,
+  Sun,
+  Moon,
 } from 'lucide-react-native';
 import { useTrips } from '@/providers/TripProvider';
 import { useSettings } from '@/providers/SettingsProvider';
@@ -34,6 +38,12 @@ interface PeriodStats {
   avgTripsPerPeriod: number;
   bestAcceleration: number;
   uniqueCarModels: number;
+  best0to100: number | null;
+  best0to200: number | null;
+  maxGForce: number;
+  avgTripHour: number;
+  dayTrips: number;
+  nightTrips: number;
 }
 
 export default function RecapScreen() {
@@ -91,6 +101,12 @@ export default function RecapScreen() {
         avgTripsPerPeriod: 0,
         bestAcceleration: 0,
         uniqueCarModels: 0,
+        best0to100: null,
+        best0to200: null,
+        maxGForce: 0,
+        avgTripHour: 12,
+        dayTrips: 0,
+        nightTrips: 0,
       };
     }
 
@@ -102,6 +118,21 @@ export default function RecapScreen() {
     const bestAcceleration = Math.max(...filteredTrips.map((trip) => trip.acceleration || 0));
     const uniqueCarModels = new Set(filteredTrips.map((trip) => trip.carModel).filter(Boolean)).size;
 
+    const times0to100 = filteredTrips.map((trip) => trip.time0to100).filter((t): t is number => t !== undefined && t > 0);
+    const best0to100 = times0to100.length > 0 ? Math.min(...times0to100) : null;
+
+    const times0to200 = filteredTrips.map((trip) => trip.time0to200).filter((t): t is number => t !== undefined && t > 0);
+    const best0to200 = times0to200.length > 0 ? Math.min(...times0to200) : null;
+
+    const gForces = filteredTrips.map((trip) => trip.maxGForce || 0);
+    const maxGForce = gForces.length > 0 ? Math.max(...gForces) : 0;
+
+    const tripHours = filteredTrips.map((trip) => new Date(trip.startTime).getHours());
+    const avgTripHour = tripHours.length > 0 ? tripHours.reduce((sum, h) => sum + h, 0) / tripHours.length : 12;
+    
+    const dayTrips = tripHours.filter((h) => h >= 6 && h < 20).length;
+    const nightTrips = tripHours.filter((h) => h < 6 || h >= 20).length;
+
     return {
       totalTrips: filteredTrips.length,
       totalDistance,
@@ -112,6 +143,12 @@ export default function RecapScreen() {
       avgTripsPerPeriod: filteredTrips.length,
       bestAcceleration,
       uniqueCarModels,
+      best0to100,
+      best0to200,
+      maxGForce,
+      avgTripHour,
+      dayTrips,
+      nightTrips,
     };
   }, [filterTripsByPeriod, selectedPeriod]);
 
@@ -242,6 +279,33 @@ export default function RecapScreen() {
           value={calculateStats.uniqueCarModels}
           color="#EC4899"
         />
+        {calculateStats.best0to100 !== null && (
+          <StatCard
+            icon={<Timer color="#10B981" size={20} />}
+            title="Best 0-100"
+            value={calculateStats.best0to100.toFixed(1)}
+            unit="sec"
+            color="#10B981"
+          />
+        )}
+        {calculateStats.best0to200 !== null && (
+          <StatCard
+            icon={<Timer color="#F59E0B" size={20} />}
+            title="Best 0-200"
+            value={calculateStats.best0to200.toFixed(1)}
+            unit="sec"
+            color="#F59E0B"
+          />
+        )}
+        {calculateStats.maxGForce > 0 && (
+          <StatCard
+            icon={<Activity color="#EF4444" size={20} />}
+            title="Max G-Force"
+            value={calculateStats.maxGForce.toFixed(2)}
+            unit="G"
+            color="#EF4444"
+          />
+        )}
       </View>
 
       {calculateStats.bestAcceleration > 0 && (
@@ -260,6 +324,67 @@ export default function RecapScreen() {
                 { width: `${Math.min(calculateStats.bestAcceleration * 10, 100)}%`, backgroundColor: colors.warning },
               ]}
             />
+          </View>
+        </View>
+      )}
+
+      {calculateStats.totalTrips > 0 && (
+        <View style={styles.driverTypeCard}>
+          <View style={styles.driverTypeHeader}>
+            {calculateStats.nightTrips > calculateStats.dayTrips ? (
+              <Moon color="#6366F1" size={24} />
+            ) : (
+              <Sun color="#F59E0B" size={24} />
+            )}
+            <Text style={styles.driverTypeTitle}>Driver Profile</Text>
+          </View>
+          <Text style={styles.driverTypeValue}>
+            {calculateStats.nightTrips > calculateStats.dayTrips
+              ? '🌙 Night Owl'
+              : calculateStats.dayTrips > calculateStats.nightTrips
+              ? '☀️ Day Cruiser'
+              : '⚖️ Balanced Driver'}
+          </Text>
+          <Text style={styles.driverTypeSubtext}>
+            {calculateStats.nightTrips > calculateStats.dayTrips
+              ? `You prefer driving at night! ${calculateStats.nightTrips} of your ${calculateStats.totalTrips} trips were after 8 PM or before 6 AM.`
+              : calculateStats.dayTrips > calculateStats.nightTrips
+              ? `You're a daytime driver! ${calculateStats.dayTrips} of your ${calculateStats.totalTrips} trips were between 6 AM and 8 PM.`
+              : `You drive equally during day and night - ${calculateStats.dayTrips} day trips and ${calculateStats.nightTrips} night trips.`}
+          </Text>
+          <View style={styles.dayNightBar}>
+            <View style={styles.dayNightLabels}>
+              <View style={styles.dayNightLabelRow}>
+                <Sun color="#F59E0B" size={14} />
+                <Text style={styles.dayNightLabelText}>Day</Text>
+              </View>
+              <View style={styles.dayNightLabelRow}>
+                <Moon color="#6366F1" size={14} />
+                <Text style={styles.dayNightLabelText}>Night</Text>
+              </View>
+            </View>
+            <View style={styles.dayNightBarTrack}>
+              <View
+                style={[
+                  styles.dayNightBarFillDay,
+                  {
+                    width: `${calculateStats.totalTrips > 0 ? (calculateStats.dayTrips / calculateStats.totalTrips) * 100 : 50}%`,
+                  },
+                ]}
+              />
+              <View
+                style={[
+                  styles.dayNightBarFillNight,
+                  {
+                    width: `${calculateStats.totalTrips > 0 ? (calculateStats.nightTrips / calculateStats.totalTrips) * 100 : 50}%`,
+                  },
+                ]}
+              />
+            </View>
+            <View style={styles.dayNightCounts}>
+              <Text style={styles.dayNightCountText}>{calculateStats.dayTrips}</Text>
+              <Text style={styles.dayNightCountText}>{calculateStats.nightTrips}</Text>
+            </View>
           </View>
         </View>
       )}
@@ -462,6 +587,80 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   accelerationFill: {
     height: '100%',
     borderRadius: 4,
+  },
+  driverTypeCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    backgroundColor: colors.cardLight,
+    borderRadius: 16,
+    padding: 20,
+  },
+  driverTypeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  driverTypeTitle: {
+    fontSize: 15,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.text,
+    marginLeft: 10,
+  },
+  driverTypeValue: {
+    fontSize: 24,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  driverTypeSubtext: {
+    fontSize: 13,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  dayNightBar: {
+    marginTop: 8,
+  },
+  dayNightLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  dayNightLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dayNightLabelText: {
+    fontSize: 12,
+    fontFamily: 'Orbitron_500Medium',
+    color: colors.textLight,
+  },
+  dayNightBarTrack: {
+    height: 10,
+    backgroundColor: colors.border,
+    borderRadius: 5,
+    flexDirection: 'row',
+    overflow: 'hidden',
+  },
+  dayNightBarFillDay: {
+    height: '100%',
+    backgroundColor: '#F59E0B',
+  },
+  dayNightBarFillNight: {
+    height: '100%',
+    backgroundColor: '#6366F1',
+  },
+  dayNightCounts: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  dayNightCountText: {
+    fontSize: 12,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.text,
   },
   emptyState: {
     alignItems: 'center',
