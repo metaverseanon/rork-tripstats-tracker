@@ -300,27 +300,14 @@ export default function RecapScreen() {
           unit={calculateStats.maxGForce > 0 ? 'G' : ''}
           color="#EF4444"
         />
+        <StatCard
+          icon={<Zap color={colors.warning} size={20} />}
+          title="Best Accel"
+          value={calculateStats.bestAcceleration > 0 ? calculateStats.bestAcceleration.toFixed(1) : '—'}
+          unit={calculateStats.bestAcceleration > 0 ? 'm/s²' : ''}
+          color={colors.warning}
+        />
       </View>
-
-      {calculateStats.bestAcceleration > 0 && (
-        <View style={styles.accelerationCard}>
-          <View style={styles.accelerationHeader}>
-            <Zap color={colors.warning} size={20} />
-            <Text style={styles.accelerationTitle}>Best Acceleration</Text>
-          </View>
-          <Text style={styles.accelerationValue}>
-            {calculateStats.bestAcceleration.toFixed(2)} m/s²
-          </Text>
-          <View style={styles.accelerationBar}>
-            <View
-              style={[
-                styles.accelerationFill,
-                { width: `${Math.min(calculateStats.bestAcceleration * 10, 100)}%`, backgroundColor: colors.warning },
-              ]}
-            />
-          </View>
-        </View>
-      )}
 
       {calculateStats.totalTrips > 0 && (
         <View style={styles.driverTypeCard}>
@@ -548,40 +535,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textLight,
     marginLeft: 4,
   },
-  accelerationCard: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    backgroundColor: colors.cardLight,
-    borderRadius: 16,
-    padding: 20,
-  },
-  accelerationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  accelerationTitle: {
-    fontSize: 15,
-    fontFamily: 'Orbitron_600SemiBold',
-    color: colors.text,
-    marginLeft: 8,
-  },
-  accelerationValue: {
-    fontSize: 28,
-    fontFamily: 'Orbitron_700Bold',
-    color: colors.text,
-    marginBottom: 12,
-  },
-  accelerationBar: {
-    height: 8,
-    backgroundColor: colors.border,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  accelerationFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
+
   driverTypeCard: {
     marginHorizontal: 16,
     marginTop: 12,
