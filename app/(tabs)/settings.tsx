@@ -142,12 +142,12 @@ export default function SettingsScreen() {
     },
     footer: {
       alignItems: 'center',
-      marginTop: -8,
+      marginTop: -24,
     },
     footerLogo: {
       width: 144,
       height: 144,
-      marginBottom: -4,
+      marginBottom: -24,
     },
     footerText: {
       fontSize: 13,
