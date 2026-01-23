@@ -502,7 +502,7 @@ export default function LeaderboardScreen() {
                         <Car size={14} color={colors.primary} />
                         <Text style={styles.carBrandModelText}>
                           <Text style={styles.carBrandHighlight}>{carInfo.brand}</Text>
-                          {carInfo.model ? ` ${carInfo.model}` : ''}
+                          {carInfo.model ? <Text>{` ${carInfo.model}`}</Text> : null}
                         </Text>
                       </View>
                     )}
