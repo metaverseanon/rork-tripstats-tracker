@@ -7,7 +7,7 @@ import { useSettings } from '@/providers/SettingsProvider';
 
 export default function RecentScreen() {
   const { trips } = useTrips();
-  const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, colors } = useSettings();
+  const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, getAccelerationLabel, colors } = useSettings();
   const screenWidth = Dimensions.get('window').width;
   
   const lastTrip = trips.length > 0 ? trips[0] : null;
@@ -234,7 +234,7 @@ export default function RecentScreen() {
               <Timer size={20} color={colors.accent} />
             </View>
             <Text style={dynamicStyles.statValue}>{formatAccelTime(lastTrip.time0to100)}</Text>
-            <Text style={dynamicStyles.statLabel}>0-100 km/h</Text>
+            <Text style={dynamicStyles.statLabel}>{getAccelerationLabel('0-100')}</Text>
           </View>
 
           <View style={dynamicStyles.statCard}>
@@ -242,7 +242,7 @@ export default function RecentScreen() {
               <Zap size={20} color={colors.accent} />
             </View>
             <Text style={dynamicStyles.statValue}>{formatAccelTime(lastTrip.time0to200)}</Text>
-            <Text style={dynamicStyles.statLabel}>0-200 km/h</Text>
+            <Text style={dynamicStyles.statLabel}>{getAccelerationLabel('0-200')}</Text>
           </View>
         </View>
 
