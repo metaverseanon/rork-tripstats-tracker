@@ -20,6 +20,7 @@ import { useSettings } from '@/providers/SettingsProvider';
 import { ThemeColors } from '@/constants/colors';
 import { useUser } from '@/providers/UserProvider';
 import { CAR_BRANDS, getModelsForBrand } from '@/constants/cars';
+import { trpcClient } from '@/lib/trpc';
 import { COUNTRIES, getCitiesForCountry } from '@/constants/countries';
 import { UserCar } from '@/types/user';
 
@@ -60,6 +61,8 @@ export default function ProfileScreen() {
   const [newCarPicture, setNewCarPicture] = useState('');
   const [showNewBrandPicker, setShowNewBrandPicker] = useState(false);
   const [showNewModelPicker, setShowNewModelPicker] = useState(false);
+  const [isCheckingDisplayName, setIsCheckingDisplayName] = useState(false);
+  const [displayNameError, setDisplayNameError] = useState('');
 
   const availableModels = useMemo(() => {
     return selectedBrand ? getModelsForBrand(selectedBrand) : [];
@@ -291,6 +294,24 @@ export default function ProfileScreen() {
       return;
     }
 
+    if (!isAuthenticated && authMode === 'signup') {
+      setIsCheckingDisplayName(true);
+      try {
+        const result = await trpcClient.user.checkDisplayName.query({ displayName: displayName.trim() });
+        if (!result.available) {
+          setDisplayNameError('This display name is already taken');
+          Alert.alert('Error', 'This display name is already taken. Please choose a different one.');
+          setIsCheckingDisplayName(false);
+          return;
+        }
+        setDisplayNameError('');
+      } catch (error) {
+        console.error('Failed to check display name:', error);
+      } finally {
+        setIsCheckingDisplayName(false);
+      }
+    }
+
     setIsSubmitting(true);
     try {
       if (isAuthenticated) {
@@ -432,13 +453,19 @@ export default function ProfileScreen() {
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Display Name</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, displayNameError ? styles.inputError : null]}
                   value={displayName}
-                  onChangeText={setDisplayName}
+                  onChangeText={(text) => {
+                    setDisplayName(text);
+                    setDisplayNameError('');
+                  }}
                   placeholder="Enter your name"
                   placeholderTextColor={colors.textLight}
                   autoCapitalize="words"
                 />
+                {displayNameError ? (
+                  <Text style={styles.errorText}>{displayNameError}</Text>
+                ) : null}
               </View>
             )}
 
@@ -965,12 +992,12 @@ export default function ProfileScreen() {
           )}
 
           <TouchableOpacity
-            style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]}
+            style={[styles.saveButton, (isSubmitting || isCheckingDisplayName) && styles.saveButtonDisabled]}
             onPress={handleSave}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isCheckingDisplayName}
           >
             <Text style={styles.saveButtonText}>
-              {isSubmitting ? 'Saving...' : isAuthenticated ? 'Save Changes' : authMode === 'signin' ? 'Sign In' : 'Create Account'}
+              {isSubmitting || isCheckingDisplayName ? 'Saving...' : isAuthenticated ? 'Save Changes' : authMode === 'signin' ? 'Sign In' : 'Create Account'}
             </Text>
           </TouchableOpacity>
 
@@ -1098,6 +1125,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  inputError: {
+    borderColor: colors.danger,
+  },
+  errorText: {
+    fontSize: 12,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.danger,
+    marginTop: 6,
   },
   passwordContainer: {
     flexDirection: 'row',

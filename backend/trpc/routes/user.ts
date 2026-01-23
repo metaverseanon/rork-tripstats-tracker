@@ -205,6 +205,22 @@ async function getAllUsers(): Promise<StoredUser[]> {
 }
 
 export const userRouter = createTRPCRouter({
+  checkDisplayName: publicProcedure
+    .input(z.object({
+      displayName: z.string(),
+    }))
+    .query(async ({ input }) => {
+      console.log("Checking display name availability:", input.displayName);
+      const users = await getAllUsers();
+      const isTaken = users.some(
+        (user) => user.displayName.toLowerCase() === input.displayName.toLowerCase()
+      );
+      return {
+        available: !isTaken,
+        displayName: input.displayName,
+      };
+    }),
+
   register: publicProcedure
     .input(z.object({
       id: z.string(),
