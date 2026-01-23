@@ -147,7 +147,7 @@ export default function SettingsScreen() {
     footerLogo: {
       width: 144,
       height: 144,
-      marginBottom: -24,
+      marginBottom: -36,
     },
     footerText: {
       fontSize: 13,
