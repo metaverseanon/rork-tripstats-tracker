@@ -104,47 +104,81 @@ export default function ProfileScreen() {
     }
   };
 
-  const pickProfilePicture = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+  const showImagePickerOptions = (type: 'profile' | 'car' | 'newCar') => {
+    Alert.alert(
+      'Add Photo',
+      'Choose an option',
+      [
+        {
+          text: 'Take Photo',
+          onPress: () => handleCameraCapture(type),
+        },
+        {
+          text: 'Choose from Library',
+          onPress: () => handleLibraryPick(type),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
+  const handleCameraCapture = async (type: 'profile' | 'car' | 'newCar') => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Camera permission is required to take photos.');
+      return;
+    }
+
+    const aspect: [number, number] = type === 'profile' ? [1, 1] : [16, 9];
+    const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
-      aspect: [1, 1],
+      aspect,
       quality: 0.8,
     });
 
     if (!result.canceled) {
-      setProfilePicture(result.assets[0].uri);
-      console.log('Profile picture selected:', result.assets[0].uri);
+      const uri = result.assets[0].uri;
+      if (type === 'profile') {
+        setProfilePicture(uri);
+      } else if (type === 'car') {
+        setCarPicture(uri);
+      } else {
+        setNewCarPicture(uri);
+      }
+      console.log(`${type} picture captured:`, uri);
     }
   };
 
-  const pickCarPicture = async () => {
+  const handleLibraryPick = async (type: 'profile' | 'car' | 'newCar') => {
+    const aspect: [number, number] = type === 'profile' ? [1, 1] : [16, 9];
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
-      aspect: [16, 9],
+      aspect,
       quality: 0.8,
     });
 
     if (!result.canceled) {
-      setCarPicture(result.assets[0].uri);
-      console.log('Car picture selected:', result.assets[0].uri);
+      const uri = result.assets[0].uri;
+      if (type === 'profile') {
+        setProfilePicture(uri);
+      } else if (type === 'car') {
+        setCarPicture(uri);
+      } else {
+        setNewCarPicture(uri);
+      }
+      console.log(`${type} picture selected:`, uri);
     }
   };
 
-  const pickNewCarPicture = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [16, 9],
-      quality: 0.8,
-    });
+  const pickProfilePicture = () => showImagePickerOptions('profile');
 
-    if (!result.canceled) {
-      setNewCarPicture(result.assets[0].uri);
-      console.log('New car picture selected:', result.assets[0].uri);
-    }
-  };
+  const pickCarPicture = () => showImagePickerOptions('car');
+
+  const pickNewCarPicture = () => showImagePickerOptions('newCar');
 
   const handleCountrySelect = (countryCode: string) => {
     setSelectedCountry(countryCode);
@@ -651,48 +685,44 @@ export default function ProfileScreen() {
           </View>
           )}
 
-          {isAuthenticated && allUserCars.length > 1 && authMode === 'signup' && (
+          {isAuthenticated && allUserCars.length > 0 && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Car color={colors.text} size={20} />
-                <Text style={styles.sectionTitle}>Select Active Car</Text>
+                <Text style={styles.sectionTitle}>My Garage</Text>
               </View>
               <Text style={styles.selectCarHint}>Tap a car to set it as your active car for tracking</Text>
-              {allUserCars.map((car, index) => (
-                <TouchableOpacity
-                  key={car.id || `user-car-${index}`}
-                  style={[
-                    styles.selectableCarCard,
-                    car.isPrimary && styles.selectableCarCardActive,
-                  ]}
-                  onPress={() => handleSelectActiveCar(car.id)}
-                  activeOpacity={0.7}
-                >
-                  {car.picture ? (
-                    <Image source={{ uri: car.picture }} style={styles.selectableCarImage} />
-                  ) : (
-                    <View style={styles.selectableCarImagePlaceholder}>
-                      <Car color={colors.textLight} size={20} />
-                    </View>
-                  )}
-                  <View style={styles.selectableCarInfo}>
-                    <Text style={[
-                      styles.selectableCarName,
-                      car.isPrimary && styles.selectableCarNameActive,
-                    ]}>
-                      {car.brand} {car.model}
-                    </Text>
-                    {car.isPrimary && (
-                      <Text style={styles.activeCarLabel}>Active</Text>
+              <View style={styles.garageGrid}>
+                {allUserCars.map((car, index) => (
+                  <TouchableOpacity
+                    key={car.id || `user-car-${index}`}
+                    style={[
+                      styles.garageCard,
+                      car.isPrimary && styles.garageCardActive,
+                    ]}
+                    onPress={() => handleSelectActiveCar(car.id)}
+                    activeOpacity={0.7}
+                  >
+                    {car.picture ? (
+                      <Image source={{ uri: car.picture }} style={styles.garageCarImage} />
+                    ) : (
+                      <View style={styles.garageCarImagePlaceholder}>
+                        <Car color={colors.textLight} size={32} />
+                      </View>
                     )}
-                  </View>
-                  {car.isPrimary && (
-                    <View style={styles.activeCheckmark}>
-                      <Check color={colors.textInverted} size={16} />
+                    <View style={styles.garageCardContent}>
+                      <Text style={styles.garageCarBrand} numberOfLines={1}>{car.brand}</Text>
+                      <Text style={styles.garageCarModel} numberOfLines={1}>{car.model}</Text>
+                      {car.isPrimary && (
+                        <View style={styles.activeTag}>
+                          <Check color={colors.textInverted} size={10} />
+                          <Text style={styles.activeTagText}>Active</Text>
+                        </View>
+                      )}
                     </View>
-                  )}
-                </TouchableOpacity>
-              ))}
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           )}
 
@@ -1456,58 +1486,72 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: 12,
     marginTop: -8,
   },
-  selectableCarCard: {
+  garageGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginHorizontal: -6,
+  },
+  garageCard: {
+    width: '50%',
+    paddingHorizontal: 6,
+    marginBottom: 12,
+  },
+  garageCardActive: {},
+  garageCarImage: {
+    width: '100%',
+    height: 100,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  garageCarImagePlaceholder: {
+    width: '100%',
+    height: 100,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
     backgroundColor: colors.cardLight,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
-    borderWidth: 2,
-    borderColor: colors.border,
-  },
-  selectableCarCardActive: {
-    borderColor: colors.accent,
-    backgroundColor: `${colors.accent}10`,
-  },
-  selectableCarImage: {
-    width: 70,
-    height: 46,
-    borderRadius: 8,
-    marginRight: 12,
-  },
-  selectableCarImagePlaceholder: {
-    width: 70,
-    height: 46,
-    borderRadius: 8,
-    marginRight: 12,
-    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderBottomWidth: 0,
   },
-  selectableCarInfo: {
-    flex: 1,
+  garageCardContent: {
+    backgroundColor: colors.cardLight,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderTopWidth: 0,
   },
-  selectableCarName: {
-    fontSize: 15,
-    fontFamily: 'Orbitron_500Medium',
-    color: colors.text,
+  garageCarBrand: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  selectableCarNameActive: {
-    color: colors.accent,
-  },
-  activeCarLabel: {
-    fontSize: 12,
+  garageCarModel: {
+    fontSize: 14,
     fontFamily: 'Orbitron_600SemiBold',
-    color: colors.accent,
+    color: colors.text,
     marginTop: 2,
   },
-  activeCheckmark: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.accent,
-    justifyContent: 'center',
+  activeTag: {
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: colors.accent,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    gap: 4,
+  },
+  activeTagText: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.textInverted,
+    textTransform: 'uppercase',
   },
 });
