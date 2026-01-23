@@ -69,7 +69,7 @@ export default function TrackScreen() {
   const dynamicStyles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? '#121212' : colors.background,
+      backgroundColor: isDark ? '#000000' : colors.background,
     },
     speedometerCircle: {
       width: 240,
@@ -119,7 +119,7 @@ export default function TrackScreen() {
     buttonContainer: {
       padding: 20,
       paddingBottom: 30,
-      backgroundColor: isDark ? '#121212' : colors.background,
+      backgroundColor: isDark ? '#000000' : colors.background,
     },
   });
 
