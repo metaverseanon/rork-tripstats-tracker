@@ -13,7 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { Stack, router } from 'expo-router';
-import { User, Car, ChevronDown, LogOut, Check, Globe, MapPin, Navigation, Search, Camera, Plus, X, Image as ImageIcon } from 'lucide-react-native';
+import { User, Car, ChevronDown, LogOut, Check, Globe, MapPin, Navigation, Search, Camera, Plus, X, Image as ImageIcon, Eye, EyeOff } from 'lucide-react-native';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { useSettings } from '@/providers/SettingsProvider';
@@ -37,6 +37,8 @@ export default function ProfileScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   
   const [email, setEmail] = useState(user?.email || '');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [profilePicture, setProfilePicture] = useState(user?.profilePicture || '');
   const [selectedCountry, setSelectedCountry] = useState(user?.country || '');
@@ -276,6 +278,14 @@ export default function ProfileScreen() {
       Alert.alert('Error', 'Please enter your email');
       return;
     }
+    if (!isAuthenticated && !password.trim()) {
+      Alert.alert('Error', 'Please enter your password');
+      return;
+    }
+    if (!isAuthenticated && password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters');
+      return;
+    }
     if (!isAuthenticated && authMode === 'signup' && !displayName.trim()) {
       Alert.alert('Error', 'Please enter your display name');
       return;
@@ -297,10 +307,12 @@ export default function ProfileScreen() {
         Alert.alert('Success', 'Profile updated successfully');
         router.back();
       } else if (authMode === 'signin') {
-        const result = await signIn(email);
-        if (result) {
+        const result = await signIn(email, password);
+        if (result.success) {
           Alert.alert('Success', 'Signed in successfully');
           router.back();
+        } else if (result.error === 'incorrect_password') {
+          Alert.alert('Error', 'Incorrect password. Please try again.');
         } else {
           Alert.alert('Error', 'No account found with this email. Please sign up first.');
         }
@@ -314,7 +326,8 @@ export default function ProfileScreen() {
         }));
         await signUp(
           email, 
-          displayName, 
+          displayName,
+          password,
           selectedCountry || undefined, 
           selectedCity || undefined, 
           selectedBrand || undefined, 
@@ -441,6 +454,36 @@ export default function ProfileScreen() {
                 autoCapitalize="none"
               />
             </View>
+
+            {!isAuthenticated && (
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Password</Text>
+                <View style={styles.passwordContainer}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder={authMode === 'signin' ? 'Enter your password' : 'Create a password'}
+                    placeholderTextColor={colors.textLight}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity
+                    style={styles.passwordToggle}
+                    onPress={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOff size={20} color={colors.textLight} />
+                    ) : (
+                      <Eye size={20} color={colors.textLight} />
+                    )}
+                  </TouchableOpacity>
+                </View>
+                {authMode === 'signup' && (
+                  <Text style={styles.passwordHint}>Must be at least 6 characters</Text>
+                )}
+              </View>
+            )}
           </View>
 
           {(isAuthenticated || authMode === 'signup') && (
@@ -1055,6 +1098,30 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.cardLight,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 16,
+    fontSize: 16,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.text,
+  },
+  passwordToggle: {
+    padding: 16,
+  },
+  passwordHint: {
+    fontSize: 12,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    marginTop: 6,
   },
   locationButton: {
     flexDirection: 'row',

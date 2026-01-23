@@ -42,7 +42,8 @@ export const [UserProvider, useUser] = createContextHook(() => {
 
   const signUp = useCallback(async (
     email: string, 
-    displayName: string, 
+    displayName: string,
+    password: string,
     country?: string, 
     city?: string, 
     carBrand?: string, 
@@ -68,6 +69,7 @@ export const [UserProvider, useUser] = createContextHook(() => {
     const newUser: UserProfile = {
       id: userId,
       email,
+      password,
       displayName,
       profilePicture,
       country,
@@ -98,16 +100,20 @@ export const [UserProvider, useUser] = createContextHook(() => {
     return newUser;
   }, []);
 
-  const signIn = useCallback(async (email: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     const stored = await AsyncStorage.getItem(USER_KEY);
     if (stored) {
       const userData = JSON.parse(stored);
       if (userData.email === email) {
-        setUser(userData);
-        return userData;
+        if (userData.password === password) {
+          setUser(userData);
+          return { success: true, user: userData };
+        } else {
+          return { success: false, error: 'incorrect_password' };
+        }
       }
     }
-    return null;
+    return { success: false, error: 'not_found' };
   }, []);
 
   const signOut = useCallback(async () => {

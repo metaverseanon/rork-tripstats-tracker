@@ -9,6 +9,7 @@ export interface UserCar {
 export interface UserProfile {
   id: string;
   email: string;
+  password?: string;
   displayName: string;
   profilePicture?: string;
   country?: string;
