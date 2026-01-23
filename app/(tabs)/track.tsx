@@ -8,7 +8,7 @@ import TripShareCard from '@/components/TripShareCard';
 
 export default function TrackScreen() {
   const { isTracking, currentTrip, currentSpeed, startTracking, stopTracking, lastSavedTrip, clearLastSavedTrip } = useTrips();
-  const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, colors } = useSettings();
+  const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, getAccelerationLabel, colors } = useSettings();
   const { user } = useUser();
   const [showShareCard, setShowShareCard] = useState(false);
 
@@ -157,14 +157,14 @@ export default function TrackScreen() {
               <Text style={dynamicStyles.statValue}>
                 {currentTrip?.time0to100 ? currentTrip.time0to100.toFixed(1) + 's' : '--'}
               </Text>
-              <Text style={dynamicStyles.statLabel}>0-100 km/h</Text>
+              <Text style={dynamicStyles.statLabel}>{getAccelerationLabel('0-100')}</Text>
             </View>
 
             <View style={dynamicStyles.statCard}>
               <Text style={dynamicStyles.statValue}>
                 {currentTrip?.time0to200 ? currentTrip.time0to200.toFixed(1) + 's' : '--'}
               </Text>
-              <Text style={dynamicStyles.statLabel}>0-200 km/h</Text>
+              <Text style={dynamicStyles.statLabel}>{getAccelerationLabel('0-200')}</Text>
             </View>
           </View>
 

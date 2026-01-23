@@ -45,7 +45,7 @@ export default function TripShareCard({ trip, visible, onClose }: TripShareCardP
   const viewShotRef2 = useRef<ViewShot>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const { trips } = useTrips();
-  const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, settings } = useSettings();
+  const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, getAccelerationLabel, settings } = useSettings();
   const isLight = settings.theme === 'light';
 
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -322,7 +322,7 @@ export default function TripShareCard({ trip, visible, onClose }: TripShareCardP
                     <Text style={[styles.statValue, isLight && styles.statValueLight]}>
                       {trip.time0to100 ? `${trip.time0to100.toFixed(1)}s` : '--'}
                     </Text>
-                    <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>0-100 km/h</Text>
+                    <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>{getAccelerationLabel('0-100')}</Text>
                   </View>
                 </View>
 

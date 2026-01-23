@@ -14,7 +14,7 @@ type FilterType = 'country' | 'city' | 'carBrand' | 'carModel';
 
 export default function LeaderboardScreen() {
   const { trips } = useTrips();
-  const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, colors } = useSettings();
+  const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, getAccelerationLabel, colors } = useSettings();
   const { user } = useUser();
   const [activeCategory, setActiveCategory] = useState<LeaderboardCategory>('topSpeed');
   const [filters, setFilters] = useState<LeaderboardFilters>({});
@@ -33,8 +33,8 @@ export default function LeaderboardScreen() {
     { key: 'totalDistance' as LeaderboardCategory, label: 'All-Time Distance', icon: <Route size={16} color={colors.primary} /> },
     { key: 'acceleration' as LeaderboardCategory, label: 'Acceleration', icon: <Gauge size={16} color={colors.success} /> },
     { key: 'gForce' as LeaderboardCategory, label: 'Max G-Force', icon: <Activity size={16} color={colors.danger} /> },
-    { key: 'zeroToHundred' as LeaderboardCategory, label: '0-100 km/h', icon: <Timer size={16} color={colors.primary} /> },
-    { key: 'zeroToTwoHundred' as LeaderboardCategory, label: '0-200 km/h', icon: <Timer size={16} color={colors.accent} /> },
+    { key: 'zeroToHundred' as LeaderboardCategory, label: getAccelerationLabel('0-100'), icon: <Timer size={16} color={colors.primary} /> },
+    { key: 'zeroToTwoHundred' as LeaderboardCategory, label: getAccelerationLabel('0-200'), icon: <Timer size={16} color={colors.accent} /> },
   ], [colors]);
 
   const activeCategory_data = useMemo(() => {
