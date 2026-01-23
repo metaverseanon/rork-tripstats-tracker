@@ -14,21 +14,34 @@ const SPEED_NOISE_THRESHOLD = 3;
 const BACKGROUND_LOCATION_TASK = 'background-location-task';
 
 let backgroundLocationCallback: ((location: ExpoLocation.LocationObject) => void) | null = null;
+let taskDefined = false;
 
-TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
-  if (error) {
-    console.error('Background location task error:', error);
-    return;
-  }
-  if (data) {
-    const { locations } = data as { locations: ExpoLocation.LocationObject[] };
-    if (locations && locations.length > 0 && backgroundLocationCallback) {
-      for (const location of locations) {
-        backgroundLocationCallback(location);
+const defineBackgroundTask = () => {
+  if (taskDefined || Platform.OS === 'web') return;
+  try {
+    TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
+      if (error) {
+        console.error('Background location task error:', error);
+        return;
       }
-    }
+      if (data) {
+        const { locations } = data as { locations: ExpoLocation.LocationObject[] };
+        if (locations && locations.length > 0 && backgroundLocationCallback) {
+          for (const location of locations) {
+            backgroundLocationCallback(location);
+          }
+        }
+      }
+    });
+    taskDefined = true;
+  } catch (error) {
+    console.error('Failed to define background task:', error);
   }
-});
+};
+
+if (Platform.OS !== 'web') {
+  defineBackgroundTask();
+}
 
 export const [TripProvider, useTrips] = createContextHook(() => {
   const [trips, setTrips] = useState<TripStats[]>([]);

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { StyleSheet, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { TripProvider } from "@/providers/TripProvider";
@@ -95,8 +95,10 @@ const styles = StyleSheet.create({
   },
 });
 
+const FONT_LOAD_TIMEOUT = 3000;
+
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Orbitron_400Regular,
     Orbitron_500Medium,
     Orbitron_600SemiBold,
@@ -104,14 +106,24 @@ export default function RootLayout() {
     Orbitron_800ExtraBold,
     Orbitron_900Black,
   });
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
-    if (fontsLoaded) {
+    const timer = setTimeout(() => {
+      console.log('Font loading timed out, proceeding anyway');
+      setTimedOut(true);
+    }, FONT_LOAD_TIMEOUT);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (fontsLoaded || fontError || timedOut) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, fontError, timedOut]);
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded && !fontError && !timedOut) {
     return null;
   }
 
