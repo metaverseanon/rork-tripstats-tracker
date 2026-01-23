@@ -502,11 +502,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   logoImage: {
-    width: 210,
-    height: 63,
+    width: 160,
+    height: 48,
     alignSelf: 'center',
     marginTop: 8,
-    marginBottom: 28,
+    marginBottom: 24,
   },
   statsGrid: {
     flexDirection: 'row',
