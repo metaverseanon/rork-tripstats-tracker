@@ -505,8 +505,7 @@ const styles = StyleSheet.create({
     width: 160,
     height: 48,
     alignSelf: 'center',
-    marginTop: 8,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   statsGrid: {
     flexDirection: 'row',
