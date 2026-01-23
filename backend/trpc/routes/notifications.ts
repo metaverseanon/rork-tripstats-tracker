@@ -138,6 +138,9 @@ function formatDuration(seconds: number): string {
   return `${mins}m`;
 }
 
+// Export for potential future use
+export { formatDuration };
+
 function generateNotificationContent(displayName: string, stats: WeeklyStats): { title: string; body: string } {
   if (stats.totalTrips === 0) {
     return {
@@ -206,7 +209,7 @@ async function sendExpoPushNotification(
 }
 
 async function sendBatchPushNotifications(
-  messages: Array<{ to: string; title: string; body: string; data?: Record<string, unknown> }>
+  messages: { to: string; title: string; body: string; data?: Record<string, unknown> }[]
 ): Promise<{ sent: number; failed: number }> {
   let sent = 0;
   let failed = 0;
@@ -321,7 +324,7 @@ export const notificationsRouter = createTRPCRouter({
       userId: z.string().optional(),
       title: z.string(),
       body: z.string(),
-      data: z.record(z.unknown()).optional(),
+      data: z.record(z.string(), z.unknown()).optional(),
     }))
     .mutation(async ({ input }) => {
       const users = await getUsersWithPushTokens();
