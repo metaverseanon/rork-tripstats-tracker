@@ -184,7 +184,7 @@ export default function RecapScreen() {
       <Text style={styles.statTitle}>{title}</Text>
       <View style={styles.statValueRow}>
         <Text style={[styles.statValue, large && styles.statValueLarge]}>{value}</Text>
-        {unit && <Text style={styles.statUnit}>{unit}</Text>}
+        {unit ? <Text style={styles.statUnit}>{unit}</Text> : null}
       </View>
     </View>
   );
