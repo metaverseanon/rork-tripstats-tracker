@@ -48,7 +48,7 @@ interface PeriodStats {
 
 export default function RecapScreen() {
   const { trips } = useTrips();
-  const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, getAccelerationLabel, colors } = useSettings();
+  const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, getAccelerationShortLabel, colors } = useSettings();
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('weekly');
 
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -295,14 +295,14 @@ export default function RecapScreen() {
         />
         <StatCard
           icon={<Timer color="#10B981" size={20} />}
-          title={`Best ${getAccelerationLabel('0-100').split(' ')[0]}`}
+          title={`Best ${getAccelerationShortLabel('0-100')}`}
           value={calculateStats.best0to100 !== null ? calculateStats.best0to100.toFixed(1) : '—'}
           unit={calculateStats.best0to100 !== null ? 'sec' : ''}
           color="#10B981"
         />
         <StatCard
           icon={<Timer color="#F59E0B" size={20} />}
-          title={`Best ${getAccelerationLabel('0-200').split(' ')[0]}`}
+          title={`Best ${getAccelerationShortLabel('0-200')}`}
           value={calculateStats.best0to200 !== null ? calculateStats.best0to200.toFixed(1) : '—'}
           unit={calculateStats.best0to200 !== null ? 'sec' : ''}
           color="#F59E0B"
