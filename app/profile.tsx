@@ -31,7 +31,8 @@ interface AdditionalCar {
 }
 
 export default function ProfileScreen() {
-  const { user, isAuthenticated, signUp, signOut, updateProfile, updateCar, updateLocation, addCar, removeCar, setPrimaryCar } = useUser();
+  const { user, isAuthenticated, signUp, signIn, signOut, updateProfile, updateCar, updateLocation, addCar, removeCar, setPrimaryCar } = useUser();
+  const [authMode, setAuthMode] = useState<'signup' | 'signin'>('signup');
   const { colors } = useSettings();
   const styles = useMemo(() => createStyles(colors), [colors]);
   
@@ -275,7 +276,7 @@ export default function ProfileScreen() {
       Alert.alert('Error', 'Please enter your email');
       return;
     }
-    if (!displayName.trim()) {
+    if (!isAuthenticated && authMode === 'signup' && !displayName.trim()) {
       Alert.alert('Error', 'Please enter your display name');
       return;
     }
@@ -294,6 +295,15 @@ export default function ProfileScreen() {
           await addCar(car.brand, car.model, car.picture);
         }
         Alert.alert('Success', 'Profile updated successfully');
+        router.back();
+      } else if (authMode === 'signin') {
+        const result = await signIn(email);
+        if (result) {
+          Alert.alert('Success', 'Signed in successfully');
+          router.back();
+        } else {
+          Alert.alert('Error', 'No account found with this email. Please sign up first.');
+        }
       } else {
         const carsToAdd: UserCar[] = additionalCars.map(c => ({
           id: c.id,
@@ -314,8 +324,8 @@ export default function ProfileScreen() {
           carsToAdd.length > 0 ? carsToAdd : undefined
         );
         Alert.alert('Success', 'Account created successfully');
+        router.back();
       }
-      router.back();
     } catch {
       Alert.alert('Error', 'Failed to save profile');
     } finally {
@@ -354,7 +364,7 @@ export default function ProfileScreen() {
     <>
       <Stack.Screen
         options={{
-          title: isAuthenticated ? 'Edit Profile' : 'Create Account',
+          title: isAuthenticated ? 'Edit Profile' : authMode === 'signin' ? 'Sign In' : 'Create Account',
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
         }}
@@ -370,43 +380,54 @@ export default function ProfileScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.avatarSection}>
-            <TouchableOpacity style={styles.avatarContainer} onPress={pickProfilePicture}>
-              {profilePicture ? (
-                <Image source={{ uri: profilePicture }} style={styles.avatarImage} />
-              ) : (
-                <View style={styles.avatar}>
-                  <User color={colors.textInverted} size={48} />
+            {(isAuthenticated || authMode === 'signup') && (
+              <TouchableOpacity style={styles.avatarContainer} onPress={pickProfilePicture}>
+                {profilePicture ? (
+                  <Image source={{ uri: profilePicture }} style={styles.avatarImage} />
+                ) : (
+                  <View style={styles.avatar}>
+                    <User color={colors.textInverted} size={48} />
+                  </View>
+                )}
+                <View style={styles.cameraOverlay}>
+                  <Camera color={colors.textInverted} size={16} />
                 </View>
-              )}
-              <View style={styles.cameraOverlay}>
-                <Camera color={colors.textInverted} size={16} />
+              </TouchableOpacity>
+            )}
+            {!isAuthenticated && authMode === 'signin' && (
+              <View style={styles.avatar}>
+                <User color={colors.textInverted} size={48} />
               </View>
-            </TouchableOpacity>
+            )}
             <Text style={styles.avatarText}>
-              {isAuthenticated ? 'Your Profile' : 'Join RedLine'}
+              {isAuthenticated ? 'Your Profile' : authMode === 'signin' ? 'Welcome Back' : 'Join RedLine'}
             </Text>
             <Text style={styles.avatarSubtext}>
               {isAuthenticated
                 ? 'Update your profile and car information'
+                : authMode === 'signin'
+                ? 'Sign in with your email to access your trips'
                 : 'Create an account to save your trips and compete on leaderboards'}
             </Text>
-            <Text style={styles.tapToChangeText}>Tap photo to change</Text>
+            {(isAuthenticated || authMode === 'signup') && <Text style={styles.tapToChangeText}>Tap photo to change</Text>}
           </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Account Information</Text>
             
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Display Name</Text>
-              <TextInput
-                style={styles.input}
-                value={displayName}
-                onChangeText={setDisplayName}
-                placeholder="Enter your name"
-                placeholderTextColor={colors.textLight}
-                autoCapitalize="words"
-              />
-            </View>
+            {(isAuthenticated || authMode === 'signup') && (
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Display Name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={displayName}
+                  onChangeText={setDisplayName}
+                  placeholder="Enter your name"
+                  placeholderTextColor={colors.textLight}
+                  autoCapitalize="words"
+                />
+              </View>
+            )}
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Email</Text>
@@ -422,6 +443,7 @@ export default function ProfileScreen() {
             </View>
           </View>
 
+          {(isAuthenticated || authMode === 'signup') && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Globe color={colors.text} size={20} />
@@ -557,8 +579,9 @@ export default function ProfileScreen() {
               )}
             </View>
           </View>
+          )}
 
-          {isAuthenticated && allUserCars.length > 1 && (
+          {isAuthenticated && allUserCars.length > 1 && authMode === 'signup' && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Car color={colors.text} size={20} />
@@ -603,6 +626,7 @@ export default function ProfileScreen() {
             </View>
           )}
 
+          {(isAuthenticated || authMode === 'signup') && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Car color={colors.text} size={20} />
@@ -716,7 +740,9 @@ export default function ProfileScreen() {
               )}
             </View>
           </View>
+          )}
 
+          {(isAuthenticated || authMode === 'signup') && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Car color={colors.text} size={20} />
@@ -758,7 +784,7 @@ export default function ProfileScreen() {
               </View>
             ))}
 
-            {showAddCarForm ? (
+            {(isAuthenticated || authMode === 'signup') && showAddCarForm ? (
               <View style={styles.addCarForm}>
                 <TouchableOpacity style={styles.carImagePickerSmall} onPress={pickNewCarPicture}>
                   {newCarPicture ? (
@@ -893,6 +919,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             )}
           </View>
+          )}
 
           <TouchableOpacity
             style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]}
@@ -900,9 +927,23 @@ export default function ProfileScreen() {
             disabled={isSubmitting}
           >
             <Text style={styles.saveButtonText}>
-              {isSubmitting ? 'Saving...' : isAuthenticated ? 'Save Changes' : 'Create Account'}
+              {isSubmitting ? 'Saving...' : isAuthenticated ? 'Save Changes' : authMode === 'signin' ? 'Sign In' : 'Create Account'}
             </Text>
           </TouchableOpacity>
+
+          {!isAuthenticated && (
+            <TouchableOpacity
+              style={styles.switchAuthButton}
+              onPress={() => setAuthMode(authMode === 'signin' ? 'signup' : 'signin')}
+            >
+              <Text style={styles.switchAuthText}>
+                {authMode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
+                <Text style={styles.switchAuthLink}>
+                  {authMode === 'signin' ? 'Sign Up' : 'Sign In'}
+                </Text>
+              </Text>
+            </TouchableOpacity>
+          )}
 
           {isAuthenticated && (
             <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
@@ -1290,6 +1331,20 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.danger,
     fontSize: 16,
     fontFamily: 'Orbitron_500Medium',
+  },
+  switchAuthButton: {
+    alignItems: 'center',
+    marginTop: 20,
+    padding: 12,
+  },
+  switchAuthText: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+  },
+  switchAuthLink: {
+    color: colors.accent,
+    fontFamily: 'Orbitron_600SemiBold',
   },
   selectCarHint: {
     fontSize: 13,
