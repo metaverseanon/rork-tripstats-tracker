@@ -358,6 +358,7 @@ export default function LeaderboardScreen() {
       )}
 
       <View style={styles.filtersContainer}>
+        <Text style={styles.sectionLabel}>Choose Category</Text>
         <TouchableOpacity
           style={styles.categoryDropdownButton}
           onPress={() => setShowCategoryDropdown(true)}
@@ -370,7 +371,8 @@ export default function LeaderboardScreen() {
           <ChevronDown size={18} color={colors.text} />
         </TouchableOpacity>
 
-        <View style={styles.filterChipsContainer}>
+        <Text style={styles.sectionLabel}>Filters</Text>
+        <View style={styles.filterRow}>
           <TouchableOpacity
             style={[styles.filterChip, filters.country && styles.filterChipActive]}
             onPress={() => openFilterModal('country')}
@@ -394,7 +396,9 @@ export default function LeaderboardScreen() {
             </Text>
             <ChevronDown size={12} color={filters.city ? colors.textInverted : colors.textLight} />
           </TouchableOpacity>
+        </View>
 
+        <View style={styles.filterRow}>
           <TouchableOpacity
             style={[styles.filterChip, filters.carBrand && styles.filterChipActive]}
             onPress={() => openFilterModal('carBrand')}
@@ -839,7 +843,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 12,
-    gap: 10,
+    gap: 8,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_500Medium',
+    color: colors.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 4,
   },
   categoryDropdownButton: {
     flexDirection: 'row',
@@ -862,18 +874,18 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: 'Orbitron_600SemiBold',
     color: colors.text,
   },
-  filterChipsContainer: {
+  filterRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
   },
   filterChip: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
     backgroundColor: colors.cardLight,
     borderWidth: 1,
     borderColor: colors.border,
@@ -889,7 +901,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 11,
     fontFamily: 'Orbitron_500Medium',
     color: colors.text,
-    maxWidth: 80,
+    flex: 1,
   },
   filterChipTextActive: {
     color: colors.textInverted,
@@ -900,9 +912,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   clearFiltersChip: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     backgroundColor: colors.cardLight,
     borderWidth: 1,
     borderColor: colors.danger,
