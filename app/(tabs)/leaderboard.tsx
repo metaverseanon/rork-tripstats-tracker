@@ -441,7 +441,7 @@ export default function LeaderboardScreen() {
               
               return (
                 <TouchableOpacity 
-                  key={trip.id} 
+                  key={trip.id || `trip-${index}`} 
                   style={styles.listItem}
                   onPress={() => openTripDetail(trip)}
                   activeOpacity={0.7}
