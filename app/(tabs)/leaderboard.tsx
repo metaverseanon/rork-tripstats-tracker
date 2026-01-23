@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, ReactNode } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, TextInput, Image, Platform } from 'react-native';
-import { Trophy, Zap, Navigation, Gauge, ChevronDown, X, MapPin, Car, Filter, Activity, Route, Search, Clock, Calendar, CornerDownRight, ChevronRight } from 'lucide-react-native';
+import { Trophy, Zap, Navigation, Gauge, ChevronDown, X, MapPin, Car, Filter, Activity, Route, Search, Clock, Calendar, CornerDownRight, ChevronRight, Timer } from 'lucide-react-native';
 import MapView, { Polyline, Marker } from 'react-native-maps';
 import { useTrips } from '@/providers/TripProvider';
 import { useSettings } from '@/providers/SettingsProvider';
@@ -20,6 +20,7 @@ export default function LeaderboardScreen() {
   const [filters, setFilters] = useState<LeaderboardFilters>({});
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [activeFilterType, setActiveFilterType] = useState<FilterType | null>(null);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
   const [selectedTrip, setSelectedTrip] = useState<TripStats | null>(null);
   const [showTripDetail, setShowTripDetail] = useState(false);
@@ -32,7 +33,13 @@ export default function LeaderboardScreen() {
     { key: 'totalDistance' as LeaderboardCategory, label: 'All-Time Distance', icon: <Route size={16} color={colors.primary} /> },
     { key: 'acceleration' as LeaderboardCategory, label: 'Acceleration', icon: <Gauge size={16} color={colors.success} /> },
     { key: 'gForce' as LeaderboardCategory, label: 'Max G-Force', icon: <Activity size={16} color={colors.danger} /> },
+    { key: 'zeroToHundred' as LeaderboardCategory, label: '0-100 km/h', icon: <Timer size={16} color={colors.primary} /> },
+    { key: 'zeroToTwoHundred' as LeaderboardCategory, label: '0-200 km/h', icon: <Timer size={16} color={colors.accent} /> },
   ], [colors]);
+
+  const activeCategory_data = useMemo(() => {
+    return CATEGORIES.find(c => c.key === activeCategory);
+  }, [CATEGORIES, activeCategory]);
 
   const countries = useMemo(() => COUNTRIES.map(c => ({ code: c.code, name: c.name, flag: c.flag })), []);
   
@@ -101,6 +108,16 @@ export default function LeaderboardScreen() {
           .filter((t) => (t.maxGForce ?? 0) > 0)
           .sort((a, b) => (b.maxGForce ?? 0) - (a.maxGForce ?? 0));
         break;
+      case 'zeroToHundred':
+        sorted = [...filteredTrips]
+          .filter((t) => (t.time0to100 ?? 0) > 0)
+          .sort((a, b) => (a.time0to100 ?? Infinity) - (b.time0to100 ?? Infinity));
+        break;
+      case 'zeroToTwoHundred':
+        sorted = [...filteredTrips]
+          .filter((t) => (t.time0to200 ?? 0) > 0)
+          .sort((a, b) => (a.time0to200 ?? Infinity) - (b.time0to200 ?? Infinity));
+        break;
     }
 
     return sorted.slice(0, 10);
@@ -138,6 +155,10 @@ export default function LeaderboardScreen() {
         return `${(trip.acceleration ?? 0).toFixed(2)} m/s²`;
       case 'gForce':
         return `${(trip.maxGForce ?? 0).toFixed(2)} G`;
+      case 'zeroToHundred':
+        return `${(trip.time0to100 ?? 0).toFixed(2)}s`;
+      case 'zeroToTwoHundred':
+        return `${(trip.time0to200 ?? 0).toFixed(2)}s`;
     }
   };
 
@@ -336,29 +357,20 @@ export default function LeaderboardScreen() {
         </View>
       )}
 
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false} 
-        style={styles.categoryScrollView}
-        contentContainerStyle={styles.categoryTabs}
-      >
-        {CATEGORIES.map((cat) => (
-          <TouchableOpacity
-            key={cat.key}
-            style={[styles.categoryTab, activeCategory === cat.key && styles.categoryTabActive]}
-            onPress={() => setActiveCategory(cat.key)}
-            activeOpacity={0.7}
-          >
-            {cat.icon}
-            <Text style={[styles.categoryTabText, activeCategory === cat.key && styles.categoryTabTextActive]}>
-              {cat.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
       <View style={styles.filtersContainer}>
-        <View style={styles.filtersRow}>
+        <TouchableOpacity
+          style={styles.categoryDropdownButton}
+          onPress={() => setShowCategoryDropdown(true)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.categoryDropdownLeft}>
+            {activeCategory_data?.icon}
+            <Text style={styles.categoryDropdownText}>{activeCategory_data?.label}</Text>
+          </View>
+          <ChevronDown size={18} color={colors.text} />
+        </TouchableOpacity>
+
+        <View style={styles.filterChipsContainer}>
           <TouchableOpacity
             style={[styles.filterChip, filters.country && styles.filterChipActive]}
             onPress={() => openFilterModal('country')}
@@ -368,7 +380,19 @@ export default function LeaderboardScreen() {
             <Text style={[styles.filterChipText, filters.country && styles.filterChipTextActive]} numberOfLines={1}>
               {filters.country || 'Country'}
             </Text>
-            <ChevronDown size={14} color={filters.country ? colors.textInverted : colors.textLight} />
+            <ChevronDown size={12} color={filters.country ? colors.textInverted : colors.textLight} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterChip, filters.city && styles.filterChipActive, !filters.country && styles.filterChipDisabled]}
+            onPress={() => filters.country && openFilterModal('city')}
+            activeOpacity={0.7}
+            disabled={!filters.country}
+          >
+            <Text style={[styles.filterChipText, filters.city && styles.filterChipTextActive, !filters.country && styles.filterChipTextDisabled]} numberOfLines={1}>
+              {filters.city || 'City'}
+            </Text>
+            <ChevronDown size={12} color={filters.city ? colors.textInverted : colors.textLight} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -380,22 +404,7 @@ export default function LeaderboardScreen() {
             <Text style={[styles.filterChipText, filters.carBrand && styles.filterChipTextActive]} numberOfLines={1}>
               {filters.carBrand || 'Brand'}
             </Text>
-            <ChevronDown size={14} color={filters.carBrand ? colors.textInverted : colors.textLight} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.filtersRow}>
-          <TouchableOpacity
-            style={[styles.filterChip, filters.city && styles.filterChipActive, !filters.country && styles.filterChipDisabled]}
-            onPress={() => filters.country && openFilterModal('city')}
-            activeOpacity={0.7}
-            disabled={!filters.country}
-          >
-            <MapPin size={14} color={filters.city ? colors.textInverted : (filters.country ? colors.text : colors.textLight)} />
-            <Text style={[styles.filterChipText, filters.city && styles.filterChipTextActive, !filters.country && styles.filterChipTextDisabled]} numberOfLines={1}>
-              {filters.city || 'City'}
-            </Text>
-            <ChevronDown size={14} color={filters.city ? colors.textInverted : colors.textLight} />
+            <ChevronDown size={12} color={filters.carBrand ? colors.textInverted : colors.textLight} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -404,24 +413,22 @@ export default function LeaderboardScreen() {
             activeOpacity={0.7}
             disabled={!filters.carBrand}
           >
-            <Car size={14} color={filters.carModel ? colors.textInverted : (filters.carBrand ? colors.text : colors.textLight)} />
             <Text style={[styles.filterChipText, filters.carModel && styles.filterChipTextActive, !filters.carBrand && styles.filterChipTextDisabled]} numberOfLines={1}>
               {filters.carModel || 'Model'}
             </Text>
-            <ChevronDown size={14} color={filters.carModel ? colors.textInverted : colors.textLight} />
+            <ChevronDown size={12} color={filters.carModel ? colors.textInverted : colors.textLight} />
           </TouchableOpacity>
-        </View>
 
-        {activeFiltersCount > 0 && (
-          <TouchableOpacity
-            style={styles.clearFiltersButton}
-            onPress={() => setFilters({})}
-            activeOpacity={0.7}
-          >
-            <X size={14} color={colors.danger} />
-            <Text style={styles.clearFiltersText}>Clear all</Text>
-          </TouchableOpacity>
-        )}
+          {activeFiltersCount > 0 && (
+            <TouchableOpacity
+              style={styles.clearFiltersChip}
+              onPress={() => setFilters({})}
+              activeOpacity={0.7}
+            >
+              <X size={12} color={colors.danger} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
@@ -759,6 +766,50 @@ export default function LeaderboardScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={showCategoryDropdown}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCategoryDropdown(false)}
+      >
+        <Pressable style={styles.categoryDropdownOverlay} onPress={() => setShowCategoryDropdown(false)}>
+          <View style={styles.categoryDropdownContent}>
+            <View style={styles.categoryDropdownHeader}>
+              <Text style={styles.categoryDropdownTitle}>Select Category</Text>
+              <TouchableOpacity onPress={() => setShowCategoryDropdown(false)} activeOpacity={0.7}>
+                <X size={22} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.categoryDropdownList}>
+              {CATEGORIES.map((cat) => (
+                <TouchableOpacity
+                  key={cat.key}
+                  style={[
+                    styles.categoryDropdownItem,
+                    activeCategory === cat.key && styles.categoryDropdownItemActive,
+                  ]}
+                  onPress={() => {
+                    setActiveCategory(cat.key);
+                    setShowCategoryDropdown(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  {cat.icon}
+                  <Text
+                    style={[
+                      styles.categoryDropdownItemText,
+                      activeCategory === cat.key && styles.categoryDropdownItemTextActive,
+                    ]}
+                  >
+                    {cat.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -784,55 +835,45 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: 'Orbitron_600SemiBold',
     color: colors.text,
   },
-  categoryScrollView: {
-    flexGrow: 0,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  categoryTabs: {
-    flexDirection: 'row',
+  filtersContainer: {
     paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
     gap: 10,
   },
-  categoryTab: {
+  categoryDropdownButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 10,
+    justifyContent: 'space-between',
+    backgroundColor: colors.cardLight,
+    paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: colors.cardLight,
+    borderWidth: 1,
+    borderColor: colors.primary,
   },
-  categoryTabActive: {
-    backgroundColor: colors.primary,
+  categoryDropdownLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  categoryTabText: {
-    fontSize: 12,
+  categoryDropdownText: {
+    fontSize: 14,
     fontFamily: 'Orbitron_600SemiBold',
     color: colors.text,
   },
-  categoryTabTextActive: {
-    color: colors.textInverted,
-  },
-  filtersContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    gap: 8,
-  },
-  filtersRow: {
+  filterChipsContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   filterChip: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 4,
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 10,
-    borderRadius: 20,
+    borderRadius: 16,
     backgroundColor: colors.cardLight,
     borderWidth: 1,
     borderColor: colors.border,
@@ -856,17 +897,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   filterChipTextDisabled: {
     color: colors.textLight,
   },
-  clearFiltersButton: {
-    flexDirection: 'row',
+  clearFiltersChip: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 6,
-  },
-  clearFiltersText: {
-    fontSize: 12,
-    fontFamily: 'Orbitron_500Medium',
-    color: colors.danger,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.cardLight,
+    borderWidth: 1,
+    borderColor: colors.danger,
   },
   scrollView: {
     flex: 1,
@@ -1258,5 +1297,53 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: 'Orbitron_400Regular',
     color: colors.textLight,
     marginTop: 2,
+  },
+  categoryDropdownOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  categoryDropdownContent: {
+    backgroundColor: colors.cardLight,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  categoryDropdownHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  categoryDropdownTitle: {
+    fontSize: 16,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.text,
+  },
+  categoryDropdownList: {
+    maxHeight: 350,
+  },
+  categoryDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  categoryDropdownItemActive: {
+    backgroundColor: colors.primary,
+  },
+  categoryDropdownItemText: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_500Medium',
+    color: colors.text,
+  },
+  categoryDropdownItemTextActive: {
+    color: colors.textInverted,
+    fontFamily: 'Orbitron_600SemiBold',
   },
 });
