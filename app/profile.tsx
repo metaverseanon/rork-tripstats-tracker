@@ -658,9 +658,9 @@ export default function ProfileScreen() {
                 <Text style={styles.sectionTitle}>Select Active Car</Text>
               </View>
               <Text style={styles.selectCarHint}>Tap a car to set it as your active car for tracking</Text>
-              {allUserCars.map((car) => (
+              {allUserCars.map((car, index) => (
                 <TouchableOpacity
-                  key={car.id}
+                  key={car.id || `user-car-${index}`}
                   style={[
                     styles.selectableCarCard,
                     car.isPrimary && styles.selectableCarCardActive,
@@ -819,8 +819,8 @@ export default function ProfileScreen() {
               <Text style={styles.sectionTitle}>Additional Cars</Text>
             </View>
 
-            {existingCars.map((car) => (
-              <View key={car.id} style={styles.additionalCarCard}>
+            {existingCars.map((car, index) => (
+              <View key={car.id || `existing-car-${index}`} style={styles.additionalCarCard}>
                 {car.picture && (
                   <Image source={{ uri: car.picture }} style={styles.additionalCarImage} />
                 )}
@@ -836,8 +836,8 @@ export default function ProfileScreen() {
               </View>
             ))}
 
-            {additionalCars.map((car) => (
-              <View key={car.id} style={styles.additionalCarCard}>
+            {additionalCars.map((car, index) => (
+              <View key={car.id || `additional-car-${index}`} style={styles.additionalCarCard}>
                 {car.picture && (
                   <Image source={{ uri: car.picture }} style={styles.additionalCarImage} />
                 )}
