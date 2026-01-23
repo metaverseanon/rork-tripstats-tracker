@@ -19,6 +19,8 @@ export interface UserProfile {
   carPicture?: string;
   cars?: UserCar[];
   createdAt: number;
+  pushToken?: string;
+  notificationsEnabled?: boolean;
 }
 
 export interface AuthState {

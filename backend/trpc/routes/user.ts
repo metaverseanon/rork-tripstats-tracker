@@ -16,6 +16,7 @@ interface StoredUser {
   carModel?: string;
   createdAt: number;
   welcomeEmailSent: boolean;
+  pushToken?: string | null;
 }
 
 const getWelcomeEmailHtml = (displayName: string) => `
@@ -176,6 +177,41 @@ async function storeUserInDb(user: StoredUser): Promise<boolean> {
   }
 }
 
+async function updateUserInDb(userId: string, updates: Partial<StoredUser>): Promise<boolean> {
+  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) {
+    console.log("Database not configured");
+    return false;
+  }
+
+  try {
+    const response = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/users/${userId}`, {
+      method: "PATCH",
+      headers: {
+        "Authorization": `Bearer ${DB_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(updates),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("Failed to update user:", error);
+      return false;
+    }
+
+    console.log("User updated in database:", userId);
+    return true;
+  } catch (error) {
+    console.error("Error updating user:", error);
+    return false;
+  }
+}
+
+async function getUsersWithPushTokens(): Promise<StoredUser[]> {
+  const users = await getAllUsers();
+  return users.filter(u => u.pushToken);
+}
+
 async function getAllUsers(): Promise<StoredUser[]> {
   if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) {
     console.log("Database not configured");
@@ -272,5 +308,25 @@ export const userRouter = createTRPCRouter({
       totalUsers: users.length,
       emailsSent: users.filter(u => u.welcomeEmailSent).length,
     };
+  }),
+
+  updatePushToken: publicProcedure
+    .input(z.object({
+      userId: z.string(),
+      pushToken: z.string().nullable(),
+    }))
+    .mutation(async ({ input }) => {
+      console.log("Updating push token for user:", input.userId);
+      const success = await updateUserInDb(input.userId, { pushToken: input.pushToken });
+      return { success };
+    }),
+
+  getUsersWithNotifications: publicProcedure.query(async () => {
+    const users = await getUsersWithPushTokens();
+    return users.map(u => ({
+      id: u.id,
+      displayName: u.displayName,
+      pushToken: u.pushToken,
+    }));
   }),
 });

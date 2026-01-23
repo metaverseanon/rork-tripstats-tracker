@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { TripProvider } from "@/providers/TripProvider";
 import { SettingsProvider } from "@/providers/SettingsProvider";
 import { UserProvider } from "@/providers/UserProvider";
+import { NotificationProvider } from "@/providers/NotificationProvider";
 import { trpc, trpcClient } from "@/lib/trpc";
 import {
   useFonts,
@@ -119,11 +120,13 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <SettingsProvider>
           <UserProvider>
-            <TripProvider>
-              <GestureHandlerRootView style={styles.container}>
-                <RootLayoutNav />
-              </GestureHandlerRootView>
-            </TripProvider>
+            <NotificationProvider>
+              <TripProvider>
+                <GestureHandlerRootView style={styles.container}>
+                  <RootLayoutNav />
+                </GestureHandlerRootView>
+              </TripProvider>
+            </NotificationProvider>
           </UserProvider>
         </SettingsProvider>
       </QueryClientProvider>

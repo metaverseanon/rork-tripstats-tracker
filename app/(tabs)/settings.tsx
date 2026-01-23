@@ -1,13 +1,17 @@
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Linking, Image } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Linking, Image, Switch, Platform, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
-import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle } from 'lucide-react-native';
+import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle, Bell } from 'lucide-react-native';
 import { useSettings, SpeedUnit, DistanceUnit } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
+import { useNotifications } from '@/providers/NotificationProvider';
 import { ThemeType } from '@/constants/colors';
+import { useState } from 'react';
 
 export default function SettingsScreen() {
   const { settings, colors, setSpeedUnit, setDistanceUnit, setTheme } = useSettings();
   const { user, isAuthenticated, getCarDisplayName } = useUser();
+  const { notificationsEnabled, registerForPushNotifications, disableNotifications, pushToken } = useNotifications();
+  const [isTogglingNotifications, setIsTogglingNotifications] = useState(false);
 
   const speedOptions: { value: SpeedUnit; label: string }[] = [
     { value: 'kmh', label: 'km/h' },
@@ -34,6 +38,25 @@ export default function SettingsScreen() {
 
   const openHelpCenter = () => {
     Linking.openURL('https://redlineapp.io/help.html');
+  };
+
+  const handleNotificationToggle = async (value: boolean) => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+    
+    setIsTogglingNotifications(true);
+    try {
+      if (value) {
+        await registerForPushNotifications(user?.id);
+      } else {
+        await disableNotifications(user?.id);
+      }
+    } catch (error) {
+      console.error('Failed to toggle notifications:', error);
+    } finally {
+      setIsTogglingNotifications(false);
+    }
   };
 
   const openProfile = () => {
@@ -193,6 +216,26 @@ export default function SettingsScreen() {
       alignItems: 'center',
       padding: 16,
     },
+    notificationItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: 16,
+    },
+    notificationContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1,
+    },
+    notificationTextContainer: {
+      flex: 1,
+    },
+    notificationDescription: {
+      fontSize: 13,
+      fontWeight: '400' as const,
+      color: colors.textLight,
+      marginTop: 2,
+    },
   });
 
   return (
@@ -344,6 +387,39 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+          </View>
+        </View>
+
+        <Text style={styles.sectionTitle}>Notifications</Text>
+        
+        <View style={styles.settingsCard}>
+          <View style={styles.notificationItem}>
+            <View style={styles.notificationContent}>
+              <View style={styles.settingIconContainer}>
+                <Bell size={20} color={colors.accent} />
+              </View>
+              <View style={styles.notificationTextContainer}>
+                <Text style={styles.settingLabel}>Weekly Recap</Text>
+                <Text style={styles.notificationDescription}>
+                  {Platform.OS === 'web' 
+                    ? 'Not available on web'
+                    : 'Get notified about your weekly driving stats'
+                  }
+                </Text>
+              </View>
+            </View>
+            {Platform.OS !== 'web' && (
+              isTogglingNotifications ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : (
+                <Switch
+                  value={notificationsEnabled}
+                  onValueChange={handleNotificationToggle}
+                  trackColor={{ false: colors.border, true: colors.accent + '80' }}
+                  thumbColor={notificationsEnabled ? colors.accent : colors.textLight}
+                />
+              )
+            )}
           </View>
         </View>
 
