@@ -279,33 +279,27 @@ export default function RecapScreen() {
           value={calculateStats.uniqueCarModels}
           color="#EC4899"
         />
-        {calculateStats.best0to100 !== null && (
-          <StatCard
-            icon={<Timer color="#10B981" size={20} />}
-            title="Best 0-100"
-            value={calculateStats.best0to100.toFixed(1)}
-            unit="sec"
-            color="#10B981"
-          />
-        )}
-        {calculateStats.best0to200 !== null && (
-          <StatCard
-            icon={<Timer color="#F59E0B" size={20} />}
-            title="Best 0-200"
-            value={calculateStats.best0to200.toFixed(1)}
-            unit="sec"
-            color="#F59E0B"
-          />
-        )}
-        {calculateStats.maxGForce > 0 && (
-          <StatCard
-            icon={<Activity color="#EF4444" size={20} />}
-            title="Max G-Force"
-            value={calculateStats.maxGForce.toFixed(2)}
-            unit="G"
-            color="#EF4444"
-          />
-        )}
+        <StatCard
+          icon={<Timer color="#10B981" size={20} />}
+          title="Best 0-100"
+          value={calculateStats.best0to100 !== null ? calculateStats.best0to100.toFixed(1) : '—'}
+          unit={calculateStats.best0to100 !== null ? 'sec' : ''}
+          color="#10B981"
+        />
+        <StatCard
+          icon={<Timer color="#F59E0B" size={20} />}
+          title="Best 0-200"
+          value={calculateStats.best0to200 !== null ? calculateStats.best0to200.toFixed(1) : '—'}
+          unit={calculateStats.best0to200 !== null ? 'sec' : ''}
+          color="#F59E0B"
+        />
+        <StatCard
+          icon={<Activity color="#EF4444" size={20} />}
+          title="Max G-Force"
+          value={calculateStats.maxGForce > 0 ? calculateStats.maxGForce.toFixed(2) : '—'}
+          unit={calculateStats.maxGForce > 0 ? 'G' : ''}
+          color="#EF4444"
+        />
       </View>
 
       {calculateStats.bestAcceleration > 0 && (
