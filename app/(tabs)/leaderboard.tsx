@@ -562,9 +562,9 @@ export default function LeaderboardScreen() {
                 <Text style={styles.modalOptionText}>All</Text>
               </TouchableOpacity>
 
-              {getFilterOptions().map((option) => (
+              {getFilterOptions().map((option, optionIndex) => (
                 <TouchableOpacity
-                  key={option.value}
+                  key={option.value || `option-${optionIndex}`}
                   style={[
                     styles.modalOption,
                     filters[activeFilterType!] === option.value && styles.modalOptionActive,

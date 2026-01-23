@@ -622,9 +622,9 @@ export default function ProfileScreen() {
               {showCityPicker && availableCities.length > 0 && (
                 <View style={styles.pickerOptions}>
                   <ScrollView style={styles.pickerScroll} nestedScrollEnabled>
-                    {availableCities.map((city) => (
+                    {availableCities.map((city, cityIndex) => (
                       <TouchableOpacity
-                        key={city}
+                        key={city || `city-${cityIndex}`}
                         style={[
                           styles.pickerOption,
                           selectedCity === city && styles.pickerOptionSelected,
