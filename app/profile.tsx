@@ -32,7 +32,7 @@ interface AdditionalCar {
 
 export default function ProfileScreen() {
   const { user, isAuthenticated, signUp, signIn, signOut, updateProfile, updateCar, updateLocation, addCar, removeCar, setPrimaryCar } = useUser();
-  const [authMode, setAuthMode] = useState<'signup' | 'signin'>('signup');
+  const [authMode, setAuthMode] = useState<'signup' | 'signin'>('signin');
   const { colors } = useSettings();
   const styles = useMemo(() => createStyles(colors), [colors]);
   
