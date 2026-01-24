@@ -17,6 +17,7 @@ const BACKGROUND_LOCATION_TASK = 'background-location-task';
 
 let backgroundLocationCallback: ((location: ExpoLocation.LocationObject) => void) | null = null;
 let taskDefined = false;
+let processLocationRef: ((location: ExpoLocation.LocationObject) => void) | null = null;
 
 const defineBackgroundTask = () => {
   if (taskDefined || Platform.OS === 'web') return;
@@ -28,9 +29,14 @@ const defineBackgroundTask = () => {
       }
       if (data) {
         const { locations } = data as { locations: ExpoLocation.LocationObject[] };
-        if (locations && locations.length > 0 && backgroundLocationCallback) {
+        if (locations && locations.length > 0) {
+          console.log('Background task received locations:', locations.length);
           for (const location of locations) {
-            backgroundLocationCallback(location);
+            if (processLocationRef) {
+              processLocationRef(location);
+            } else if (backgroundLocationCallback) {
+              backgroundLocationCallback(location);
+            }
           }
         }
       }
@@ -71,12 +77,14 @@ export const [TripProvider, useTrips] = createContextHook(() => {
   const time0to100 = useRef<number | null>(null);
   const time0to200 = useRef<number | null>(null);
   const time0to300 = useRef<number | null>(null);
+  const currentSpeedRef = useRef<number>(0);
 
   useEffect(() => {
     loadTrips();
     restoreTrackingState();
     return () => {
       backgroundLocationCallback = null;
+      processLocationRef = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -104,9 +112,15 @@ export const [TripProvider, useTrips] = createContextHook(() => {
         
         const hasTask = await ExpoLocation.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(() => false);
         if (hasTask) {
+          console.log('Restoring active background tracking');
           isBackgroundEnabled.current = true;
           setupBackgroundCallback();
           startDurationTimer(trip.startTime);
+          
+          const currentLocation = await ExpoLocation.getCurrentPositionAsync({
+            accuracy: ExpoLocation.Accuracy.BestForNavigation,
+          });
+          processLocationUpdateBackground(currentLocation);
         } else {
           resumeTracking(trip);
         }
@@ -138,11 +152,21 @@ export const [TripProvider, useTrips] = createContextHook(() => {
   }, [trips]);
 
   const setupBackgroundCallback = useCallback(() => {
+    console.log('Setting up background callback');
     backgroundLocationCallback = (location: ExpoLocation.LocationObject) => {
       processLocationUpdateBackground(location);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    processLocationRef = (location: ExpoLocation.LocationObject) => {
+      console.log('Background location update received, speed:', location.coords.speed);
+      processLocationUpdateBackground(location);
+    };
+    return () => {
+      processLocationRef = null;
+    };
+  });
 
   const startDurationTimer = (startTime: number) => {
     if (durationInterval.current) {
@@ -169,8 +193,12 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       timestamp: location.timestamp,
     };
 
+    console.log('Processing background location - raw speed:', rawSpeed, 'filtered speed:', speed);
+
     setCurrentSpeed(speed);
     setCurrentLocation(newLocation);
+    
+    currentSpeedRef.current = speed;
 
     calculateAcceleration(speed, location.timestamp);
     trackAccelerationTimes(speed, location.timestamp);
