@@ -98,47 +98,12 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
         throw new Error('Permission denied');
       }
 
-      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? process.env.EXPO_PUBLIC_PROJECT_ID;
       console.log('Getting push token with projectId:', projectId);
       
       if (!projectId) {
-        console.log('No EAS project ID found, using experienceId fallback');
-        const tokenData = await Notifications.getExpoPushTokenAsync();
-        const token = tokenData.data;
-        console.log('Push token obtained (fallback):', token);
-        
-        await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
-        await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'true');
-        setPushToken(token);
-        setNotificationsEnabled(true);
-
-        if (userId) {
-          try {
-            await trpcClient.user.updatePushToken.mutate({ userId, pushToken: token });
-            console.log('Push token synced to backend');
-          } catch (error) {
-            console.error('Failed to sync push token to backend:', error);
-          }
-        }
-
-        if (Platform.OS === 'android') {
-          await Notifications.setNotificationChannelAsync('default', {
-            name: 'Default',
-            importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#CC0000',
-          });
-
-          await Notifications.setNotificationChannelAsync('weekly-recap', {
-            name: 'Weekly Recap',
-            description: 'Weekly driving statistics and highlights',
-            importance: Notifications.AndroidImportance.HIGH,
-            vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#CC0000',
-          });
-        }
-
-        return token;
+        console.log('No project ID found');
+        throw new Error('No project ID available for push notifications');
       }
       
       const tokenData = await Notifications.getExpoPushTokenAsync({
