@@ -1,6 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -97,9 +98,51 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
         throw new Error('Permission denied');
       }
 
-      console.log('Getting push token with projectId:', process.env.EXPO_PUBLIC_PROJECT_ID);
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+      console.log('Getting push token with projectId:', projectId);
+      
+      if (!projectId) {
+        console.log('No EAS project ID found, using experienceId fallback');
+        const tokenData = await Notifications.getExpoPushTokenAsync();
+        const token = tokenData.data;
+        console.log('Push token obtained (fallback):', token);
+        
+        await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
+        await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'true');
+        setPushToken(token);
+        setNotificationsEnabled(true);
+
+        if (userId) {
+          try {
+            await trpcClient.user.updatePushToken.mutate({ userId, pushToken: token });
+            console.log('Push token synced to backend');
+          } catch (error) {
+            console.error('Failed to sync push token to backend:', error);
+          }
+        }
+
+        if (Platform.OS === 'android') {
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'Default',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#CC0000',
+          });
+
+          await Notifications.setNotificationChannelAsync('weekly-recap', {
+            name: 'Weekly Recap',
+            description: 'Weekly driving statistics and highlights',
+            importance: Notifications.AndroidImportance.HIGH,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#CC0000',
+          });
+        }
+
+        return token;
+      }
+      
       const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId: process.env.EXPO_PUBLIC_PROJECT_ID,
+        projectId,
       });
       const token = tokenData.data;
 
