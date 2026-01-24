@@ -101,9 +101,10 @@ export const [TripProvider, useTrips] = createContextHook(() => {
   const lastLocationUpdateTime = useRef<number>(0);
   const staleSpeedInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const appState = useRef<AppStateStatus>(AppState.currentState);
+  const isTrackingRef = useRef<boolean>(false);
 
   const refreshSpeedFromStorage = useCallback(async () => {
-    if (!isTracking) return;
+    if (!isTrackingRef.current) return;
     
     try {
       const [[, speedStr], [, timeStr]] = await AsyncStorage.multiGet([CURRENT_SPEED_KEY, LAST_LOCATION_TIME_KEY]);
@@ -117,8 +118,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
         setCurrentSpeed(storedSpeed);
         currentSpeedRef.current = storedSpeed;
         lastLocationUpdateTime.current = storedTime;
-      } else if (storedTime > 0 && (now - storedTime) >= SPEED_STALE_TIMEOUT) {
-        console.log('Stored speed is stale, setting to 0');
+      } else {
+        console.log('Stored speed is stale or missing, setting to 0');
         setCurrentSpeed(0);
         currentSpeedRef.current = 0;
       }
@@ -131,15 +132,51 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     } catch (e) {
       console.error('Failed to refresh speed from storage:', e);
     }
-  }, [isTracking]);
+  }, []);
+
+  const fetchFreshLocation = useCallback(async () => {
+    if (!isTrackingRef.current || Platform.OS === 'web') return;
+    
+    try {
+      console.log('Fetching fresh location after app resume');
+      const location = await ExpoLocation.getCurrentPositionAsync({
+        accuracy: ExpoLocation.Accuracy.BestForNavigation,
+      });
+      
+      const rawSpeed = Math.max(0, (location.coords.speed ?? 0) * 3.6);
+      const speed = rawSpeed < SPEED_NOISE_THRESHOLD ? 0 : rawSpeed;
+      
+      console.log('Fresh location speed:', speed);
+      
+      const now = Date.now();
+      lastLocationUpdateTime.current = now;
+      setCurrentSpeed(speed);
+      currentSpeedRef.current = speed;
+      
+      await saveBackgroundSpeed(speed, now);
+      
+      processLocationUpdateBackground(location);
+    } catch (error) {
+      console.error('Failed to fetch fresh location:', error);
+      setCurrentSpeed(0);
+      currentSpeedRef.current = 0;
+    }
+  }, []);
 
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+    const subscription = AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
       console.log('AppState changed from', appState.current, 'to', nextAppState);
       
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-        console.log('App came to foreground, refreshing speed');
-        refreshSpeedFromStorage();
+        console.log('App came to foreground, refreshing speed and fetching fresh location');
+        
+        await refreshSpeedFromStorage();
+        
+        fetchFreshLocation();
+        
+        if (isTrackingRef.current && staleSpeedInterval.current === null) {
+          startStaleSpeedDetection();
+        }
       }
       
       appState.current = nextAppState;
@@ -148,7 +185,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     return () => {
       subscription.remove();
     };
-  }, [refreshSpeedFromStorage]);
+  }, [refreshSpeedFromStorage, fetchFreshLocation]);
 
   useEffect(() => {
     loadTrips();
@@ -180,6 +217,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
         const trip = JSON.parse(savedTrip) as TripStats;
         setCurrentTrip(trip);
         setIsTracking(true);
+        isTrackingRef.current = true;
         
         const hasTask = await ExpoLocation.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(() => false);
         if (hasTask) {
@@ -655,6 +693,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
 
       setCurrentTrip(newTrip);
       setIsTracking(true);
+      isTrackingRef.current = true;
       await saveTrackingState(true, newTrip);
 
       previousHeading.current = null;
@@ -731,6 +770,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     }
 
     setIsTracking(false);
+    isTrackingRef.current = false;
     setCurrentTrip(null);
     setCurrentSpeed(0);
     setCurrentLocation(null);
