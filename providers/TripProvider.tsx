@@ -2,7 +2,7 @@ import createContextHook from '@nkzw/create-context-hook';
 import * as ExpoLocation from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform, Alert } from 'react-native';
+import { Platform, Alert, AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TripStats, Location as LocationType, TripLocation } from '@/types/trip';
 
@@ -15,10 +15,23 @@ const CORNER_RESET_TIMEOUT = 3000;
 const SPEED_NOISE_THRESHOLD = 5;
 const BACKGROUND_LOCATION_TASK = 'background-location-task';
 const SPEED_STALE_TIMEOUT = 3000;
+const CURRENT_SPEED_KEY = 'current_speed';
+const LAST_LOCATION_TIME_KEY = 'last_location_time';
 
 let backgroundLocationCallback: ((location: ExpoLocation.LocationObject) => void) | null = null;
 let taskDefined = false;
 let processLocationRef: ((location: ExpoLocation.LocationObject) => void) | null = null;
+
+const saveBackgroundSpeed = async (speed: number, timestamp: number) => {
+  try {
+    await AsyncStorage.multiSet([
+      [CURRENT_SPEED_KEY, speed.toString()],
+      [LAST_LOCATION_TIME_KEY, timestamp.toString()],
+    ]);
+  } catch (e) {
+    console.error('Failed to save background speed:', e);
+  }
+};
 
 const defineBackgroundTask = () => {
   if (taskDefined || Platform.OS === 'web') return;
@@ -32,6 +45,12 @@ const defineBackgroundTask = () => {
         const { locations } = data as { locations: ExpoLocation.LocationObject[] };
         if (locations && locations.length > 0) {
           console.log('Background task received locations:', locations.length);
+          const latestLocation = locations[locations.length - 1];
+          const rawSpeed = Math.max(0, (latestLocation.coords.speed ?? 0) * 3.6);
+          const speed = rawSpeed < 5 ? 0 : rawSpeed;
+          
+          await saveBackgroundSpeed(speed, Date.now());
+          
           for (const location of locations) {
             if (processLocationRef) {
               processLocationRef(location);
@@ -81,6 +100,55 @@ export const [TripProvider, useTrips] = createContextHook(() => {
   const currentSpeedRef = useRef<number>(0);
   const lastLocationUpdateTime = useRef<number>(0);
   const staleSpeedInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const appState = useRef<AppStateStatus>(AppState.currentState);
+
+  const refreshSpeedFromStorage = useCallback(async () => {
+    if (!isTracking) return;
+    
+    try {
+      const [[, speedStr], [, timeStr]] = await AsyncStorage.multiGet([CURRENT_SPEED_KEY, LAST_LOCATION_TIME_KEY]);
+      const storedSpeed = speedStr ? parseFloat(speedStr) : 0;
+      const storedTime = timeStr ? parseInt(timeStr, 10) : 0;
+      const now = Date.now();
+      
+      console.log('Refreshing speed from storage:', storedSpeed, 'time since update:', now - storedTime, 'ms');
+      
+      if (storedTime > 0 && (now - storedTime) < SPEED_STALE_TIMEOUT) {
+        setCurrentSpeed(storedSpeed);
+        currentSpeedRef.current = storedSpeed;
+        lastLocationUpdateTime.current = storedTime;
+      } else if (storedTime > 0 && (now - storedTime) >= SPEED_STALE_TIMEOUT) {
+        console.log('Stored speed is stale, setting to 0');
+        setCurrentSpeed(0);
+        currentSpeedRef.current = 0;
+      }
+      
+      const savedTrip = await AsyncStorage.getItem(CURRENT_TRIP_KEY);
+      if (savedTrip) {
+        const trip = JSON.parse(savedTrip) as TripStats;
+        setCurrentTrip(trip);
+      }
+    } catch (e) {
+      console.error('Failed to refresh speed from storage:', e);
+    }
+  }, [isTracking]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      console.log('AppState changed from', appState.current, 'to', nextAppState);
+      
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        console.log('App came to foreground, refreshing speed');
+        refreshSpeedFromStorage();
+      }
+      
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [refreshSpeedFromStorage]);
 
   useEffect(() => {
     loadTrips();
@@ -220,11 +288,14 @@ export const [TripProvider, useTrips] = createContextHook(() => {
 
     console.log('Processing background location - raw speed:', rawSpeed, 'filtered speed:', speed);
 
-    lastLocationUpdateTime.current = Date.now();
+    const now = Date.now();
+    lastLocationUpdateTime.current = now;
     setCurrentSpeed(speed);
     setCurrentLocation(newLocation);
     
     currentSpeedRef.current = speed;
+    
+    saveBackgroundSpeed(speed, now).catch(console.error);
 
     calculateAcceleration(speed, location.timestamp);
     trackAccelerationTimes(speed, location.timestamp);
@@ -287,10 +358,13 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       timestamp: location.timestamp,
     };
 
-    lastLocationUpdateTime.current = Date.now();
+    const now = Date.now();
+    lastLocationUpdateTime.current = now;
     setCurrentSpeed(speed);
     currentSpeedRef.current = speed;
     setCurrentLocation(newLocation);
+    
+    saveBackgroundSpeed(speed, now).catch(console.error);
 
     calculateAcceleration(speed, location.timestamp);
     trackAccelerationTimes(speed, location.timestamp);
@@ -661,6 +735,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     setCurrentSpeed(0);
     setCurrentLocation(null);
     await saveTrackingState(false, null);
+    await AsyncStorage.multiRemove([CURRENT_SPEED_KEY, LAST_LOCATION_TIME_KEY]).catch(console.error);
     previousHeading.current = null;
     accumulatedHeadingChange.current = 0;
     lastCornerTime.current = 0;
