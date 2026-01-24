@@ -68,11 +68,15 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
   const registerForPushNotifications = useCallback(async (userId?: string): Promise<string | null> => {
     if (Platform.OS === 'web') {
       console.log('Push notifications not supported on web');
+      setNotificationsEnabled(false);
+      await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'false');
       return null;
     }
 
     if (!Device.isDevice) {
       console.log('Push notifications require a physical device');
+      setNotificationsEnabled(false);
+      await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'false');
       return null;
     }
 
@@ -87,6 +91,8 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
 
       if (finalStatus !== 'granted') {
         console.log('Push notification permission denied');
+        setNotificationsEnabled(false);
+        await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'false');
         return null;
       }
 
@@ -131,6 +137,8 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
       return token;
     } catch (error) {
       console.error('Failed to register for push notifications:', error);
+      setNotificationsEnabled(false);
+      await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'false');
       return null;
     }
   }, []);
@@ -138,7 +146,9 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
   const disableNotifications = useCallback(async (userId?: string) => {
     try {
       await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'false');
+      await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
       setNotificationsEnabled(false);
+      setPushToken(null);
 
       if (userId && pushToken) {
         try {

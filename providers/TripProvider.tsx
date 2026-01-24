@@ -9,7 +9,9 @@ import { TripStats, Location as LocationType, TripLocation } from '@/types/trip'
 const TRIPS_KEY = 'trips';
 const CURRENT_TRIP_KEY = 'current_trip';
 const TRACKING_STATE_KEY = 'tracking_state';
-const CORNER_THRESHOLD = 30;
+const CORNER_THRESHOLD = 15;
+const CORNER_ACCUMULATION_THRESHOLD = 45;
+const CORNER_RESET_TIMEOUT = 3000;
 const SPEED_NOISE_THRESHOLD = 3;
 const BACKGROUND_LOCATION_TASK = 'background-location-task';
 
@@ -54,8 +56,12 @@ export const [TripProvider, useTrips] = createContextHook(() => {
   const isBackgroundEnabled = useRef<boolean>(false);
   const durationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const previousHeading = useRef<number | null>(null);
+  const accumulatedHeadingChange = useRef<number>(0);
+  const lastCornerTime = useRef<number>(0);
   const previousSpeed = useRef<number>(0);
   const previousSpeedTime = useRef<number>(0);
+  const currentTripRef = useRef<TripStats | null>(null);
+  const tripsRef = useRef<TripStats[]>([]);
   const maxAcceleration = useRef<number>(0);
   const maxGForce = useRef<number>(0);
   const accelStartTime = useRef<number | null>(null);
@@ -123,11 +129,20 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     }
   };
 
-  const setupBackgroundCallback = () => {
+  useEffect(() => {
+    currentTripRef.current = currentTrip;
+  }, [currentTrip]);
+
+  useEffect(() => {
+    tripsRef.current = trips;
+  }, [trips]);
+
+  const setupBackgroundCallback = useCallback(() => {
     backgroundLocationCallback = (location: ExpoLocation.LocationObject) => {
-      processLocationUpdate(location);
+      processLocationUpdateBackground(location);
     };
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const startDurationTimer = (startTime: number) => {
     if (durationInterval.current) {
@@ -142,6 +157,70 @@ export const [TripProvider, useTrips] = createContextHook(() => {
         return updated;
       });
     }, 1000);
+  };
+
+  const processLocationUpdateBackground = (location: ExpoLocation.LocationObject) => {
+    const rawSpeed = Math.max(0, (location.coords.speed ?? 0) * 3.6);
+    const speed = rawSpeed < SPEED_NOISE_THRESHOLD ? 0 : rawSpeed;
+    const newLocation: LocationType = {
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+      speed: speed,
+      timestamp: location.timestamp,
+    };
+
+    setCurrentSpeed(speed);
+    setCurrentLocation(newLocation);
+
+    calculateAcceleration(speed, location.timestamp);
+    trackAccelerationTimes(speed, location.timestamp);
+
+    setCurrentTrip((prev) => {
+      if (!prev) return prev;
+
+      const updatedLocations = [...prev.locations, newLocation];
+      let distance = prev.distance;
+      let corners = prev.corners;
+
+      if (prev.locations.length > 0) {
+        const lastLoc = prev.locations[prev.locations.length - 1];
+        const dist = calculateDistance(
+          lastLoc.latitude,
+          lastLoc.longitude,
+          newLocation.latitude,
+          newLocation.longitude
+        );
+        distance += dist;
+
+        if (location.coords.heading !== undefined && location.coords.heading !== null && location.coords.heading !== -1) {
+          if (detectCorner(location.coords.heading, location.timestamp)) {
+            corners++;
+          }
+        }
+      }
+
+      const duration = (Date.now() - prev.startTime) / 1000;
+      const topSpeed = Math.max(prev.topSpeed, speed);
+      const avgSpeed = distance > 0 ? (distance / duration) * 3600 : 0;
+
+      const updated = {
+        ...prev,
+        locations: updatedLocations,
+        distance,
+        duration,
+        topSpeed,
+        avgSpeed,
+        corners,
+        acceleration: maxAcceleration.current,
+        maxGForce: maxGForce.current,
+        time0to100: time0to100.current ?? undefined,
+        time0to200: time0to200.current ?? undefined,
+        time0to300: time0to300.current ?? undefined,
+      };
+      
+      AsyncStorage.setItem(CURRENT_TRIP_KEY, JSON.stringify(updated)).catch(console.error);
+      return updated;
+    });
   };
 
   const processLocationUpdate = (location: ExpoLocation.LocationObject) => {
@@ -178,7 +257,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
         distance += dist;
 
         if (location.coords.heading !== undefined && location.coords.heading !== null && location.coords.heading !== -1) {
-          if (detectCorner(location.coords.heading)) {
+          if (detectCorner(location.coords.heading, location.timestamp)) {
             corners++;
           }
         }
@@ -225,9 +304,10 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     }
   };
 
-  const detectCorner = (newHeading: number): boolean => {
+  const detectCorner = (newHeading: number, currentTime: number): boolean => {
     if (previousHeading.current === null) {
       previousHeading.current = newHeading;
+      accumulatedHeadingChange.current = 0;
       return false;
     }
 
@@ -236,9 +316,26 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       diff = 360 - diff;
     }
 
-    const isCorner = diff > CORNER_THRESHOLD;
+    // Reset accumulation if too much time has passed since last significant change
+    if (currentTime - lastCornerTime.current > CORNER_RESET_TIMEOUT) {
+      accumulatedHeadingChange.current = 0;
+    }
+
+    // Accumulate heading changes for gradual turns
+    if (diff >= CORNER_THRESHOLD) {
+      accumulatedHeadingChange.current += diff;
+      lastCornerTime.current = currentTime;
+    }
+
     previousHeading.current = newHeading;
-    return isCorner;
+
+    // Detect corner when accumulated change exceeds threshold
+    if (accumulatedHeadingChange.current >= CORNER_ACCUMULATION_THRESHOLD) {
+      accumulatedHeadingChange.current = 0;
+      return true;
+    }
+
+    return false;
   };
 
   const reverseGeocode = async (latitude: number, longitude: number): Promise<TripLocation> => {
@@ -429,6 +526,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       await saveTrackingState(true, newTrip);
 
       previousHeading.current = null;
+      accumulatedHeadingChange.current = 0;
+      lastCornerTime.current = 0;
       previousSpeed.current = 0;
       previousSpeedTime.current = 0;
       maxAcceleration.current = 0;
@@ -503,6 +602,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     setCurrentLocation(null);
     await saveTrackingState(false, null);
     previousHeading.current = null;
+    accumulatedHeadingChange.current = 0;
+    lastCornerTime.current = 0;
     previousSpeed.current = 0;
     previousSpeedTime.current = 0;
     maxAcceleration.current = 0;
