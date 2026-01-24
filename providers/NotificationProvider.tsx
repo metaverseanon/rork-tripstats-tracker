@@ -98,19 +98,17 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
         throw new Error('Permission denied');
       }
 
-      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+      const projectId = process.env.EXPO_PUBLIC_PROJECT_ID || Constants.expoConfig?.extra?.eas?.projectId;
       console.log('Getting push token with projectId:', projectId);
       
-      let tokenData;
-      if (projectId) {
-        tokenData = await Notifications.getExpoPushTokenAsync({
-          projectId,
-        });
-      } else {
-        // In development/Expo Go, try without explicit projectId
-        console.log('No EAS projectId found, trying without explicit projectId');
-        tokenData = await Notifications.getExpoPushTokenAsync();
+      if (!projectId) {
+        console.error('No projectId available for push notifications');
+        throw new Error('Push notifications are not configured properly. Please try again later.');
       }
+      
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId,
+      });
       const token = tokenData.data;
 
       console.log('Push token obtained:', token);
