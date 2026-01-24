@@ -98,17 +98,30 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
         throw new Error('Permission denied');
       }
 
-      const projectId = process.env.EXPO_PUBLIC_PROJECT_ID || Constants.expoConfig?.extra?.eas?.projectId;
-      console.log('Getting push token with projectId:', projectId);
+      // Get EAS project ID - must be a valid UUID format
+      // Do NOT use EXPO_PUBLIC_PROJECT_ID as that's the Rork project ID, not EAS
+      const easProjectId = Constants.expoConfig?.extra?.eas?.projectId;
+      console.log('EAS projectId from config:', easProjectId);
+      console.log('experienceId:', Constants.expoConfig?.slug ? `@${Constants.expoConfig?.owner || 'anonymous'}/${Constants.expoConfig?.slug}` : undefined);
       
-      if (!projectId) {
-        console.error('No projectId available for push notifications');
-        throw new Error('Push notifications are not configured properly. Please try again later.');
+      let tokenData;
+      
+      if (easProjectId) {
+        // Production: use EAS project ID
+        console.log('Using EAS projectId for push token');
+        tokenData = await Notifications.getExpoPushTokenAsync({
+          projectId: easProjectId,
+        });
+      } else {
+        // Development in Expo Go: try without projectId (uses experienceId)
+        console.log('No EAS projectId, trying Expo Go mode...');
+        try {
+          tokenData = await Notifications.getExpoPushTokenAsync();
+        } catch (expoGoError) {
+          console.error('Expo Go push token failed:', expoGoError);
+          throw new Error('Push notifications require a production build. They are not available in development mode.');
+        }
       }
-      
-      const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId,
-      });
       const token = tokenData.data;
 
       console.log('Push token obtained:', token);
