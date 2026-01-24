@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Linking, Image, Switch, Platform, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Linking, Image, Switch, Platform, ActivityIndicator, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle, Bell } from 'lucide-react-native';
 import { useSettings, SpeedUnit, DistanceUnit } from '@/providers/SettingsProvider';
@@ -52,8 +52,28 @@ export default function SettingsScreen() {
       } else {
         await disableNotifications(user?.id);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to toggle notifications:', error);
+      const message = error?.message || 'Unknown error';
+      if (message.includes('Permission denied')) {
+        Alert.alert(
+          'Permission Required',
+          'Please enable notifications in your device settings to receive weekly recaps.',
+          [{ text: 'OK' }]
+        );
+      } else if (message.includes('physical device')) {
+        Alert.alert(
+          'Device Required',
+          'Push notifications require a physical device. They won\'t work on simulators.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Error',
+          'Failed to enable notifications. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
     } finally {
       setIsTogglingNotifications(false);
     }

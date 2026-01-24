@@ -66,36 +66,38 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
   };
 
   const registerForPushNotifications = useCallback(async (userId?: string): Promise<string | null> => {
+    console.log('registerForPushNotifications called, Platform:', Platform.OS);
+    
     if (Platform.OS === 'web') {
       console.log('Push notifications not supported on web');
-      setNotificationsEnabled(false);
-      await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'false');
-      return null;
+      throw new Error('Push notifications not supported on web');
     }
 
+    console.log('Device.isDevice:', Device.isDevice);
     if (!Device.isDevice) {
       console.log('Push notifications require a physical device');
-      setNotificationsEnabled(false);
-      await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'false');
-      return null;
+      throw new Error('Push notifications require a physical device');
     }
 
     try {
+      console.log('Checking existing permissions...');
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      console.log('Existing permission status:', existingStatus);
       let finalStatus = existingStatus;
 
       if (existingStatus !== 'granted') {
+        console.log('Requesting permissions...');
         const { status } = await Notifications.requestPermissionsAsync();
+        console.log('New permission status:', status);
         finalStatus = status;
       }
 
       if (finalStatus !== 'granted') {
         console.log('Push notification permission denied');
-        setNotificationsEnabled(false);
-        await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'false');
-        return null;
+        throw new Error('Permission denied');
       }
 
+      console.log('Getting push token with projectId:', process.env.EXPO_PUBLIC_PROJECT_ID);
       const tokenData = await Notifications.getExpoPushTokenAsync({
         projectId: process.env.EXPO_PUBLIC_PROJECT_ID,
       });
@@ -137,9 +139,7 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
       return token;
     } catch (error) {
       console.error('Failed to register for push notifications:', error);
-      setNotificationsEnabled(false);
-      await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'false');
-      return null;
+      throw error;
     }
   }, []);
 
