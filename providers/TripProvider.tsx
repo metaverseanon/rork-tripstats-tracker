@@ -14,6 +14,7 @@ const CORNER_ACCUMULATION_THRESHOLD = 45;
 const CORNER_RESET_TIMEOUT = 3000;
 const SPEED_NOISE_THRESHOLD = 5;
 const BACKGROUND_LOCATION_TASK = 'background-location-task';
+const SPEED_STALE_TIMEOUT = 3000;
 
 let backgroundLocationCallback: ((location: ExpoLocation.LocationObject) => void) | null = null;
 let taskDefined = false;
@@ -78,6 +79,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
   const time0to200 = useRef<number | null>(null);
   const time0to300 = useRef<number | null>(null);
   const currentSpeedRef = useRef<number>(0);
+  const lastLocationUpdateTime = useRef<number>(0);
+  const staleSpeedInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     loadTrips();
@@ -183,6 +186,28 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     }, 1000);
   };
 
+  const startStaleSpeedDetection = () => {
+    if (staleSpeedInterval.current) {
+      clearInterval(staleSpeedInterval.current);
+    }
+    lastLocationUpdateTime.current = Date.now();
+    staleSpeedInterval.current = setInterval(() => {
+      const timeSinceLastUpdate = Date.now() - lastLocationUpdateTime.current;
+      if (lastLocationUpdateTime.current > 0 && timeSinceLastUpdate > SPEED_STALE_TIMEOUT && currentSpeedRef.current > 0) {
+        console.log('Speed stale detected, no location update for', timeSinceLastUpdate, 'ms, setting speed to 0');
+        setCurrentSpeed(0);
+        currentSpeedRef.current = 0;
+      }
+    }, 1000);
+  };
+
+  const stopStaleSpeedDetection = () => {
+    if (staleSpeedInterval.current) {
+      clearInterval(staleSpeedInterval.current);
+      staleSpeedInterval.current = null;
+    }
+  };
+
   const processLocationUpdateBackground = (location: ExpoLocation.LocationObject) => {
     const rawSpeed = Math.max(0, (location.coords.speed ?? 0) * 3.6);
     const speed = rawSpeed < SPEED_NOISE_THRESHOLD ? 0 : rawSpeed;
@@ -195,6 +220,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
 
     console.log('Processing background location - raw speed:', rawSpeed, 'filtered speed:', speed);
 
+    lastLocationUpdateTime.current = Date.now();
     setCurrentSpeed(speed);
     setCurrentLocation(newLocation);
     
@@ -261,7 +287,9 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       timestamp: location.timestamp,
     };
 
+    lastLocationUpdateTime.current = Date.now();
     setCurrentSpeed(speed);
+    currentSpeedRef.current = speed;
     setCurrentLocation(newLocation);
 
     calculateAcceleration(speed, location.timestamp);
@@ -501,7 +529,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       await ExpoLocation.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
         accuracy: ExpoLocation.Accuracy.BestForNavigation,
         timeInterval: 1000,
-        distanceInterval: 5,
+        distanceInterval: 0,
         showsBackgroundLocationIndicator: true,
         foregroundService: {
           notificationTitle: 'TripStats Tracking',
@@ -509,6 +537,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
           notificationColor: '#CC0000',
         },
       });
+      startStaleSpeedDetection();
     } else {
       console.log('Background location not granted, using foreground only');
       isBackgroundEnabled.current = false;
@@ -517,10 +546,11 @@ export const [TripProvider, useTrips] = createContextHook(() => {
         {
           accuracy: ExpoLocation.Accuracy.BestForNavigation,
           timeInterval: 1000,
-          distanceInterval: 5,
+          distanceInterval: 0,
         },
         (location) => processLocationUpdate(location)
       );
+      startStaleSpeedDetection();
     }
     
     startDurationTimer(startTime);
@@ -599,6 +629,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       durationInterval.current = null;
     }
 
+    stopStaleSpeedDetection();
+
     if (currentTrip) {
       let tripLocation: TripLocation = { country: 'Unknown', city: 'Unknown' };
       
@@ -643,6 +675,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     time0to100.current = null;
     time0to200.current = null;
     time0to300.current = null;
+    lastLocationUpdateTime.current = 0;
   }, [currentTrip, trips]);
 
   const clearLastSavedTrip = useCallback(() => {
