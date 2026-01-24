@@ -12,7 +12,7 @@ const TRACKING_STATE_KEY = 'tracking_state';
 const CORNER_THRESHOLD = 15;
 const CORNER_ACCUMULATION_THRESHOLD = 45;
 const CORNER_RESET_TIMEOUT = 3000;
-const SPEED_NOISE_THRESHOLD = 3;
+const SPEED_NOISE_THRESHOLD = 5;
 const BACKGROUND_LOCATION_TASK = 'background-location-task';
 
 let backgroundLocationCallback: ((location: ExpoLocation.LocationObject) => void) | null = null;
