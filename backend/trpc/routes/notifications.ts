@@ -356,4 +356,42 @@ export const notificationsRouter = createTRPCRouter({
         failed,
       };
     }),
+
+  sendDrivePing: publicProcedure
+    .input(z.object({
+      fromUserId: z.string(),
+      fromUserName: z.string(),
+      fromUserCar: z.string().optional(),
+      toUserId: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      console.log("Sending drive ping from", input.fromUserName, "to user", input.toUserId);
+      
+      const users = await getUsersWithPushTokens();
+      const targetUser = users.find(u => u.id === input.toUserId);
+
+      if (!targetUser) {
+        return {
+          success: false,
+          message: "User not found or notifications not enabled",
+        };
+      }
+
+      const carInfo = input.fromUserCar ? ` (${input.fromUserCar})` : '';
+      const title = "🚗 Drive Invite!";
+      const body = `${input.fromUserName}${carInfo} wants to go for a drive with you!`;
+
+      const success = await sendExpoPushNotification(
+        targetUser.pushToken,
+        title,
+        body,
+        { 
+          type: "drive_ping", 
+          fromUserId: input.fromUserId,
+          fromUserName: input.fromUserName,
+        }
+      );
+
+      return { success };
+    }),
 });

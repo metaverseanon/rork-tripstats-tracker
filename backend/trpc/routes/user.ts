@@ -329,4 +329,32 @@ export const userRouter = createTRPCRouter({
       pushToken: u.pushToken,
     }));
   }),
+
+  getNearbyUsers: publicProcedure
+    .input(z.object({
+      userId: z.string(),
+      country: z.string().optional(),
+      city: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      console.log("Fetching nearby users for:", input.userId);
+      const users = await getAllUsers();
+      
+      const nearbyUsers = users.filter(u => {
+        if (u.id === input.userId) return false;
+        if (input.city && u.city === input.city) return true;
+        if (input.country && u.country === input.country) return true;
+        return false;
+      });
+
+      return nearbyUsers.map(u => ({
+        id: u.id,
+        displayName: u.displayName,
+        country: u.country,
+        city: u.city,
+        carBrand: u.carBrand,
+        carModel: u.carModel,
+        hasPushToken: !!u.pushToken,
+      }));
+    }),
 });

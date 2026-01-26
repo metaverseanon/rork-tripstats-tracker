@@ -1,6 +1,8 @@
 import { useState, useMemo, useCallback, ReactNode } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, TextInput, Image, Platform } from 'react-native';
-import { Trophy, Zap, Navigation, Gauge, ChevronDown, X, MapPin, Car, Filter, Activity, Route, Search, Clock, Calendar, CornerDownRight, ChevronRight, Timer } from 'lucide-react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, TextInput, Image, Platform, Alert, ActivityIndicator } from 'react-native';
+import { Trophy, Zap, Navigation, Gauge, ChevronDown, X, MapPin, Car, Filter, Activity, Route, Search, Clock, Calendar, CornerDownRight, ChevronRight, Timer, Users, Send, Bell } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
+import { trpc } from '@/lib/trpc';
 import MapView, { Polyline, Marker } from 'react-native-maps';
 import { useTrips } from '@/providers/TripProvider';
 import { useSettings } from '@/providers/SettingsProvider';
@@ -24,8 +26,58 @@ export default function LeaderboardScreen() {
   const [countrySearch, setCountrySearch] = useState('');
   const [selectedTrip, setSelectedTrip] = useState<TripStats | null>(null);
   const [showTripDetail, setShowTripDetail] = useState(false);
+  const [showNearbyDrivers, setShowNearbyDrivers] = useState(false);
+  const [pingingUserId, setPingingUserId] = useState<string | null>(null);
 
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  const nearbyUsersQuery = trpc.user.getNearbyUsers.useQuery(
+    {
+      userId: user?.id || '',
+      country: user?.country,
+      city: user?.city,
+    },
+    {
+      enabled: !!user?.id && !!(user?.country || user?.city),
+    }
+  );
+
+  const sendPingMutation = trpc.notifications.sendDrivePing.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert('Ping Sent!', 'Your drive invite has been sent.');
+      } else {
+        Alert.alert('Could not send', data.message || 'User may not have notifications enabled.');
+      }
+      setPingingUserId(null);
+    },
+    onError: (error) => {
+      console.error('Failed to send ping:', error);
+      Alert.alert('Error', 'Failed to send drive invite. Please try again.');
+      setPingingUserId(null);
+    },
+  });
+
+  const handlePingUser = useCallback((targetUserId: string, targetUserName: string) => {
+    if (!user) return;
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setPingingUserId(targetUserId);
+    
+    const carInfo = user.carBrand && user.carModel 
+      ? `${user.carBrand} ${user.carModel}` 
+      : undefined;
+    
+    sendPingMutation.mutate({
+      fromUserId: user.id,
+      fromUserName: user.displayName,
+      fromUserCar: carInfo,
+      toUserId: targetUserId,
+    });
+  }, [user, sendPingMutation]);
+
+  const nearbyUsers = nearbyUsersQuery.data || [];
 
   const CATEGORIES = useMemo(() => [
     { key: 'topSpeed' as LeaderboardCategory, label: 'Top Speed', icon: <Zap size={16} color={colors.warning} /> },
@@ -354,6 +406,16 @@ export default function LeaderboardScreen() {
         <View style={styles.userLocationBanner}>
           <MapPin size={14} color={colors.primary} />
           <Text style={styles.userLocationText}>{userLocation}</Text>
+          {nearbyUsers.length > 0 && (
+            <TouchableOpacity
+              style={styles.nearbyDriversButton}
+              onPress={() => setShowNearbyDrivers(true)}
+              activeOpacity={0.7}
+            >
+              <Users size={14} color={colors.textInverted} />
+              <Text style={styles.nearbyDriversButtonText}>{nearbyUsers.length} Nearby</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -772,6 +834,105 @@ export default function LeaderboardScreen() {
       </Modal>
 
       <Modal
+        visible={showNearbyDrivers}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowNearbyDrivers(false)}
+      >
+        <View style={styles.nearbyDriversOverlay}>
+          <View style={styles.nearbyDriversContent}>
+            <View style={styles.nearbyDriversHeader}>
+              <View style={styles.nearbyDriversHeaderLeft}>
+                <Users size={22} color={colors.primary} />
+                <Text style={styles.nearbyDriversTitle}>Nearby Drivers</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowNearbyDrivers(false)} activeOpacity={0.7}>
+                <X size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={styles.nearbyDriversSubtitle}>
+              Drivers in {user?.city || user?.country || 'your area'}
+            </Text>
+
+            <ScrollView style={styles.nearbyDriversList} showsVerticalScrollIndicator={false}>
+              {nearbyUsersQuery.isLoading ? (
+                <View style={styles.nearbyLoadingContainer}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={styles.nearbyLoadingText}>Finding drivers...</Text>
+                </View>
+              ) : nearbyUsers.length === 0 ? (
+                <View style={styles.nearbyEmptyContainer}>
+                  <Users size={40} color={colors.textLight} />
+                  <Text style={styles.nearbyEmptyText}>No nearby drivers yet</Text>
+                  <Text style={styles.nearbyEmptySubtext}>Be the first in your area!</Text>
+                </View>
+              ) : (
+                nearbyUsers.map((driver) => (
+                  <View key={driver.id} style={styles.nearbyDriverItem}>
+                    <View style={styles.nearbyDriverAvatar}>
+                      <Text style={styles.nearbyDriverInitial}>
+                        {driver.displayName[0].toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.nearbyDriverInfo}>
+                      <Text style={styles.nearbyDriverName}>{driver.displayName}</Text>
+                      {driver.city && (
+                        <View style={styles.nearbyDriverLocationRow}>
+                          <MapPin size={10} color={colors.textLight} />
+                          <Text style={styles.nearbyDriverLocation}>
+                            {driver.city}{driver.country ? `, ${driver.country}` : ''}
+                          </Text>
+                        </View>
+                      )}
+                      {driver.carBrand && (
+                        <View style={styles.nearbyDriverCarRow}>
+                          <Car size={10} color={colors.primary} />
+                          <Text style={styles.nearbyDriverCar}>
+                            {driver.carBrand} {driver.carModel || ''}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <TouchableOpacity
+                      style={[
+                        styles.pingButton,
+                        !driver.hasPushToken && styles.pingButtonDisabled,
+                      ]}
+                      onPress={() => handlePingUser(driver.id, driver.displayName)}
+                      disabled={!driver.hasPushToken || pingingUserId === driver.id}
+                      activeOpacity={0.7}
+                    >
+                      {pingingUserId === driver.id ? (
+                        <ActivityIndicator size="small" color={colors.textInverted} />
+                      ) : (
+                        <>
+                          <Send size={14} color={driver.hasPushToken ? colors.textInverted : colors.textLight} />
+                          <Text style={[
+                            styles.pingButtonText,
+                            !driver.hasPushToken && styles.pingButtonTextDisabled,
+                          ]}>
+                            Ping
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+            
+            <View style={styles.nearbyDriversFooter}>
+              <Bell size={14} color={colors.textLight} />
+              <Text style={styles.nearbyDriversFooterText}>
+                Ping to invite for a drive!
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
         visible={showCategoryDropdown}
         transparent
         animationType="fade"
@@ -838,6 +999,21 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Orbitron_600SemiBold',
     color: colors.text,
+    flex: 1,
+  },
+  nearbyDriversButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primary,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+  },
+  nearbyDriversButtonText: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.textInverted,
   },
   filtersContainer: {
     paddingHorizontal: 16,
@@ -1357,5 +1533,156 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   categoryDropdownItemTextActive: {
     color: colors.textInverted,
     fontFamily: 'Orbitron_600SemiBold',
+  },
+  nearbyDriversOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  nearbyDriversContent: {
+    backgroundColor: colors.cardLight,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '80%',
+    paddingBottom: 20,
+  },
+  nearbyDriversHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  nearbyDriversHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  nearbyDriversTitle: {
+    fontSize: 18,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.text,
+  },
+  nearbyDriversSubtitle: {
+    fontSize: 12,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  nearbyDriversList: {
+    paddingHorizontal: 16,
+  },
+  nearbyLoadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 12,
+  },
+  nearbyLoadingText: {
+    fontSize: 13,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+  },
+  nearbyEmptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 8,
+  },
+  nearbyEmptyText: {
+    fontSize: 15,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.text,
+    marginTop: 8,
+  },
+  nearbyEmptySubtext: {
+    fontSize: 13,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+  },
+  nearbyDriverItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    gap: 12,
+  },
+  nearbyDriverAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nearbyDriverInitial: {
+    fontSize: 18,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.textInverted,
+  },
+  nearbyDriverInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  nearbyDriverName: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.text,
+  },
+  nearbyDriverLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  nearbyDriverLocation: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+  },
+  nearbyDriverCarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  nearbyDriverCar: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_500Medium',
+    color: colors.primary,
+  },
+  pingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+  },
+  pingButtonDisabled: {
+    backgroundColor: colors.border,
+  },
+  pingButtonText: {
+    fontSize: 12,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.textInverted,
+  },
+  pingButtonTextDisabled: {
+    color: colors.textLight,
+  },
+  nearbyDriversFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingTop: 16,
+    paddingHorizontal: 20,
+  },
+  nearbyDriversFooterText: {
+    fontSize: 12,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
   },
 });
