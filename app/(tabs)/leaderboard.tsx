@@ -1,6 +1,8 @@
-import { useState, useMemo, useCallback, ReactNode } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, TextInput, Image, Platform, Alert, ActivityIndicator } from 'react-native';
-import { Trophy, Zap, Navigation, Gauge, ChevronDown, X, MapPin, Car, Filter, Activity, Route, Search, Clock, Calendar, CornerDownRight, ChevronRight, Timer, Users, Send, Bell } from 'lucide-react-native';
+import { useState, useMemo, useCallback, ReactNode, useEffect } from 'react';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, TextInput, Image, Platform, Alert, ActivityIndicator, Linking } from 'react-native';
+import { Trophy, Zap, Navigation, Gauge, ChevronDown, X, MapPin, Car, Filter, Activity, Route, Search, Clock, Calendar, CornerDownRight, ChevronRight, Timer, Users, Send, Bell, Check, XCircle, Share2, Navigation2, MessageCircle } from 'lucide-react-native';
+import * as Location from 'expo-location';
+import type { DriveMeetup } from '@/types/meetup';
 import * as Haptics from 'expo-haptics';
 import { trpc } from '@/lib/trpc';
 import MapView, { Polyline, Marker } from 'react-native-maps';
@@ -28,6 +30,11 @@ export default function LeaderboardScreen() {
   const [showTripDetail, setShowTripDetail] = useState(false);
   const [showNearbyDrivers, setShowNearbyDrivers] = useState(false);
   const [pingingUserId, setPingingUserId] = useState<string | null>(null);
+  const [showMeetupsModal, setShowMeetupsModal] = useState(false);
+  const [respondingMeetupId, setRespondingMeetupId] = useState<string | null>(null);
+  const [sharingLocationMeetupId, setSharingLocationMeetupId] = useState<string | null>(null);
+  const [selectedMeetup, setSelectedMeetup] = useState<DriveMeetup | null>(null);
+  const [showMeetupDetail, setShowMeetupDetail] = useState(false);
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -42,11 +49,17 @@ export default function LeaderboardScreen() {
     }
   );
 
+  const meetupsQuery = trpc.notifications.getMeetups.useQuery(
+    { userId: user?.id || '' },
+    { enabled: !!user?.id, refetchInterval: 30000 }
+  );
+
   const sendPingMutation = trpc.notifications.sendDrivePing.useMutation({
     onSuccess: (data) => {
       if (data.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert('Ping Sent!', 'Your drive invite has been sent.');
+        meetupsQuery.refetch();
       } else {
         Alert.alert('Could not send', data.message || 'User may not have notifications enabled.');
       }
@@ -59,7 +72,52 @@ export default function LeaderboardScreen() {
     },
   });
 
-  const handlePingUser = useCallback((targetUserId: string, targetUserName: string) => {
+  const respondToPingMutation = trpc.notifications.respondToPing.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        meetupsQuery.refetch();
+        if (data.status === 'accepted') {
+          Alert.alert('Meetup Confirmed!', 'You can now share your location with the driver.');
+        }
+      }
+      setRespondingMeetupId(null);
+    },
+    onError: (error) => {
+      console.error('Failed to respond to ping:', error);
+      Alert.alert('Error', 'Failed to respond. Please try again.');
+      setRespondingMeetupId(null);
+    },
+  });
+
+  const shareLocationMutation = trpc.notifications.shareLocation.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert('Location Shared!', 'The other driver can now see your location.');
+        meetupsQuery.refetch();
+      } else {
+        Alert.alert('Error', data.message || 'Failed to share location.');
+      }
+      setSharingLocationMeetupId(null);
+    },
+    onError: (error) => {
+      console.error('Failed to share location:', error);
+      Alert.alert('Error', 'Failed to share location. Please try again.');
+      setSharingLocationMeetupId(null);
+    },
+  });
+
+  const cancelMeetupMutation = trpc.notifications.cancelMeetup.useMutation({
+    onSuccess: () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      meetupsQuery.refetch();
+      setShowMeetupDetail(false);
+      setSelectedMeetup(null);
+    },
+  });
+
+  const handlePingUser = useCallback((targetUserId: string, targetUserName: string, targetUserCar?: string) => {
     if (!user) return;
     
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -74,10 +132,106 @@ export default function LeaderboardScreen() {
       fromUserName: user.displayName,
       fromUserCar: carInfo,
       toUserId: targetUserId,
+      toUserName: targetUserName,
+      toUserCar: targetUserCar,
     });
   }, [user, sendPingMutation]);
 
+  const handleRespondToPing = useCallback((meetupId: string, response: 'accepted' | 'declined') => {
+    if (!user) return;
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setRespondingMeetupId(meetupId);
+    
+    respondToPingMutation.mutate({
+      meetupId,
+      response,
+      responderId: user.id,
+      responderName: user.displayName,
+    });
+  }, [user, respondToPingMutation]);
+
+  const handleShareLocation = useCallback(async (meetup: DriveMeetup) => {
+    if (!user) return;
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSharingLocationMeetupId(meetup.id);
+    
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Location permission is required to share your location.');
+        setSharingLocationMeetupId(null);
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      shareLocationMutation.mutate({
+        meetupId: meetup.id,
+        userId: user.id,
+        userName: user.displayName,
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+    } catch (error) {
+      console.error('Failed to get location:', error);
+      Alert.alert('Error', 'Failed to get your location. Please try again.');
+      setSharingLocationMeetupId(null);
+    }
+  }, [user, shareLocationMutation]);
+
+  const handleNavigateToLocation = useCallback((latitude: number, longitude: number) => {
+    const url = Platform.select({
+      ios: `maps://app?daddr=${latitude},${longitude}`,
+      android: `google.navigation:q=${latitude},${longitude}`,
+      default: `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`,
+    });
+    
+    Linking.openURL(url).catch(() => {
+      Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`);
+    });
+  }, []);
+
+  const handleCancelMeetup = useCallback((meetup: DriveMeetup) => {
+    if (!user) return;
+    
+    Alert.alert(
+      'Cancel Meetup',
+      'Are you sure you want to cancel this meetup?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: () => {
+            cancelMeetupMutation.mutate({
+              meetupId: meetup.id,
+              userId: user.id,
+              userName: user.displayName,
+            });
+          },
+        },
+      ]
+    );
+  }, [user, cancelMeetupMutation]);
+
   const nearbyUsers = nearbyUsersQuery.data || [];
+  const meetups = meetupsQuery.data || [];
+
+  const pendingIncomingPings = useMemo(() => {
+    return meetups.filter(m => m.status === 'pending' && m.toUserId === user?.id);
+  }, [meetups, user?.id]);
+
+  const activeMeetups = useMemo(() => {
+    return meetups.filter(m => m.status === 'accepted');
+  }, [meetups]);
+
+  const pendingOutgoingPings = useMemo(() => {
+    return meetups.filter(m => m.status === 'pending' && m.fromUserId === user?.id);
+  }, [meetups, user?.id]);
 
   const CATEGORIES = useMemo(() => [
     { key: 'topSpeed' as LeaderboardCategory, label: 'Top Speed', icon: <Zap size={16} color={colors.warning} /> },
@@ -406,16 +560,30 @@ export default function LeaderboardScreen() {
         <View style={styles.userLocationBanner}>
           <MapPin size={14} color={colors.primary} />
           <Text style={styles.userLocationText}>{userLocation}</Text>
-          {nearbyUsers.length > 0 && (
-            <TouchableOpacity
-              style={styles.nearbyDriversButton}
-              onPress={() => setShowNearbyDrivers(true)}
-              activeOpacity={0.7}
-            >
-              <Users size={14} color={colors.textInverted} />
-              <Text style={styles.nearbyDriversButtonText}>{nearbyUsers.length} Nearby</Text>
-            </TouchableOpacity>
-          )}
+          <View style={styles.bannerButtonsRow}>
+            {(pendingIncomingPings.length > 0 || activeMeetups.length > 0) && (
+              <TouchableOpacity
+                style={[styles.nearbyDriversButton, styles.meetupsButton]}
+                onPress={() => setShowMeetupsModal(true)}
+                activeOpacity={0.7}
+              >
+                <MessageCircle size={14} color={colors.textInverted} />
+                <Text style={styles.nearbyDriversButtonText}>
+                  {pendingIncomingPings.length > 0 ? `${pendingIncomingPings.length} New` : `${activeMeetups.length} Active`}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {nearbyUsers.length > 0 && (
+              <TouchableOpacity
+                style={styles.nearbyDriversButton}
+                onPress={() => setShowNearbyDrivers(true)}
+                activeOpacity={0.7}
+              >
+                <Users size={14} color={colors.textInverted} />
+                <Text style={styles.nearbyDriversButtonText}>{nearbyUsers.length} Nearby</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       )}
 
@@ -899,7 +1067,7 @@ export default function LeaderboardScreen() {
                         styles.pingButton,
                         !driver.hasPushToken && styles.pingButtonDisabled,
                       ]}
-                      onPress={() => handlePingUser(driver.id, driver.displayName)}
+                      onPress={() => handlePingUser(driver.id, driver.displayName, driver.carBrand && driver.carModel ? `${driver.carBrand} ${driver.carModel}` : undefined)}
                       disabled={!driver.hasPushToken || pingingUserId === driver.id}
                       activeOpacity={0.7}
                     >
@@ -928,6 +1096,313 @@ export default function LeaderboardScreen() {
                 Ping to invite for a drive!
               </Text>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showMeetupsModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowMeetupsModal(false)}
+      >
+        <View style={styles.nearbyDriversOverlay}>
+          <View style={styles.nearbyDriversContent}>
+            <View style={styles.nearbyDriversHeader}>
+              <View style={styles.nearbyDriversHeaderLeft}>
+                <MessageCircle size={22} color={colors.primary} />
+                <Text style={styles.nearbyDriversTitle}>Drive Meetups</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowMeetupsModal(false)} activeOpacity={0.7}>
+                <X size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.nearbyDriversList} showsVerticalScrollIndicator={false}>
+              {pendingIncomingPings.length > 0 && (
+                <View style={styles.meetupSection}>
+                  <Text style={styles.meetupSectionTitle}>Incoming Invites</Text>
+                  {pendingIncomingPings.map((meetup) => (
+                    <View key={meetup.id} style={styles.meetupItem}>
+                      <View style={styles.meetupItemHeader}>
+                        <View style={styles.nearbyDriverAvatar}>
+                          <Text style={styles.nearbyDriverInitial}>
+                            {meetup.fromUserName[0].toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={styles.meetupItemInfo}>
+                          <Text style={styles.meetupItemName}>{meetup.fromUserName}</Text>
+                          {meetup.fromUserCar && (
+                            <View style={styles.nearbyDriverCarRow}>
+                              <Car size={10} color={colors.primary} />
+                              <Text style={styles.nearbyDriverCar}>{meetup.fromUserCar}</Text>
+                            </View>
+                          )}
+                          <Text style={styles.meetupItemTime}>
+                            {new Date(meetup.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.meetupActions}>
+                        <TouchableOpacity
+                          style={styles.acceptButton}
+                          onPress={() => handleRespondToPing(meetup.id, 'accepted')}
+                          disabled={respondingMeetupId === meetup.id}
+                          activeOpacity={0.7}
+                        >
+                          {respondingMeetupId === meetup.id ? (
+                            <ActivityIndicator size="small" color={colors.textInverted} />
+                          ) : (
+                            <>
+                              <Check size={16} color={colors.textInverted} />
+                              <Text style={styles.acceptButtonText}>Accept</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.declineButton}
+                          onPress={() => handleRespondToPing(meetup.id, 'declined')}
+                          disabled={respondingMeetupId === meetup.id}
+                          activeOpacity={0.7}
+                        >
+                          <XCircle size={16} color={colors.danger} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {activeMeetups.length > 0 && (
+                <View style={styles.meetupSection}>
+                  <Text style={styles.meetupSectionTitle}>Active Meetups</Text>
+                  {activeMeetups.map((meetup) => {
+                    const isAccepter = meetup.toUserId === user?.id;
+                    const otherUserName = isAccepter ? meetup.fromUserName : meetup.toUserName;
+                    const otherUserCar = isAccepter ? meetup.fromUserCar : meetup.toUserCar;
+                    const myLocation = isAccepter ? meetup.toUserLocation : meetup.fromUserLocation;
+                    const theirLocation = isAccepter ? meetup.fromUserLocation : meetup.toUserLocation;
+
+                    return (
+                      <TouchableOpacity
+                        key={meetup.id}
+                        style={styles.activeMeetupItem}
+                        onPress={() => {
+                          setSelectedMeetup(meetup);
+                          setShowMeetupDetail(true);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.meetupItemHeader}>
+                          <View style={[styles.nearbyDriverAvatar, styles.activeAvatar]}>
+                            <Text style={styles.nearbyDriverInitial}>
+                              {otherUserName[0].toUpperCase()}
+                            </Text>
+                          </View>
+                          <View style={styles.meetupItemInfo}>
+                            <Text style={styles.meetupItemName}>{otherUserName}</Text>
+                            {otherUserCar && (
+                              <View style={styles.nearbyDriverCarRow}>
+                                <Car size={10} color={colors.primary} />
+                                <Text style={styles.nearbyDriverCar}>{otherUserCar}</Text>
+                              </View>
+                            )}
+                            <View style={styles.locationStatusRow}>
+                              {theirLocation ? (
+                                <View style={styles.locationSharedBadge}>
+                                  <MapPin size={10} color={colors.success} />
+                                  <Text style={styles.locationSharedText}>Location shared</Text>
+                                </View>
+                              ) : (
+                                <Text style={styles.waitingLocationText}>Waiting for location...</Text>
+                              )}
+                            </View>
+                          </View>
+                        </View>
+                        <View style={styles.meetupQuickActions}>
+                          {isAccepter && !myLocation && (
+                            <TouchableOpacity
+                              style={styles.shareLocationButton}
+                              onPress={() => handleShareLocation(meetup)}
+                              disabled={sharingLocationMeetupId === meetup.id}
+                              activeOpacity={0.7}
+                            >
+                              {sharingLocationMeetupId === meetup.id ? (
+                                <ActivityIndicator size="small" color={colors.textInverted} />
+                              ) : (
+                                <>
+                                  <Share2 size={14} color={colors.textInverted} />
+                                  <Text style={styles.shareLocationButtonText}>Share</Text>
+                                </>
+                              )}
+                            </TouchableOpacity>
+                          )}
+                          {theirLocation && (
+                            <TouchableOpacity
+                              style={styles.navigateButton}
+                              onPress={() => handleNavigateToLocation(theirLocation.latitude, theirLocation.longitude)}
+                              activeOpacity={0.7}
+                            >
+                              <Navigation2 size={14} color={colors.textInverted} />
+                            </TouchableOpacity>
+                          )}
+                          <ChevronRight size={18} color={colors.textLight} />
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+
+              {pendingOutgoingPings.length > 0 && (
+                <View style={styles.meetupSection}>
+                  <Text style={styles.meetupSectionTitle}>Pending Invites</Text>
+                  {pendingOutgoingPings.map((meetup) => (
+                    <View key={meetup.id} style={styles.pendingMeetupItem}>
+                      <View style={styles.meetupItemHeader}>
+                        <View style={[styles.nearbyDriverAvatar, styles.pendingAvatar]}>
+                          <Text style={styles.nearbyDriverInitial}>
+                            {meetup.toUserName[0].toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={styles.meetupItemInfo}>
+                          <Text style={styles.meetupItemName}>{meetup.toUserName}</Text>
+                          {meetup.toUserCar && (
+                            <View style={styles.nearbyDriverCarRow}>
+                              <Car size={10} color={colors.primary} />
+                              <Text style={styles.nearbyDriverCar}>{meetup.toUserCar}</Text>
+                            </View>
+                          )}
+                          <Text style={styles.pendingStatusText}>Waiting for response...</Text>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {pendingIncomingPings.length === 0 && activeMeetups.length === 0 && pendingOutgoingPings.length === 0 && (
+                <View style={styles.nearbyEmptyContainer}>
+                  <MessageCircle size={40} color={colors.textLight} />
+                  <Text style={styles.nearbyEmptyText}>No meetups yet</Text>
+                  <Text style={styles.nearbyEmptySubtext}>Ping nearby drivers to start!</Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showMeetupDetail}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setShowMeetupDetail(false);
+          setSelectedMeetup(null);
+        }}
+      >
+        <View style={styles.tripDetailOverlay}>
+          <View style={styles.tripDetailContent}>
+            <View style={styles.tripDetailHeader}>
+              <Text style={styles.tripDetailTitle}>Meetup Details</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowMeetupDetail(false);
+                  setSelectedMeetup(null);
+                }}
+                activeOpacity={0.7}
+                style={styles.closeButton}
+              >
+                <X size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {selectedMeetup && (() => {
+              const isAccepter = selectedMeetup.toUserId === user?.id;
+              const otherUserName = isAccepter ? selectedMeetup.fromUserName : selectedMeetup.toUserName;
+              const otherUserCar = isAccepter ? selectedMeetup.fromUserCar : selectedMeetup.toUserCar;
+              const myLocation = isAccepter ? selectedMeetup.toUserLocation : selectedMeetup.fromUserLocation;
+              const theirLocation = isAccepter ? selectedMeetup.fromUserLocation : selectedMeetup.toUserLocation;
+
+              return (
+                <ScrollView style={styles.tripDetailScroll} showsVerticalScrollIndicator={false}>
+                  <View style={styles.meetupDetailCard}>
+                    <View style={styles.meetupDetailAvatar}>
+                      <Text style={styles.meetupDetailAvatarText}>
+                        {otherUserName[0].toUpperCase()}
+                      </Text>
+                    </View>
+                    <Text style={styles.meetupDetailName}>{otherUserName}</Text>
+                    {otherUserCar && (
+                      <View style={styles.meetupDetailCarRow}>
+                        <Car size={16} color={colors.primary} />
+                        <Text style={styles.meetupDetailCarText}>{otherUserCar}</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.meetupDetailSection}>
+                    <Text style={styles.meetupDetailSectionTitle}>Location Status</Text>
+                    
+                    <View style={styles.locationStatusCard}>
+                      <View style={styles.locationStatusItem}>
+                        <Text style={styles.locationStatusLabel}>Your Location</Text>
+                        {myLocation ? (
+                          <View style={styles.locationSharedBadge}>
+                            <Check size={12} color={colors.success} />
+                            <Text style={styles.locationSharedText}>Shared</Text>
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            style={styles.shareLocationButtonLarge}
+                            onPress={() => handleShareLocation(selectedMeetup)}
+                            disabled={sharingLocationMeetupId === selectedMeetup.id}
+                            activeOpacity={0.7}
+                          >
+                            {sharingLocationMeetupId === selectedMeetup.id ? (
+                              <ActivityIndicator size="small" color={colors.textInverted} />
+                            ) : (
+                              <>
+                                <Share2 size={16} color={colors.textInverted} />
+                                <Text style={styles.shareLocationButtonText}>Share Location</Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        )}
+                      </View>
+
+                      <View style={styles.locationDivider} />
+
+                      <View style={styles.locationStatusItem}>
+                        <Text style={styles.locationStatusLabel}>{otherUserName}'s Location</Text>
+                        {theirLocation ? (
+                          <TouchableOpacity
+                            style={styles.navigateButtonLarge}
+                            onPress={() => handleNavigateToLocation(theirLocation.latitude, theirLocation.longitude)}
+                            activeOpacity={0.7}
+                          >
+                            <Navigation2 size={16} color={colors.textInverted} />
+                            <Text style={styles.navigateButtonText}>Navigate</Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <Text style={styles.waitingLocationText}>Waiting...</Text>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.cancelMeetupButton}
+                    onPress={() => handleCancelMeetup(selectedMeetup)}
+                    activeOpacity={0.7}
+                  >
+                    <XCircle size={18} color={colors.danger} />
+                    <Text style={styles.cancelMeetupButtonText}>Cancel Meetup</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              );
+            })()}
           </View>
         </View>
       </Modal>
@@ -1684,5 +2159,272 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Orbitron_400Regular',
     color: colors.textLight,
+  },
+  bannerButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  meetupsButton: {
+    backgroundColor: colors.success,
+  },
+  meetupSection: {
+    marginBottom: 20,
+  },
+  meetupSectionTitle: {
+    fontSize: 12,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.textLight,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+    marginTop: 10,
+  },
+  meetupItem: {
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+  },
+  meetupItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  meetupItemInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  meetupItemName: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.text,
+  },
+  meetupItemTime: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    marginTop: 2,
+  },
+  meetupActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
+  acceptButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.success,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
+  acceptButtonText: {
+    fontSize: 13,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.textInverted,
+  },
+  declineButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: colors.cardLight,
+    borderWidth: 1,
+    borderColor: colors.danger,
+  },
+  activeMeetupItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.success,
+  },
+  activeAvatar: {
+    backgroundColor: colors.success,
+  },
+  pendingMeetupItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    opacity: 0.7,
+  },
+  pendingAvatar: {
+    backgroundColor: colors.textLight,
+  },
+  pendingStatusText: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    fontStyle: 'italic',
+  },
+  locationStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  locationSharedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: `${colors.success}20`,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+  },
+  locationSharedText: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_500Medium',
+    color: colors.success,
+  },
+  waitingLocationText: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    fontStyle: 'italic',
+  },
+  meetupQuickActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  shareLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.accent,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+  },
+  shareLocationButtonText: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.textInverted,
+  },
+  navigateButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary,
+  },
+  meetupDetailCard: {
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 16,
+  },
+  meetupDetailAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  meetupDetailAvatarText: {
+    fontSize: 32,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.textInverted,
+  },
+  meetupDetailName: {
+    fontSize: 20,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  meetupDetailCarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  meetupDetailCarText: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_500Medium',
+    color: colors.primary,
+  },
+  meetupDetailSection: {
+    marginBottom: 16,
+  },
+  meetupDetailSectionTitle: {
+    fontSize: 12,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.textLight,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+  },
+  locationStatusCard: {
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    padding: 16,
+  },
+  locationStatusItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  locationStatusLabel: {
+    fontSize: 13,
+    fontFamily: 'Orbitron_500Medium',
+    color: colors.text,
+  },
+  locationDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 12,
+  },
+  shareLocationButtonLarge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.accent,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+  },
+  navigateButtonLarge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+  },
+  navigateButtonText: {
+    fontSize: 12,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.textInverted,
+  },
+  cancelMeetupButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.cardLight,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 32,
+  },
+  cancelMeetupButtonText: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.danger,
   },
 });
