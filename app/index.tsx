@@ -29,7 +29,7 @@ export default function WelcomeScreen() {
   return (
     <View style={styles.container}>
       <Animated.Image
-        source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/uj6zjjqpk5gfonevymng6' }}
+        source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/p9r5vd6lxx66zq9yngusf' }}
         style={[styles.logo, { opacity: fadeAnim }]}
         resizeMode="contain"
       />
@@ -40,12 +40,12 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
   },
   logo: {
-    width: 225,
-    height: 150,
+    width: 200,
+    height: 200,
   },
 });
