@@ -67,6 +67,12 @@ export default function SettingsScreen() {
           'Push notifications require a physical device. They won\'t work on simulators.',
           [{ text: 'OK' }]
         );
+      } else if (message.includes('production build') || message.includes('development mode')) {
+        Alert.alert(
+          'Production Build Required',
+          'Push notifications are only available in TestFlight or App Store builds. They cannot be enabled in development mode.',
+          [{ text: 'OK' }]
+        );
       } else {
         Alert.alert(
           'Error',
