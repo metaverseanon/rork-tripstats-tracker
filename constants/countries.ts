@@ -213,5 +213,5 @@ export const getCountryDisplayName = (code: string): string => {
 
 export const getCitiesForCountry = (countryCode: string): string[] => {
   const country = getCountryByCode(countryCode);
-  return country?.cities || [];
+  return country?.cities.slice().sort((a, b) => a.localeCompare(b)) || [];
 };
