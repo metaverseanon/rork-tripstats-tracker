@@ -62,13 +62,18 @@ const defineBackgroundTask = () => {
       }
     });
     taskDefined = true;
+    console.log('Background task defined successfully');
   } catch (error) {
-    console.error('Failed to define background task:', error);
+    console.warn('Failed to define background task (this is OK if not using background location):', error);
+    taskDefined = true; // Prevent retry attempts
   }
 };
 
+// Define task after a small delay to ensure native modules are ready
 if (Platform.OS !== 'web') {
-  defineBackgroundTask();
+  setTimeout(() => {
+    defineBackgroundTask();
+  }, 100);
 }
 
 export const [TripProvider, useTrips] = createContextHook(() => {

@@ -10,15 +10,22 @@ import { trpcClient } from '@/lib/trpc';
 const PUSH_TOKEN_KEY = 'push_token';
 const NOTIFICATIONS_ENABLED_KEY = 'notifications_enabled';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// Set up notification handler safely
+try {
+  if (Platform.OS !== 'web') {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  }
+} catch (error) {
+  console.warn('Failed to set notification handler:', error);
+}
 
 export const [NotificationProvider, useNotifications] = createContextHook(() => {
   const [pushToken, setPushToken] = useState<string | null>(null);
@@ -30,20 +37,34 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
   useEffect(() => {
     loadNotificationSettings();
 
-    notificationListener.current = Notifications.addNotificationReceivedListener((notification: Notifications.Notification) => {
-      console.log('Notification received:', notification);
-    });
+    if (Platform.OS !== 'web') {
+      try {
+        notificationListener.current = Notifications.addNotificationReceivedListener((notification: Notifications.Notification) => {
+          console.log('Notification received:', notification);
+        });
 
-    responseListener.current = Notifications.addNotificationResponseReceivedListener((response: Notifications.NotificationResponse) => {
-      console.log('Notification response:', response);
-    });
+        responseListener.current = Notifications.addNotificationResponseReceivedListener((response: Notifications.NotificationResponse) => {
+          console.log('Notification response:', response);
+        });
+      } catch (error) {
+        console.warn('Failed to setup notification listeners:', error);
+      }
+    }
 
     return () => {
       if (notificationListener.current) {
-        notificationListener.current.remove();
+        try {
+          notificationListener.current.remove();
+        } catch (e) {
+          console.warn('Failed to remove notification listener:', e);
+        }
       }
       if (responseListener.current) {
-        responseListener.current.remove();
+        try {
+          responseListener.current.remove();
+        } catch (e) {
+          console.warn('Failed to remove response listener:', e);
+        }
       }
     };
   }, []);
