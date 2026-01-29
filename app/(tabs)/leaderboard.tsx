@@ -9,7 +9,7 @@ import MapView, { Polyline, Marker } from 'react-native-maps';
 import { useTrips } from '@/providers/TripProvider';
 import { useSettings } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
-import { COUNTRIES } from '@/constants/countries';
+import { COUNTRIES, getCountryByCode } from '@/constants/countries';
 import { CAR_BRANDS, getModelsForBrand } from '@/constants/cars';
 import { LeaderboardCategory, LeaderboardFilters, TripStats } from '@/types/trip';
 import { ThemeColors } from '@/constants/colors';
@@ -271,9 +271,63 @@ export default function LeaderboardScreen() {
     return getModelsForBrand(filters.carBrand);
   }, [filters.carBrand]);
 
+  const matchesCountryFilter = useCallback((tripCountry: string | undefined, filterCountry: string) => {
+    if (!tripCountry) return false;
+    if (tripCountry === filterCountry) return true;
+    
+    const tripCountryLower = tripCountry.toLowerCase();
+    const filterCountryLower = filterCountry.toLowerCase();
+    if (tripCountryLower === filterCountryLower) return true;
+    
+    const selectedCountry = COUNTRIES.find(c => c.name === filterCountry);
+    if (!selectedCountry) return false;
+    
+    const nativeNames: Record<string, string[]> = {
+      'HR': ['hrvatska', 'croatia'],
+      'DE': ['deutschland', 'germany'],
+      'ES': ['españa', 'spain'],
+      'FR': ['france'],
+      'IT': ['italia', 'italy'],
+      'PL': ['polska', 'poland'],
+      'NL': ['nederland', 'netherlands'],
+      'PT': ['portugal'],
+      'AT': ['österreich', 'austria'],
+      'CH': ['schweiz', 'suisse', 'svizzera', 'switzerland'],
+      'BE': ['belgique', 'belgië', 'belgium'],
+      'CZ': ['česko', 'czech republic', 'czechia'],
+      'HU': ['magyarország', 'hungary'],
+      'SK': ['slovensko', 'slovakia'],
+      'SI': ['slovenija', 'slovenia'],
+      'RS': ['srbija', 'serbia'],
+      'BA': ['bosna i hercegovina', 'bosnia and herzegovina'],
+      'ME': ['crna gora', 'montenegro'],
+      'MK': ['северна македонија', 'north macedonia'],
+      'AL': ['shqipëria', 'albania'],
+      'GR': ['ελλάδα', 'greece'],
+      'BG': ['българия', 'bulgaria'],
+      'RO': ['românia', 'romania'],
+      'UA': ['україна', 'ukraine'],
+      'RU': ['россия', 'russia'],
+      'TR': ['türkiye', 'turkey'],
+      'SE': ['sverige', 'sweden'],
+      'NO': ['norge', 'norway'],
+      'DK': ['danmark', 'denmark'],
+      'FI': ['suomi', 'finland'],
+      'JP': ['日本', 'japan'],
+      'CN': ['中国', 'china'],
+      'KR': ['대한민국', 'south korea'],
+      'BR': ['brasil', 'brazil'],
+      'MX': ['méxico', 'mexico'],
+      'AR': ['argentina'],
+    };
+    
+    const alternateNames = nativeNames[selectedCountry.code] || [];
+    return alternateNames.some(name => tripCountryLower === name || tripCountryLower.includes(name));
+  }, []);
+
   const filteredTrips = useMemo(() => {
     return trips.filter((trip) => {
-      if (filters.country && trip.location?.country !== filters.country) return false;
+      if (filters.country && !matchesCountryFilter(trip.location?.country, filters.country)) return false;
       if (filters.city && trip.location?.city !== filters.city) return false;
       if (filters.carBrand && filters.carModel) {
         const fullCarModel = `${filters.carBrand} ${filters.carModel}`;
