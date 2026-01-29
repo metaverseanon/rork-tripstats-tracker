@@ -327,6 +327,14 @@ export default function ProfileScreen() {
       Alert.alert('Error', 'Please enter your display name');
       return;
     }
+    if (!isAuthenticated && authMode === 'signup' && !selectedBrand) {
+      Alert.alert('Error', 'Please select your car brand');
+      return;
+    }
+    if (!isAuthenticated && authMode === 'signup' && !selectedModel) {
+      Alert.alert('Error', 'Please select your car model');
+      return;
+    }
 
     if (!isAuthenticated && authMode === 'signup') {
       setIsCheckingDisplayName(true);
@@ -730,7 +738,7 @@ export default function ProfileScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Car color={colors.text} size={20} />
-              <Text style={styles.sectionTitle}>Primary Car (Optional)</Text>
+              <Text style={styles.sectionTitle}>Primary Car {authMode === 'signup' && !isAuthenticated ? '(Required)' : '(Optional)'}</Text>
             </View>
 
             <TouchableOpacity style={styles.carImagePicker} onPress={pickCarPicture}>
