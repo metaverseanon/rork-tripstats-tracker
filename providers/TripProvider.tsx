@@ -20,6 +20,7 @@ const LAST_LOCATION_TIME_KEY = 'last_location_time';
 
 let backgroundLocationCallback: ((location: ExpoLocation.LocationObject) => void) | null = null;
 let taskDefined = false;
+let taskDefinitionAttempted = false;
 let processLocationRef: ((location: ExpoLocation.LocationObject) => void) | null = null;
 
 const saveBackgroundSpeed = async (speed: number, timestamp: number) => {
@@ -35,14 +36,15 @@ const saveBackgroundSpeed = async (speed: number, timestamp: number) => {
 
 const defineBackgroundTask = () => {
   if (taskDefined || Platform.OS === 'web') return;
+  if (taskDefinitionAttempted) return;
   
-  // Mark as defined immediately to prevent multiple attempts
-  taskDefined = true;
+  taskDefinitionAttempted = true;
   
   try {
-    // Check if TaskManager is available
+    // Check if TaskManager is available and ready
     if (!TaskManager || typeof TaskManager.defineTask !== 'function') {
       console.warn('TaskManager not available');
+      taskDefinitionAttempted = false; // Allow retry later
       return;
     }
     
@@ -71,27 +73,16 @@ const defineBackgroundTask = () => {
         }
       }
     });
+    taskDefined = true;
     console.log('Background task defined successfully');
   } catch (error) {
     console.warn('Failed to define background task:', error);
+    taskDefinitionAttempted = false; // Allow retry later
   }
 };
 
-// Define task safely - only on native and with proper guards
-if (Platform.OS !== 'web') {
-  // Use a longer delay and wrap in try-catch
-  try {
-    setTimeout(() => {
-      try {
-        defineBackgroundTask();
-      } catch (e) {
-        console.warn('Background task definition failed:', e);
-      }
-    }, 500);
-  } catch (e) {
-    console.warn('Failed to schedule background task definition:', e);
-  }
-}
+// Task will be defined lazily when needed, not at module load time
+// This prevents crashes in production builds where module load order differs
 
 export const [TripProvider, useTrips] = createContextHook(() => {
   const [trips, setTrips] = useState<TripStats[]>([]);
@@ -210,6 +201,15 @@ export const [TripProvider, useTrips] = createContextHook(() => {
   }, [refreshSpeedFromStorage, fetchFreshLocation]);
 
   useEffect(() => {
+    // Define background task safely inside useEffect (after React Native is fully initialized)
+    if (Platform.OS !== 'web') {
+      try {
+        defineBackgroundTask();
+      } catch (e) {
+        console.warn('Background task definition failed:', e);
+      }
+    }
+    
     loadTrips();
     restoreTrackingState();
     return () => {
@@ -729,6 +729,11 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       console.log('Background location permission granted, starting background updates');
       isBackgroundEnabled.current = true;
       setupBackgroundCallback();
+      
+      // Ensure task is defined before starting
+      if (!taskDefined) {
+        defineBackgroundTask();
+      }
       
       await ExpoLocation.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
         accuracy: ExpoLocation.Accuracy.BestForNavigation,
