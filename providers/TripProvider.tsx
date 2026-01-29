@@ -201,7 +201,36 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     try {
       const stored = await AsyncStorage.getItem(TRIPS_KEY);
       if (stored) {
-        setTrips(JSON.parse(stored));
+        try {
+          const parsedTrips = JSON.parse(stored) as TripStats[];
+          // Validate the data structure
+          if (Array.isArray(parsedTrips)) {
+            // Clean up oversized location arrays to prevent future issues
+            const cleanedTrips = parsedTrips.map(trip => ({
+              ...trip,
+              locations: Array.isArray(trip.locations) 
+                ? trip.locations.slice(-500) // Keep only last 500 locations per trip
+                : [],
+            }));
+            setTrips(cleanedTrips);
+            // Save cleaned data back
+            await AsyncStorage.setItem(TRIPS_KEY, JSON.stringify(cleanedTrips));
+          } else {
+            console.error('Invalid trips data format, resetting');
+            setTrips([]);
+            await AsyncStorage.removeItem(TRIPS_KEY);
+          }
+        } catch (parseError) {
+          console.error('Failed to parse trips JSON, data may be corrupted:', parseError);
+          // Data is corrupted, reset it
+          setTrips([]);
+          await AsyncStorage.removeItem(TRIPS_KEY);
+          Alert.alert(
+            'Data Recovery',
+            'Some trip data was corrupted and has been reset. Your future trips will be saved normally.',
+            [{ text: 'OK' }]
+          );
+        }
       }
     } catch (error) {
       console.error('Failed to load trips:', error);
@@ -465,10 +494,29 @@ export const [TripProvider, useTrips] = createContextHook(() => {
 
   const saveTrips = async (newTrips: TripStats[]) => {
     try {
-      await AsyncStorage.setItem(TRIPS_KEY, JSON.stringify(newTrips));
-      setTrips(newTrips);
+      // Limit locations to prevent data bloat
+      const tripsToSave = newTrips.map(trip => ({
+        ...trip,
+        locations: Array.isArray(trip.locations) 
+          ? trip.locations.slice(-500) // Keep only last 500 locations
+          : [],
+      }));
+      await AsyncStorage.setItem(TRIPS_KEY, JSON.stringify(tripsToSave));
+      setTrips(tripsToSave);
     } catch (error) {
       console.error('Failed to save trips:', error);
+      // If save fails due to size, try saving without locations
+      try {
+        const minimalTrips = newTrips.map(trip => ({
+          ...trip,
+          locations: [],
+        }));
+        await AsyncStorage.setItem(TRIPS_KEY, JSON.stringify(minimalTrips));
+        setTrips(minimalTrips);
+        console.log('Saved trips without locations due to storage constraints');
+      } catch (fallbackError) {
+        console.error('Failed to save even minimal trips:', fallbackError);
+      }
     }
   };
 
