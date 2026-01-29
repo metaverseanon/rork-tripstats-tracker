@@ -139,7 +139,12 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
       // Get EAS project ID - must be a valid UUID format
       // Do NOT use EXPO_PUBLIC_PROJECT_ID as that's the Rork project ID, not EAS
       const easProjectId = Constants.expoConfig?.extra?.eas?.projectId;
+      const appOwnership = Constants.appOwnership;
+      const isStandaloneBuild = appOwnership === 'standalone' || appOwnership === null;
+      
       console.log('EAS projectId from config:', easProjectId);
+      console.log('App ownership:', appOwnership);
+      console.log('Is standalone build:', isStandaloneBuild);
       console.log('experienceId:', Constants.expoConfig?.slug ? `@${Constants.expoConfig?.owner || 'anonymous'}/${Constants.expoConfig?.slug}` : undefined);
       
       let tokenData;
@@ -150,6 +155,17 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
         tokenData = await Notifications.getExpoPushTokenAsync({
           projectId: easProjectId,
         });
+      } else if (isStandaloneBuild) {
+        // Standalone/TestFlight build without explicit EAS projectId
+        // Try to get token - EAS Build should have injected the projectId at build time
+        console.log('Standalone build without explicit EAS projectId, attempting to get token...');
+        try {
+          tokenData = await Notifications.getExpoPushTokenAsync();
+        } catch (standaloneError) {
+          console.error('Standalone push token failed:', standaloneError);
+          // This could mean APNs isn't configured properly for this bundle ID
+          throw new Error('Failed to get push token. Please ensure push notifications are configured in App Store Connect for this app.');
+        }
       } else {
         // Development in Expo Go: try without projectId (uses experienceId)
         console.log('No EAS projectId, trying Expo Go mode...');
