@@ -46,7 +46,7 @@ export const COUNTRIES: Country[] = [
   { code: 'KM', name: 'Comoros', flag: '🇰🇲', cities: ['Moroni', 'Mutsamudu', 'Fomboni', 'Domoni', 'Tsimbeo'] },
   { code: 'CG', name: 'Congo', flag: '🇨🇬', cities: ['Brazzaville', 'Pointe-Noire', 'Dolisie', 'Nkayi', 'Owando'] },
   { code: 'CR', name: 'Costa Rica', flag: '🇨🇷', cities: ['San José', 'Limón', 'Alajuela', 'Heredia', 'Cartago', 'Liberia'] },
-  { code: 'HR', name: 'Croatia', flag: '🇭🇷', cities: ['Zagreb', 'Split', 'Rijeka', 'Osijek', 'Zadar', 'Dubrovnik', 'Pula'] },
+  { code: 'HR', name: 'Croatia', flag: '🇭🇷', cities: ['Zagreb', 'Split', 'Rijeka', 'Osijek', 'Zadar', 'Dubrovnik', 'Pula', 'Šibenik', 'Slavonski Brod', 'Karlovac', 'Varaždin', 'Velika Gorica', 'Sisak', 'Vukovar', 'Bjelovar', 'Vinkovci', 'Koprivnica', 'Čakovec', 'Požega', 'Virovitica', 'Đakovo', 'Knin', 'Makarska', 'Rovinj', 'Poreč', 'Opatija', 'Samobor', 'Trogir', 'Hvar', 'Korčula', 'Omiš', 'Senj', 'Crikvenica', 'Biograd na Moru', 'Gospić', 'Kutina'] },
   { code: 'CU', name: 'Cuba', flag: '🇨🇺', cities: ['Havana', 'Santiago de Cuba', 'Camagüey', 'Holguín', 'Santa Clara', 'Varadero'] },
   { code: 'CY', name: 'Cyprus', flag: '🇨🇾', cities: ['Nicosia', 'Limassol', 'Larnaca', 'Paphos', 'Famagusta'] },
   { code: 'CZ', name: 'Czech Republic', flag: '🇨🇿', cities: ['Prague', 'Brno', 'Ostrava', 'Plzeň', 'Liberec', 'Olomouc'] },
