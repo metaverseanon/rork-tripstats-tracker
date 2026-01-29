@@ -18,6 +18,7 @@ import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { useSettings } from '@/providers/SettingsProvider';
 import { ThemeColors } from '@/constants/colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUser } from '@/providers/UserProvider';
 import { CAR_BRANDS, getModelsForBrand } from '@/constants/cars';
 import { trpcClient } from '@/lib/trpc';
@@ -63,6 +64,13 @@ export default function ProfileScreen() {
   const [showNewModelPicker, setShowNewModelPicker] = useState(false);
   const [isCheckingDisplayName, setIsCheckingDisplayName] = useState(false);
   const [displayNameError, setDisplayNameError] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetCode, setResetCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [resetStep, setResetStep] = useState<'email' | 'code' | 'newPassword'>('email');
+  const [isResetting, setIsResetting] = useState(false);
 
   const availableModels = useMemo(() => {
     return selectedBrand ? getModelsForBrand(selectedBrand) : [];
@@ -427,6 +435,91 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleForgotPassword = () => {
+    setResetEmail(email);
+    setResetCode('');
+    setNewPassword('');
+    setResetStep('email');
+    setShowForgotPassword(true);
+  };
+
+  const handleRequestResetCode = async () => {
+    if (!resetEmail.trim()) {
+      Alert.alert('Error', 'Please enter your email');
+      return;
+    }
+    setIsResetting(true);
+    try {
+      await trpcClient.user.requestPasswordReset.mutate({ email: resetEmail.trim() });
+      setResetStep('code');
+      Alert.alert('Code Sent', 'If an account exists with this email, a reset code has been sent.');
+    } catch (error) {
+      console.error('Failed to request reset code:', error);
+      Alert.alert('Error', 'Failed to send reset code. Please try again.');
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    if (!resetCode.trim()) {
+      Alert.alert('Error', 'Please enter the reset code');
+      return;
+    }
+    setIsResetting(true);
+    try {
+      const result = await trpcClient.user.verifyResetCode.mutate({ 
+        email: resetEmail.trim(), 
+        code: resetCode.trim() 
+      });
+      if (result.valid) {
+        setResetStep('newPassword');
+      } else {
+        Alert.alert('Error', result.error || 'Invalid code');
+      }
+    } catch (error) {
+      console.error('Failed to verify code:', error);
+      Alert.alert('Error', 'Failed to verify code. Please try again.');
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!newPassword.trim()) {
+      Alert.alert('Error', 'Please enter a new password');
+      return;
+    }
+    if (newPassword.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters');
+      return;
+    }
+    setIsResetting(true);
+    try {
+      const stored = await AsyncStorage.getItem('user_profile');
+      if (stored) {
+        const userData = JSON.parse(stored);
+        if (userData.email.toLowerCase() === resetEmail.toLowerCase()) {
+          userData.password = newPassword;
+          await AsyncStorage.setItem('user_profile', JSON.stringify(userData));
+          await trpcClient.user.clearResetCode.mutate({ email: resetEmail });
+          setShowForgotPassword(false);
+          setPassword(newPassword);
+          Alert.alert('Success', 'Your password has been reset. You can now sign in.');
+        } else {
+          Alert.alert('Error', 'Email does not match the stored account.');
+        }
+      } else {
+        Alert.alert('Error', 'No account found on this device.');
+      }
+    } catch (error) {
+      console.error('Failed to reset password:', error);
+      Alert.alert('Error', 'Failed to reset password. Please try again.');
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   const closeAllPickers = () => {
     setShowCountryPicker(false);
     setShowCityPicker(false);
@@ -550,6 +643,11 @@ export default function ProfileScreen() {
                 </View>
                 {authMode === 'signup' && (
                   <Text style={styles.passwordHint}>Must be at least 6 characters</Text>
+                )}
+                {authMode === 'signin' && (
+                  <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPasswordButton}>
+                    <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                  </TouchableOpacity>
                 )}
               </View>
             )}
@@ -1061,6 +1159,124 @@ export default function ProfileScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {showForgotPassword && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {resetStep === 'email' ? 'Reset Password' : resetStep === 'code' ? 'Enter Code' : 'New Password'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowForgotPassword(false)} style={styles.modalCloseButton}>
+                <X size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {resetStep === 'email' && (
+              <>
+                <Text style={styles.modalDescription}>
+                  Enter your email address and we will send you a code to reset your password.
+                </Text>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Email</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={resetEmail}
+                    onChangeText={setResetEmail}
+                    placeholder="Enter your email"
+                    placeholderTextColor={colors.textLight}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
+                <TouchableOpacity
+                  style={[styles.saveButton, isResetting && styles.saveButtonDisabled]}
+                  onPress={handleRequestResetCode}
+                  disabled={isResetting}
+                >
+                  <Text style={styles.saveButtonText}>
+                    {isResetting ? 'Sending...' : 'Send Reset Code'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {resetStep === 'code' && (
+              <>
+                <Text style={styles.modalDescription}>
+                  Enter the 6-digit code sent to {resetEmail}
+                </Text>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Reset Code</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={resetCode}
+                    onChangeText={setResetCode}
+                    placeholder="Enter 6-digit code"
+                    placeholderTextColor={colors.textLight}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                  />
+                </View>
+                <TouchableOpacity
+                  style={[styles.saveButton, isResetting && styles.saveButtonDisabled]}
+                  onPress={handleVerifyCode}
+                  disabled={isResetting}
+                >
+                  <Text style={styles.saveButtonText}>
+                    {isResetting ? 'Verifying...' : 'Verify Code'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleRequestResetCode} style={styles.resendCodeButton}>
+                  <Text style={styles.resendCodeText}>Resend Code</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {resetStep === 'newPassword' && (
+              <>
+                <Text style={styles.modalDescription}>
+                  Enter your new password.
+                </Text>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>New Password</Text>
+                  <View style={styles.passwordContainer}>
+                    <TextInput
+                      style={styles.passwordInput}
+                      value={newPassword}
+                      onChangeText={setNewPassword}
+                      placeholder="Enter new password"
+                      placeholderTextColor={colors.textLight}
+                      secureTextEntry={!showNewPassword}
+                      autoCapitalize="none"
+                    />
+                    <TouchableOpacity
+                      style={styles.passwordToggle}
+                      onPress={() => setShowNewPassword(!showNewPassword)}
+                    >
+                      {showNewPassword ? (
+                        <EyeOff size={20} color={colors.textLight} />
+                      ) : (
+                        <Eye size={20} color={colors.textLight} />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.passwordHint}>Must be at least 6 characters</Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.saveButton, isResetting && styles.saveButtonDisabled]}
+                  onPress={handleResetPassword}
+                  disabled={isResetting}
+                >
+                  <Text style={styles.saveButtonText}>
+                    {isResetting ? 'Resetting...' : 'Reset Password'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      )}
     </>
   );
 }
@@ -1486,6 +1702,64 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   switchAuthLink: {
     color: colors.accent,
     fontFamily: 'Orbitron_600SemiBold',
+  },
+  forgotPasswordButton: {
+    marginTop: 12,
+    alignSelf: 'flex-end',
+  },
+  forgotPasswordText: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_500Medium',
+    color: colors.accent,
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: colors.cardLight,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.text,
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  modalDescription: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  resendCodeButton: {
+    alignItems: 'center',
+    marginTop: 16,
+    padding: 8,
+  },
+  resendCodeText: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_500Medium',
+    color: colors.accent,
   },
   selectCarHint: {
     fontSize: 13,

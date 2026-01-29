@@ -140,11 +140,15 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
       // Do NOT use EXPO_PUBLIC_PROJECT_ID as that's the Rork project ID, not EAS
       const easProjectId = Constants.expoConfig?.extra?.eas?.projectId;
       const appOwnership = Constants.appOwnership;
-      const isStandaloneBuild = appOwnership === 'standalone' || appOwnership === null;
+      // In production builds (TestFlight/App Store), appOwnership is null or undefined
+      // In Expo Go, appOwnership is 'expo'
+      const isExpoGo = appOwnership === 'expo';
+      const isProductionBuild = !isExpoGo;
       
       console.log('EAS projectId from config:', easProjectId);
       console.log('App ownership:', appOwnership);
-      console.log('Is standalone build:', isStandaloneBuild);
+      console.log('Is Expo Go:', isExpoGo);
+      console.log('Is production build:', isProductionBuild);
       console.log('experienceId:', Constants.expoConfig?.slug ? `@${Constants.expoConfig?.owner || 'anonymous'}/${Constants.expoConfig?.slug}` : undefined);
       
       let tokenData;
@@ -155,25 +159,30 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
         tokenData = await Notifications.getExpoPushTokenAsync({
           projectId: easProjectId,
         });
-      } else if (isStandaloneBuild) {
-        // Standalone/TestFlight build without explicit EAS projectId
+      } else if (isProductionBuild) {
+        // Production build (TestFlight/App Store) without explicit EAS projectId
         // Try to get token - EAS Build should have injected the projectId at build time
-        console.log('Standalone build without explicit EAS projectId, attempting to get token...');
+        console.log('Production build without explicit EAS projectId, attempting to get token...');
         try {
           tokenData = await Notifications.getExpoPushTokenAsync();
-        } catch (standaloneError) {
-          console.error('Standalone push token failed:', standaloneError);
-          // This could mean APNs isn't configured properly for this bundle ID
-          throw new Error('Failed to get push token. Please ensure push notifications are configured in App Store Connect for this app.');
+        } catch (productionError: any) {
+          console.error('Production push token failed:', productionError);
+          const errorMessage = productionError?.message || String(productionError);
+          // Check for common APNs/FCM configuration issues
+          if (errorMessage.includes('APNS') || errorMessage.includes('certificate') || errorMessage.includes('entitlement')) {
+            throw new Error('Push notifications are not configured for this app. Please check APNs configuration in App Store Connect.');
+          }
+          // Generic error for production builds
+          throw new Error(`Failed to enable notifications: ${errorMessage}`);
         }
       } else {
         // Development in Expo Go: try without projectId (uses experienceId)
-        console.log('No EAS projectId, trying Expo Go mode...');
+        console.log('Expo Go mode, attempting to get token...');
         try {
           tokenData = await Notifications.getExpoPushTokenAsync();
-        } catch (expoGoError) {
+        } catch (expoGoError: any) {
           console.error('Expo Go push token failed:', expoGoError);
-          throw new Error('Push notifications require a production build. They are not available in development mode.');
+          throw new Error('Push notifications are not fully supported in Expo Go. Please use a development or production build.');
         }
       }
       const token = tokenData.data;
