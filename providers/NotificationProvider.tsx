@@ -1,6 +1,5 @@
 import createContextHook from '@nkzw/create-context-hook';
 import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { Platform } from 'react-native';
@@ -10,9 +9,22 @@ import { trpcClient } from '@/lib/trpc';
 const PUSH_TOKEN_KEY = 'push_token';
 const NOTIFICATIONS_ENABLED_KEY = 'notifications_enabled';
 
+// Check if running on a real device (safe check without expo-device)
+const isRealDevice = (): boolean => {
+  if (Platform.OS === 'web') return false;
+  try {
+    // expo-device may not be available or may crash
+    const Device = require('expo-device');
+    return Device.isDevice ?? true;
+  } catch {
+    // If expo-device fails, assume it's a real device (production build)
+    return true;
+  }
+};
+
 // Set up notification handler safely
-try {
-  if (Platform.OS !== 'web') {
+if (Platform.OS !== 'web') {
+  try {
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
         shouldShowAlert: true,
@@ -22,9 +34,9 @@ try {
         shouldShowList: true,
       }),
     });
+  } catch (error) {
+    console.warn('Failed to set notification handler:', error);
   }
-} catch (error) {
-  console.warn('Failed to set notification handler:', error);
 }
 
 export const [NotificationProvider, useNotifications] = createContextHook(() => {
@@ -95,8 +107,9 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
       throw new Error('Push notifications not supported on web');
     }
 
-    console.log('Device.isDevice:', Device.isDevice);
-    if (!Device.isDevice) {
+    const deviceIsReal = isRealDevice();
+    console.log('isRealDevice:', deviceIsReal);
+    if (!deviceIsReal) {
       console.log('Push notifications require a physical device');
       throw new Error('Push notifications require a physical device');
     }

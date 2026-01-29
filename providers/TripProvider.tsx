@@ -35,7 +35,17 @@ const saveBackgroundSpeed = async (speed: number, timestamp: number) => {
 
 const defineBackgroundTask = () => {
   if (taskDefined || Platform.OS === 'web') return;
+  
+  // Mark as defined immediately to prevent multiple attempts
+  taskDefined = true;
+  
   try {
+    // Check if TaskManager is available
+    if (!TaskManager || typeof TaskManager.defineTask !== 'function') {
+      console.warn('TaskManager not available');
+      return;
+    }
+    
     TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
       if (error) {
         console.error('Background location task error:', error);
@@ -61,19 +71,26 @@ const defineBackgroundTask = () => {
         }
       }
     });
-    taskDefined = true;
     console.log('Background task defined successfully');
   } catch (error) {
-    console.warn('Failed to define background task (this is OK if not using background location):', error);
-    taskDefined = true; // Prevent retry attempts
+    console.warn('Failed to define background task:', error);
   }
 };
 
-// Define task after a small delay to ensure native modules are ready
+// Define task safely - only on native and with proper guards
 if (Platform.OS !== 'web') {
-  setTimeout(() => {
-    defineBackgroundTask();
-  }, 100);
+  // Use a longer delay and wrap in try-catch
+  try {
+    setTimeout(() => {
+      try {
+        defineBackgroundTask();
+      } catch (e) {
+        console.warn('Background task definition failed:', e);
+      }
+    }, 500);
+  } catch (e) {
+    console.warn('Failed to schedule background task definition:', e);
+  }
 }
 
 export const [TripProvider, useTrips] = createContextHook(() => {
@@ -253,23 +270,45 @@ export const [TripProvider, useTrips] = createContextHook(() => {
         setIsTracking(true);
         isTrackingRef.current = true;
         
-        const hasTask = await ExpoLocation.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK).catch(() => false);
+        if (Platform.OS === 'web') {
+          resumeTracking(trip);
+          return;
+        }
+        
+        let hasTask = false;
+        try {
+          hasTask = await ExpoLocation.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+        } catch (e) {
+          console.warn('Could not check background task status:', e);
+        }
+        
         if (hasTask) {
           console.log('Restoring active background tracking');
           isBackgroundEnabled.current = true;
           setupBackgroundCallback();
           startDurationTimer(trip.startTime);
           
-          const currentLocation = await ExpoLocation.getCurrentPositionAsync({
-            accuracy: ExpoLocation.Accuracy.BestForNavigation,
-          });
-          processLocationUpdateBackground(currentLocation);
+          try {
+            const currentLocation = await ExpoLocation.getCurrentPositionAsync({
+              accuracy: ExpoLocation.Accuracy.BestForNavigation,
+            });
+            processLocationUpdateBackground(currentLocation);
+          } catch (locError) {
+            console.warn('Could not get current position:', locError);
+          }
         } else {
           resumeTracking(trip);
         }
       }
     } catch (error) {
       console.error('Failed to restore tracking state:', error);
+      // Reset tracking state on error to prevent crash loops
+      try {
+        await AsyncStorage.removeItem(TRACKING_STATE_KEY);
+        await AsyncStorage.removeItem(CURRENT_TRIP_KEY);
+      } catch (e) {
+        console.warn('Could not clear tracking state:', e);
+      }
     }
   };
 
