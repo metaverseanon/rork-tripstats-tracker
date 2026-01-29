@@ -17,8 +17,12 @@ const isRealDevice = (): boolean => {
   return true;
 };
 
-// Set up notification handler safely
-if (Platform.OS !== 'web') {
+// Notification handler is now set lazily inside the provider to avoid TurboModule crashes
+let notificationHandlerSet = false;
+
+const setupNotificationHandler = () => {
+  if (notificationHandlerSet || Platform.OS === 'web') return;
+  
   try {
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
@@ -29,10 +33,12 @@ if (Platform.OS !== 'web') {
         shouldShowList: true,
       }),
     });
+    notificationHandlerSet = true;
+    console.log('Notification handler set successfully');
   } catch (error) {
     console.warn('Failed to set notification handler:', error);
   }
-}
+};
 
 export const [NotificationProvider, useNotifications] = createContextHook(() => {
   const [pushToken, setPushToken] = useState<string | null>(null);
@@ -42,6 +48,9 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
 
   useEffect(() => {
+    // Set up notification handler lazily after React is initialized
+    setupNotificationHandler();
+    
     loadNotificationSettings();
 
     if (Platform.OS !== 'web') {
