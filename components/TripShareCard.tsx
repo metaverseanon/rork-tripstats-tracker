@@ -22,10 +22,13 @@ import { TripStats } from '@/types/trip';
 import { useTrips } from '@/providers/TripProvider';
 import { useSettings } from '@/providers/SettingsProvider';
 
+type TimePeriod = 'today' | 'week' | 'month' | 'year' | 'all';
+
 interface TripShareCardProps {
   trip: TripStats;
   visible: boolean;
   onClose: () => void;
+  timePeriod?: TimePeriod;
 }
 
 interface RankingInfo {
@@ -40,7 +43,7 @@ const CARD_WIDTH = Math.min(SCREEN_WIDTH - 48, 360);
 const CARD_GAP = 16;
 const SNAP_INTERVAL = CARD_WIDTH + CARD_GAP;
 
-export default function TripShareCard({ trip, visible, onClose }: TripShareCardProps) {
+export default function TripShareCard({ trip, visible, onClose, timePeriod = 'today' }: TripShareCardProps) {
   const viewShotRef = useRef<ViewShot>(null);
   const viewShotRef2 = useRef<ViewShot>(null);
   const [currentPage, setCurrentPage] = useState(0);
@@ -104,15 +107,44 @@ export default function TripShareCard({ trip, visible, onClose }: TripShareCardP
     return 'Unknown Location';
   };
 
+  const getTimePeriodStart = useCallback((period: TimePeriod): number => {
+    const now = new Date();
+    switch (period) {
+      case 'today':
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      case 'week':
+        const dayOfWeek = now.getDay();
+        const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
+        return startOfWeek.getTime();
+      case 'month':
+        return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+      case 'year':
+        return new Date(now.getFullYear(), 0, 1).getTime();
+      case 'all':
+      default:
+        return 0;
+    }
+  }, []);
+
+  const getTimePeriodLabel = useCallback((period: TimePeriod): string => {
+    switch (period) {
+      case 'today': return 'today';
+      case 'week': return 'this week';
+      case 'month': return 'this month';
+      case 'year': return 'this year';
+      case 'all': return 'all-time';
+      default: return 'all-time';
+    }
+  }, []);
+
   const rankingInfo = useMemo((): RankingInfo | null => {
     if (!trip || trips.length === 0) return null;
 
     const tripCountry = trip.location?.country;
     const tripCity = trip.location?.city;
     
-    const now = Date.now();
-    const oneDayAgo = now - 24 * 60 * 60 * 1000;
-    const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
+    const periodStart = getTimePeriodStart(timePeriod);
+    const periodLabel = getTimePeriodLabel(timePeriod);
 
     const checkRanking = (
       filterFn: (t: TripStats) => boolean,
@@ -142,59 +174,33 @@ export default function TripShareCard({ trip, visible, onClose }: TripShareCardP
       return null;
     };
 
-    if (tripCity && tripCity !== 'Unknown') {
-      const cityTodayRank = checkRanking(
-        t => t.location?.city === tripCity && t.startTime > oneDayAgo,
-        `in ${tripCity}`,
-        'today'
-      );
-      if (cityTodayRank) return cityTodayRank;
+    const timeFilter = (t: TripStats) => timePeriod === 'all' || t.startTime >= periodStart;
 
-      const cityWeekRank = checkRanking(
-        t => t.location?.city === tripCity && t.startTime > oneWeekAgo,
+    if (tripCity && tripCity !== 'Unknown') {
+      const cityRank = checkRanking(
+        t => t.location?.city === tripCity && timeFilter(t),
         `in ${tripCity}`,
-        'this week'
+        periodLabel
       );
-      if (cityWeekRank) return cityWeekRank;
+      if (cityRank) return cityRank;
     }
 
     if (tripCountry && tripCountry !== 'Unknown') {
-      const countryTodayRank = checkRanking(
-        t => t.location?.country === tripCountry && t.startTime > oneDayAgo,
+      const countryRank = checkRanking(
+        t => t.location?.country === tripCountry && timeFilter(t),
         `in ${tripCountry}`,
-        'today'
+        periodLabel
       );
-      if (countryTodayRank) return countryTodayRank;
-
-      const countryWeekRank = checkRanking(
-        t => t.location?.country === tripCountry && t.startTime > oneWeekAgo,
-        `in ${tripCountry}`,
-        'this week'
-      );
-      if (countryWeekRank) return countryWeekRank;
-
-      const countryAllTimeRank = checkRanking(
-        t => t.location?.country === tripCountry,
-        `in ${tripCountry}`,
-        'all-time'
-      );
-      if (countryAllTimeRank) return countryAllTimeRank;
+      if (countryRank) return countryRank;
     }
 
-    const globalTodayRank = checkRanking(
-      t => t.startTime > oneDayAgo,
+    const globalRank = checkRanking(
+      t => timeFilter(t),
       'globally',
-      'today'
+      periodLabel
     );
-    if (globalTodayRank) return globalTodayRank;
-
-    const globalAllTimeRank = checkRanking(
-      () => true,
-      'globally',
-      'all-time'
-    );
-    return globalAllTimeRank;
-  }, [trip, trips]);
+    return globalRank;
+  }, [trip, trips, timePeriod, getTimePeriodStart, getTimePeriodLabel]);
 
   const getRankSuffix = (rank: number) => {
     if (rank === 1) return 'st';
