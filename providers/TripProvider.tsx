@@ -94,6 +94,9 @@ export const [TripProvider, useTrips] = createContextHook(() => {
   const staleSpeedInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const appState = useRef<AppStateStatus>(AppState.currentState);
   const isTrackingRef = useRef<boolean>(false);
+  const pendingLocationsRef = useRef<LocationType[]>([]);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSaveTimeRef = useRef<number>(0);
 
   const refreshSpeedFromStorage = useCallback(async () => {
     if (!isTrackingRef.current) return;
@@ -318,20 +321,35 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     return () => {
       processLocationRef = null;
     };
-  });
+  }, []);
+
+  const debouncedSaveTrip = useCallback((trip: TripStats) => {
+    const now = Date.now();
+    if (now - lastSaveTimeRef.current < 2000) {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      saveTimeoutRef.current = setTimeout(() => {
+        lastSaveTimeRef.current = Date.now();
+        AsyncStorage.setItem(CURRENT_TRIP_KEY, JSON.stringify(trip)).catch(console.error);
+      }, 2000);
+      return;
+    }
+    lastSaveTimeRef.current = now;
+    AsyncStorage.setItem(CURRENT_TRIP_KEY, JSON.stringify(trip)).catch(console.error);
+  }, []);
 
   const startDurationTimer = (startTime: number) => {
     if (durationInterval.current) {
       clearInterval(durationInterval.current);
     }
     durationInterval.current = setInterval(() => {
-      setCurrentTrip((prev) => {
-        if (!prev) return prev;
-        const elapsed = Math.max(0, (Date.now() - startTime) / 1000);
-        const updated = { ...prev, duration: elapsed };
-        AsyncStorage.setItem(CURRENT_TRIP_KEY, JSON.stringify(updated)).catch(console.error);
-        return updated;
-      });
+      const tripData = currentTripRef.current;
+      if (!tripData) return;
+      const elapsed = Math.max(0, (Date.now() - startTime) / 1000);
+      const updated = { ...tripData, duration: elapsed };
+      currentTripRef.current = updated;
+      setCurrentTrip(updated);
     }, 1000);
   };
 
@@ -371,62 +389,69 @@ export const [TripProvider, useTrips] = createContextHook(() => {
 
     const now = Date.now();
     lastLocationUpdateTime.current = now;
-    setCurrentSpeed(speed);
-    setCurrentLocation(newLocation);
-    
     currentSpeedRef.current = speed;
+    
+    pendingLocationsRef.current.push(newLocation);
+    if (pendingLocationsRef.current.length > 1000) {
+      pendingLocationsRef.current = pendingLocationsRef.current.slice(-500);
+    }
     
     saveBackgroundSpeed(speed, now).catch(console.error);
 
     calculateAcceleration(speed, location.timestamp);
     trackAccelerationTimes(speed, location.timestamp);
 
-    setCurrentTrip((prev) => {
-      if (!prev) return prev;
+    const tripData = currentTripRef.current;
+    if (!tripData) return;
 
-      const updatedLocations = [...prev.locations, newLocation];
-      let distance = prev.distance;
-      let corners = prev.corners;
+    let distance = tripData.distance;
+    let corners = tripData.corners;
 
-      if (prev.locations.length > 0) {
-        const lastLoc = prev.locations[prev.locations.length - 1];
-        const dist = calculateDistance(
-          lastLoc.latitude,
-          lastLoc.longitude,
-          newLocation.latitude,
-          newLocation.longitude
-        );
-        distance += dist;
+    const allLocations = [...tripData.locations, ...pendingLocationsRef.current];
+    if (allLocations.length > 1) {
+      const lastLoc = allLocations[allLocations.length - 2];
+      const dist = calculateDistance(
+        lastLoc.latitude,
+        lastLoc.longitude,
+        newLocation.latitude,
+        newLocation.longitude
+      );
+      distance += dist;
 
-        if (location.coords.heading !== undefined && location.coords.heading !== null && location.coords.heading !== -1) {
-          if (detectCorner(location.coords.heading, location.timestamp)) {
-            corners++;
-          }
+      if (location.coords.heading !== undefined && location.coords.heading !== null && location.coords.heading !== -1) {
+        if (detectCorner(location.coords.heading, location.timestamp)) {
+          corners++;
         }
       }
+    }
 
-      const duration = (Date.now() - prev.startTime) / 1000;
-      const topSpeed = Math.max(prev.topSpeed, speed);
-      const avgSpeed = distance > 0 ? (distance / duration) * 3600 : 0;
+    const duration = (Date.now() - tripData.startTime) / 1000;
+    const topSpeed = Math.max(tripData.topSpeed, speed);
+    const avgSpeed = distance > 0 ? (distance / duration) * 3600 : 0;
 
-      const updated = {
-        ...prev,
-        locations: updatedLocations,
-        distance,
-        duration,
-        topSpeed,
-        avgSpeed,
-        corners,
-        acceleration: maxAcceleration.current,
-        maxGForce: maxGForce.current,
-        time0to100: time0to100.current ?? undefined,
-        time0to200: time0to200.current ?? undefined,
-        time0to300: time0to300.current ?? undefined,
-      };
-      
-      AsyncStorage.setItem(CURRENT_TRIP_KEY, JSON.stringify(updated)).catch(console.error);
-      return updated;
-    });
+    const updated: TripStats = {
+      ...tripData,
+      locations: allLocations.slice(-500),
+      distance,
+      duration,
+      topSpeed,
+      avgSpeed,
+      corners,
+      acceleration: maxAcceleration.current,
+      maxGForce: maxGForce.current,
+      time0to100: time0to100.current ?? undefined,
+      time0to200: time0to200.current ?? undefined,
+      time0to300: time0to300.current ?? undefined,
+    };
+    
+    currentTripRef.current = updated;
+    pendingLocationsRef.current = [];
+    
+    setCurrentSpeed(speed);
+    setCurrentLocation(newLocation);
+    setCurrentTrip(updated);
+    
+    debouncedSaveTrip(updated);
   };
 
   const processLocationUpdate = (location: ExpoLocation.LocationObject) => {
@@ -441,61 +466,65 @@ export const [TripProvider, useTrips] = createContextHook(() => {
 
     const now = Date.now();
     lastLocationUpdateTime.current = now;
-    setCurrentSpeed(speed);
     currentSpeedRef.current = speed;
-    setCurrentLocation(newLocation);
     
     saveBackgroundSpeed(speed, now).catch(console.error);
 
     calculateAcceleration(speed, location.timestamp);
     trackAccelerationTimes(speed, location.timestamp);
 
-    setCurrentTrip((prev) => {
-      if (!prev) return prev;
+    const tripData = currentTripRef.current;
+    if (!tripData) return;
 
-      const updatedLocations = [...prev.locations, newLocation];
-      let distance = prev.distance;
-      let corners = prev.corners;
+    const locations = tripData.locations;
+    let distance = tripData.distance;
+    let corners = tripData.corners;
 
-      if (prev.locations.length > 0) {
-        const lastLoc = prev.locations[prev.locations.length - 1];
-        const dist = calculateDistance(
-          lastLoc.latitude,
-          lastLoc.longitude,
-          newLocation.latitude,
-          newLocation.longitude
-        );
-        distance += dist;
+    if (locations.length > 0) {
+      const lastLoc = locations[locations.length - 1];
+      const dist = calculateDistance(
+        lastLoc.latitude,
+        lastLoc.longitude,
+        newLocation.latitude,
+        newLocation.longitude
+      );
+      distance += dist;
 
-        if (location.coords.heading !== undefined && location.coords.heading !== null && location.coords.heading !== -1) {
-          if (detectCorner(location.coords.heading, location.timestamp)) {
-            corners++;
-          }
+      if (location.coords.heading !== undefined && location.coords.heading !== null && location.coords.heading !== -1) {
+        if (detectCorner(location.coords.heading, location.timestamp)) {
+          corners++;
         }
       }
+    }
 
-      const duration = (Date.now() - prev.startTime) / 1000;
-      const topSpeed = Math.max(prev.topSpeed, speed);
-      const avgSpeed = distance > 0 ? (distance / duration) * 3600 : 0;
+    const duration = (Date.now() - tripData.startTime) / 1000;
+    const topSpeed = Math.max(tripData.topSpeed, speed);
+    const avgSpeed = distance > 0 ? (distance / duration) * 3600 : 0;
 
-      const updated = {
-        ...prev,
-        locations: updatedLocations,
-        distance,
-        duration,
-        topSpeed,
-        avgSpeed,
-        corners,
-        acceleration: maxAcceleration.current,
-        maxGForce: maxGForce.current,
-        time0to100: time0to100.current ?? undefined,
-        time0to200: time0to200.current ?? undefined,
-        time0to300: time0to300.current ?? undefined,
-      };
-      
-      AsyncStorage.setItem(CURRENT_TRIP_KEY, JSON.stringify(updated)).catch(console.error);
-      return updated;
-    });
+    const updatedLocations = [...locations, newLocation].slice(-500);
+    
+    const updated: TripStats = {
+      ...tripData,
+      locations: updatedLocations,
+      distance,
+      duration,
+      topSpeed,
+      avgSpeed,
+      corners,
+      acceleration: maxAcceleration.current,
+      maxGForce: maxGForce.current,
+      time0to100: time0to100.current ?? undefined,
+      time0to200: time0to200.current ?? undefined,
+      time0to300: time0to300.current ?? undefined,
+    };
+    
+    currentTripRef.current = updated;
+    
+    setCurrentSpeed(speed);
+    setCurrentLocation(newLocation);
+    setCurrentTrip(updated);
+    
+    debouncedSaveTrip(updated);
   };
 
   const resumeTracking = async (trip: TripStats) => {
@@ -807,6 +836,12 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     }
 
     stopStaleSpeedDetection();
+    
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    pendingLocationsRef.current = [];
 
     if (currentTrip) {
       let tripLocation: TripLocation = { country: 'Unknown', city: 'Unknown' };
@@ -855,6 +890,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     time0to200.current = null;
     time0to300.current = null;
     lastLocationUpdateTime.current = 0;
+    pendingLocationsRef.current = [];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTrip, trips]);
 
   const clearLastSavedTrip = useCallback(() => {
