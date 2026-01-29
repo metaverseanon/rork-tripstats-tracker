@@ -255,13 +255,13 @@ export default function LeaderboardScreen() {
     if (!filters.country) return [];
     const countryData = COUNTRIES.find(c => c.name === filters.country);
     if (countryData) {
-      return countryData.cities;
+      return [...countryData.cities].sort((a, b) => a.localeCompare(b));
     }
     const citiesFromTrips = trips
       .filter(trip => trip.location?.country === filters.country)
       .map(trip => trip.location?.city)
       .filter((city): city is string => !!city && city !== 'Unknown');
-    return [...new Set(citiesFromTrips)];
+    return [...new Set(citiesFromTrips)].sort((a, b) => a.localeCompare(b));
   }, [trips, filters.country]);
   
   const carBrands = useMemo(() => {
