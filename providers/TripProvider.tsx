@@ -42,9 +42,15 @@ const defineBackgroundTask = () => {
   
   try {
     // Check if TaskManager is available and ready
-    if (!TaskManager || typeof TaskManager.defineTask !== 'function') {
+    if (!TaskManager) {
       console.warn('TaskManager not available');
-      taskDefinitionAttempted = false; // Allow retry later
+      taskDefinitionAttempted = false;
+      return;
+    }
+    
+    if (typeof TaskManager.defineTask !== 'function') {
+      console.warn('TaskManager.defineTask not available');
+      taskDefinitionAttempted = false;
       return;
     }
     

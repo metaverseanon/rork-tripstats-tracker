@@ -12,14 +12,9 @@ const NOTIFICATIONS_ENABLED_KEY = 'notifications_enabled';
 // Check if running on a real device (safe check without expo-device)
 const isRealDevice = (): boolean => {
   if (Platform.OS === 'web') return false;
-  try {
-    // expo-device may not be available or may crash
-    const Device = require('expo-device');
-    return Device.isDevice ?? true;
-  } catch {
-    // If expo-device fails, assume it's a real device (production build)
-    return true;
-  }
+  // In production builds, always assume real device
+  // expo-device can cause crashes in some build configurations
+  return true;
 };
 
 // Set up notification handler safely

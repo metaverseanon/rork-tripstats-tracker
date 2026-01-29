@@ -10,9 +10,9 @@ const getBaseUrl = () => {
   const url = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
 
   if (!url) {
-    throw new Error(
-      "Rork did not set EXPO_PUBLIC_RORK_API_BASE_URL, please use support",
-    );
+    console.error('EXPO_PUBLIC_RORK_API_BASE_URL is not set');
+    // Return a fallback that won't crash the app but will fail API calls gracefully
+    return 'https://api.placeholder.invalid';
   }
 
   return url;
