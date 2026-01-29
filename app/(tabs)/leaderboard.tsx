@@ -15,6 +15,7 @@ import { LeaderboardCategory, LeaderboardFilters, TripStats } from '@/types/trip
 import { ThemeColors } from '@/constants/colors';
 
 type FilterType = 'country' | 'city' | 'carBrand' | 'carModel';
+type TimePeriod = 'today' | 'week' | 'month' | 'year' | 'all';
 
 export default function LeaderboardScreen() {
   const { trips } = useTrips();
@@ -35,6 +36,7 @@ export default function LeaderboardScreen() {
   const [sharingLocationMeetupId, setSharingLocationMeetupId] = useState<string | null>(null);
   const [selectedMeetup, setSelectedMeetup] = useState<DriveMeetup | null>(null);
   const [showMeetupDetail, setShowMeetupDetail] = useState(false);
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>('all');
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -271,6 +273,33 @@ export default function LeaderboardScreen() {
     return getModelsForBrand(filters.carBrand);
   }, [filters.carBrand]);
 
+  const TIME_PERIODS: { key: TimePeriod; label: string }[] = useMemo(() => [
+    { key: 'today', label: 'Today' },
+    { key: 'week', label: 'This Week' },
+    { key: 'month', label: 'This Month' },
+    { key: 'year', label: 'This Year' },
+    { key: 'all', label: 'All Time' },
+  ], []);
+
+  const getTimePeriodStart = useCallback((period: TimePeriod): number => {
+    const now = new Date();
+    switch (period) {
+      case 'today':
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      case 'week':
+        const dayOfWeek = now.getDay();
+        const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
+        return startOfWeek.getTime();
+      case 'month':
+        return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+      case 'year':
+        return new Date(now.getFullYear(), 0, 1).getTime();
+      case 'all':
+      default:
+        return 0;
+    }
+  }, []);
+
   const matchesCountryFilter = useCallback((tripCountry: string | undefined, filterCountry: string) => {
     if (!tripCountry) return false;
     if (tripCountry === filterCountry) return true;
@@ -326,7 +355,10 @@ export default function LeaderboardScreen() {
   }, []);
 
   const filteredTrips = useMemo(() => {
+    const timePeriodStart = getTimePeriodStart(timePeriod);
+    
     return trips.filter((trip) => {
+      if (timePeriod !== 'all' && trip.startTime < timePeriodStart) return false;
       if (filters.country && !matchesCountryFilter(trip.location?.country, filters.country)) return false;
       if (filters.city && trip.location?.city !== filters.city) return false;
       if (filters.carBrand && filters.carModel) {
@@ -337,7 +369,7 @@ export default function LeaderboardScreen() {
       }
       return true;
     });
-  }, [trips, filters]);
+  }, [trips, filters, timePeriod, getTimePeriodStart]);
 
   const leaderboardData = useMemo(() => {
     let sorted: TripStats[] = [];
@@ -654,6 +686,25 @@ export default function LeaderboardScreen() {
           </View>
           <ChevronDown size={18} color={colors.text} />
         </TouchableOpacity>
+
+        <Text style={styles.sectionLabel}>Time Period</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timePeriodScroll} contentContainerStyle={styles.timePeriodContent}>
+          {TIME_PERIODS.map((period) => (
+            <TouchableOpacity
+              key={period.key}
+              style={[styles.timePeriodChip, timePeriod === period.key && styles.timePeriodChipActive]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setTimePeriod(period.key);
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.timePeriodChipText, timePeriod === period.key && styles.timePeriodChipTextActive]}>
+                {period.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
         <Text style={styles.sectionLabel}>Filters</Text>
         <View style={styles.filterRow}>
@@ -1557,6 +1608,34 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginTop: 4,
+  },
+  timePeriodScroll: {
+    marginHorizontal: -16,
+    marginBottom: 4,
+  },
+  timePeriodContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  timePeriodChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: colors.cardLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  timePeriodChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  timePeriodChipText: {
+    fontSize: 12,
+    fontFamily: 'Orbitron_500Medium',
+    color: colors.text,
+  },
+  timePeriodChipTextActive: {
+    color: colors.textInverted,
   },
   categoryDropdownButton: {
     flexDirection: 'row',
