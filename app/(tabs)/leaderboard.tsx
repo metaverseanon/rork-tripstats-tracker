@@ -275,9 +275,9 @@ export default function LeaderboardScreen() {
 
   const TIME_PERIODS: { key: TimePeriod; label: string }[] = useMemo(() => [
     { key: 'today', label: 'Today' },
-    { key: 'week', label: 'This Week' },
-    { key: 'month', label: 'This Month' },
-    { key: 'year', label: 'This Year' },
+    { key: 'week', label: 'Week' },
+    { key: 'month', label: 'Month' },
+    { key: 'year', label: 'Year' },
     { key: 'all', label: 'All Time' },
   ], []);
 
