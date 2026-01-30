@@ -218,7 +218,6 @@ export const [TripProvider, useTrips] = createContextHook(() => {
   useEffect(() => {
     loadTrips();
     restoreTrackingState();
-    checkAndRequestLocationOnFirstLaunch();
     return () => {
       backgroundLocationCallback = null;
       processLocationRef = null;
