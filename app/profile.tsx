@@ -1732,9 +1732,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 80,
   },
   modalContent: {
     backgroundColor: colors.cardLight,
