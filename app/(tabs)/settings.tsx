@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Linking, Image, Switch, Platform, ActivityIndicator, Alert } from 'react-native';
+import { trpc } from '@/lib/trpc';
 import { router } from 'expo-router';
 import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle, Bell } from 'lucide-react-native';
 import { useSettings, SpeedUnit, DistanceUnit } from '@/providers/SettingsProvider';
@@ -10,7 +11,8 @@ import { useState } from 'react';
 export default function SettingsScreen() {
   const { settings, colors, setSpeedUnit, setDistanceUnit, setTheme } = useSettings();
   const { user, isAuthenticated, getCarDisplayName } = useUser();
-  const { notificationsEnabled, registerForPushNotifications, disableNotifications } = useNotifications();
+  const { notificationsEnabled, pushToken, registerForPushNotifications, disableNotifications } = useNotifications();
+  const sendTestMutation = trpc.notifications.sendTestNotification.useMutation();
   const [isTogglingNotifications, setIsTogglingNotifications] = useState(false);
 
   const speedOptions: { value: SpeedUnit; label: string }[] = [
@@ -93,6 +95,25 @@ export default function SettingsScreen() {
 
   const openProfile = () => {
     router.push('/profile' as any);
+  };
+
+  const handleSendTestNotification = async () => {
+    if (!pushToken) {
+      Alert.alert('Error', 'Push notifications are not enabled. Please enable them first.');
+      return;
+    }
+
+    try {
+      const result = await sendTestMutation.mutateAsync({ pushToken });
+      if (result.success) {
+        Alert.alert('Success', 'Test notification sent! You should receive it shortly.');
+      } else {
+        Alert.alert('Error', 'Failed to send test notification.');
+      }
+    } catch (error: any) {
+      console.error('Failed to send test notification:', error);
+      Alert.alert('Error', error?.message || 'Failed to send test notification.');
+    }
   };
 
   const carName = getCarDisplayName();
@@ -453,6 +474,30 @@ export default function SettingsScreen() {
               )
             )}
           </View>
+
+          {Platform.OS !== 'web' && notificationsEnabled && (
+            <>
+              <View style={styles.divider} />
+              <TouchableOpacity 
+                style={styles.linkItem} 
+                onPress={handleSendTestNotification}
+                activeOpacity={0.7}
+                disabled={sendTestMutation.isPending}
+              >
+                <View style={styles.linkContent}>
+                  <View style={styles.settingIconContainer}>
+                    <Bell size={20} color={colors.accent} />
+                  </View>
+                  <Text style={styles.linkText}>Send Test Notification</Text>
+                </View>
+                {sendTestMutation.isPending ? (
+                  <ActivityIndicator size="small" color={colors.accent} />
+                ) : (
+                  <ChevronRight size={20} color={colors.textLight} />
+                )}
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         <Text style={styles.sectionTitle}>Legal</Text>
