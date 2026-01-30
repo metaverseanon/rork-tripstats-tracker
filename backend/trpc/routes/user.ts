@@ -307,39 +307,49 @@ const getPasswordResetEmailHtml = (displayName: string, code: string) => `
 `;
 
 async function sendPasswordResetEmail(email: string, displayName: string, code: string): Promise<{ sent: boolean; error?: string }> {
+  console.log("[PASSWORD_RESET] Starting sendPasswordResetEmail");
+  console.log("[PASSWORD_RESET] RESEND_API_KEY exists:", !!RESEND_API_KEY);
+  console.log("[PASSWORD_RESET] RESEND_API_KEY length:", RESEND_API_KEY?.length || 0);
+  
   if (!RESEND_API_KEY) {
-    console.error("RESEND_API_KEY not configured");
+    console.error("[PASSWORD_RESET] RESEND_API_KEY not configured");
     return { sent: false, error: "Email service not configured" };
   }
 
+  const emailPayload = {
+    from: "RedLine <info@redlineapp.io>",
+    to: [email],
+    subject: "Password Reset Code - RedLine 🔐",
+    html: getPasswordResetEmailHtml(displayName, code),
+  };
+
   try {
-    console.log("Attempting to send password reset email to:", email);
+    console.log("[PASSWORD_RESET] Sending email to:", email);
+    console.log("[PASSWORD_RESET] Payload (without html):", { ...emailPayload, html: "[HTML CONTENT]" });
+    
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${RESEND_API_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        from: "RedLine <info@redlineapp.io>",
-        to: [email],
-        subject: "Password Reset Code - RedLine 🔐",
-        html: getPasswordResetEmailHtml(displayName, code),
-      }),
+      body: JSON.stringify(emailPayload),
     });
 
+    console.log("[PASSWORD_RESET] Response status:", response.status);
+    const responseText = await response.text();
+    console.log("[PASSWORD_RESET] Response body:", responseText);
+
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Failed to send password reset email:", response.status, errorText);
-      return { sent: false, error: `Email delivery failed: ${response.status}` };
+      console.error("[PASSWORD_RESET] Failed:", response.status, responseText);
+      return { sent: false, error: `Email delivery failed: ${response.status} - ${responseText}` };
     }
 
-    const result = await response.json();
-    console.log("Password reset email sent successfully to:", email, "Result:", result);
+    console.log("[PASSWORD_RESET] Email sent successfully to:", email);
     return { sent: true };
   } catch (error) {
-    console.error("Error sending password reset email:", error);
-    return { sent: false, error: "Network error sending email" };
+    console.error("[PASSWORD_RESET] Exception:", error);
+    return { sent: false, error: `Network error: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -466,15 +476,22 @@ export const userRouter = createTRPCRouter({
       email: z.string().email(),
     }))
     .mutation(async ({ input }) => {
-      console.log("Password reset requested for:", input.email);
+      console.log("[PASSWORD_RESET] ===== REQUEST STARTED =====");
+      console.log("[PASSWORD_RESET] Email:", input.email);
+      
       const users = await getAllUsers();
+      console.log("[PASSWORD_RESET] Total users in DB:", users.length);
+      console.log("[PASSWORD_RESET] User emails:", users.map(u => u.email));
+      
       const user = users.find(u => u.email.toLowerCase() === input.email.toLowerCase());
       
       if (!user) {
-        console.log("No user found for email:", input.email);
+        console.log("[PASSWORD_RESET] No user found for email:", input.email);
         return { success: false, emailSent: false, error: "No account found with this email address." };
       }
 
+      console.log("[PASSWORD_RESET] User found:", user.displayName);
+      
       const code = generateResetCode();
       const expiresAt = Date.now() + 15 * 60 * 1000;
       
@@ -484,11 +501,15 @@ export const userRouter = createTRPCRouter({
         expiresAt,
       });
 
-      console.log("Reset code generated for:", input.email, "Code:", code);
+      console.log("[PASSWORD_RESET] Code generated:", code);
+      console.log("[PASSWORD_RESET] Calling sendPasswordResetEmail...");
+      
       const emailResult = await sendPasswordResetEmail(input.email, user.displayName, code);
       
+      console.log("[PASSWORD_RESET] Email result:", emailResult);
+      
       if (!emailResult.sent) {
-        console.error("Failed to send reset email:", emailResult.error);
+        console.error("[PASSWORD_RESET] Failed to send:", emailResult.error);
         return { 
           success: false, 
           emailSent: false,
@@ -496,6 +517,7 @@ export const userRouter = createTRPCRouter({
         };
       }
       
+      console.log("[PASSWORD_RESET] ===== SUCCESS =====");
       return { 
         success: true, 
         emailSent: true,
