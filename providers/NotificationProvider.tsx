@@ -49,45 +49,6 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
   const notificationListener = useRef<Notifications.EventSubscription | null>(null);
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
 
-  useEffect(() => {
-    // Set up notification handler lazily after React is initialized
-    setupNotificationHandler();
-    
-    loadNotificationSettings();
-    checkAndRequestPermissionOnFirstLaunch();
-
-    if (Platform.OS !== 'web') {
-      try {
-        notificationListener.current = Notifications.addNotificationReceivedListener((notification: Notifications.Notification) => {
-          console.log('Notification received:', notification);
-        });
-
-        responseListener.current = Notifications.addNotificationResponseReceivedListener((response: Notifications.NotificationResponse) => {
-          console.log('Notification response:', response);
-        });
-      } catch (error) {
-        console.warn('Failed to setup notification listeners:', error);
-      }
-    }
-
-    return () => {
-      if (notificationListener.current) {
-        try {
-          notificationListener.current.remove();
-        } catch (e) {
-          console.warn('Failed to remove notification listener:', e);
-        }
-      }
-      if (responseListener.current) {
-        try {
-          responseListener.current.remove();
-        } catch (e) {
-          console.warn('Failed to remove response listener:', e);
-        }
-      }
-    };
-  }, []);
-
   const loadNotificationSettings = async () => {
     try {
       const [storedToken, storedEnabled] = await Promise.all([
@@ -103,53 +64,6 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
       console.error('Failed to load notification settings:', error);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const checkAndRequestPermissionOnFirstLaunch = async () => {
-    if (Platform.OS === 'web') {
-      setHasAskedPermission(true);
-      return;
-    }
-
-    try {
-      const hasAsked = await AsyncStorage.getItem(NOTIFICATION_PERMISSION_ASKED_KEY);
-      
-      if (hasAsked === 'true') {
-        setHasAskedPermission(true);
-        return;
-      }
-
-      // Mark that we've asked (do this before asking to prevent duplicate prompts)
-      await AsyncStorage.setItem(NOTIFICATION_PERMISSION_ASKED_KEY, 'true');
-      setHasAskedPermission(true);
-
-      // Small delay to let the app settle before showing permission dialog
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      console.log('Requesting notification permission on first launch...');
-      
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      
-      if (existingStatus === 'granted') {
-        console.log('Notification permission already granted');
-        return;
-      }
-
-      const { status } = await Notifications.requestPermissionsAsync();
-      console.log('Notification permission result:', status);
-      
-      if (status === 'granted') {
-        // Try to register for push notifications
-        try {
-          await registerForPushNotifications();
-        } catch (error) {
-          console.warn('Auto-registration after permission grant failed:', error);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to check/request notification permission:', error);
-      setHasAskedPermission(true);
     }
   };
 
@@ -276,6 +190,88 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
       throw error;
     }
   }, []);
+
+  const checkAndRequestPermissionOnFirstLaunch = useCallback(async () => {
+    if (Platform.OS === 'web') {
+      setHasAskedPermission(true);
+      return;
+    }
+
+    try {
+      const hasAsked = await AsyncStorage.getItem(NOTIFICATION_PERMISSION_ASKED_KEY);
+      
+      if (hasAsked === 'true') {
+        setHasAskedPermission(true);
+        return;
+      }
+
+      await AsyncStorage.setItem(NOTIFICATION_PERMISSION_ASKED_KEY, 'true');
+      setHasAskedPermission(true);
+
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      console.log('Requesting notification permission on first launch...');
+      
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      
+      if (existingStatus === 'granted') {
+        console.log('Notification permission already granted');
+        return;
+      }
+
+      const { status } = await Notifications.requestPermissionsAsync();
+      console.log('Notification permission result:', status);
+      
+      if (status === 'granted') {
+        try {
+          await registerForPushNotifications();
+        } catch (error) {
+          console.warn('Auto-registration after permission grant failed:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check/request notification permission:', error);
+      setHasAskedPermission(true);
+    }
+  }, [registerForPushNotifications]);
+
+  useEffect(() => {
+    setupNotificationHandler();
+    
+    loadNotificationSettings();
+    checkAndRequestPermissionOnFirstLaunch();
+
+    if (Platform.OS !== 'web') {
+      try {
+        notificationListener.current = Notifications.addNotificationReceivedListener((notification: Notifications.Notification) => {
+          console.log('Notification received:', notification);
+        });
+
+        responseListener.current = Notifications.addNotificationResponseReceivedListener((response: Notifications.NotificationResponse) => {
+          console.log('Notification response:', response);
+        });
+      } catch (error) {
+        console.warn('Failed to setup notification listeners:', error);
+      }
+    }
+
+    return () => {
+      if (notificationListener.current) {
+        try {
+          notificationListener.current.remove();
+        } catch (e) {
+          console.warn('Failed to remove notification listener:', e);
+        }
+      }
+      if (responseListener.current) {
+        try {
+          responseListener.current.remove();
+        } catch (e) {
+          console.warn('Failed to remove response listener:', e);
+        }
+      }
+    };
+  }, [checkAndRequestPermissionOnFirstLaunch]);
 
   const disableNotifications = useCallback(async (userId?: string) => {
     try {
