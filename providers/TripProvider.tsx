@@ -17,6 +17,7 @@ const BACKGROUND_LOCATION_TASK = 'background-location-task';
 const SPEED_STALE_TIMEOUT = 3000;
 const CURRENT_SPEED_KEY = 'current_speed';
 const LAST_LOCATION_TIME_KEY = 'last_location_time';
+const LOCATION_PERMISSION_ASKED_KEY = 'location_permission_asked';
 
 let backgroundLocationCallback: ((location: ExpoLocation.LocationObject) => void) | null = null;
 let processLocationRef: ((location: ExpoLocation.LocationObject) => void) | null = null;
@@ -182,9 +183,42 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     };
   }, [refreshSpeedFromStorage, fetchFreshLocation]);
 
+  const checkAndRequestLocationOnFirstLaunch = useCallback(async () => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+
+    try {
+      const hasAsked = await AsyncStorage.getItem(LOCATION_PERMISSION_ASKED_KEY);
+      
+      if (hasAsked === 'true') {
+        return;
+      }
+
+      await AsyncStorage.setItem(LOCATION_PERMISSION_ASKED_KEY, 'true');
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      console.log('Requesting location permission on first launch...');
+      
+      const { status: existingStatus } = await ExpoLocation.getForegroundPermissionsAsync();
+      
+      if (existingStatus === 'granted') {
+        console.log('Location permission already granted');
+        return;
+      }
+
+      const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
+      console.log('Location permission result:', status);
+    } catch (error) {
+      console.error('Failed to check/request location permission:', error);
+    }
+  }, []);
+
   useEffect(() => {
     loadTrips();
     restoreTrackingState();
+    checkAndRequestLocationOnFirstLaunch();
     return () => {
       backgroundLocationCallback = null;
       processLocationRef = null;

@@ -112,7 +112,14 @@ export default function SettingsScreen() {
       }
     } catch (error: any) {
       console.error('Failed to send test notification:', error);
-      Alert.alert('Error', error?.message || 'Failed to send test notification.');
+      const errorMessage = error?.message || String(error) || '';
+      if (errorMessage.includes('JSON') || errorMessage.includes('Unexpected token') || errorMessage.includes('unexpected character')) {
+        Alert.alert('Server Error', 'The server is not responding correctly. Please try again later.');
+      } else if (errorMessage.includes('Network') || errorMessage.includes('fetch')) {
+        Alert.alert('Network Error', 'Could not connect to the server. Please check your internet connection.');
+      } else {
+        Alert.alert('Error', 'Failed to send test notification. Please try again.');
+      }
     }
   };
 
