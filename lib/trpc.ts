@@ -29,6 +29,14 @@ export const trpcClient = trpc.createClient({
           const response = await fetch(url, options);
           console.log('[TRPC] Response status:', response.status);
           
+          const contentType = response.headers.get('content-type') || '';
+          
+          if (!contentType.includes('application/json')) {
+            const text = await response.text();
+            console.error('[TRPC] Non-JSON response:', text.substring(0, 200));
+            throw new Error('Server returned non-JSON response. Please try again.');
+          }
+          
           if (!response.ok) {
             const text = await response.text();
             console.error('[TRPC] Error response:', text.substring(0, 500));
