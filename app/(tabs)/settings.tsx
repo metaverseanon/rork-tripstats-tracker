@@ -98,20 +98,30 @@ export default function SettingsScreen() {
   };
 
   const handleSendTestNotification = async () => {
+    console.log('[TEST NOTIFICATION] Button pressed');
+    console.log('[TEST NOTIFICATION] pushToken:', pushToken);
+    console.log('[TEST NOTIFICATION] notificationsEnabled:', notificationsEnabled);
+    
     if (!pushToken) {
+      console.log('[TEST NOTIFICATION] No push token available');
       Alert.alert('Error', 'Push notifications are not enabled. Please enable them first.');
       return;
     }
 
     try {
+      console.log('[TEST NOTIFICATION] Calling sendTestNotification mutation...');
       const result = await sendTestMutation.mutateAsync({ pushToken });
+      console.log('[TEST NOTIFICATION] Mutation result:', JSON.stringify(result));
+      
       if (result.success) {
         Alert.alert('Success', 'Test notification sent! You should receive it shortly.');
       } else {
         Alert.alert('Error', 'Failed to send test notification.');
       }
     } catch (error: any) {
-      console.error('Failed to send test notification:', error);
+      console.error('[TEST NOTIFICATION] Error:', error);
+      console.error('[TEST NOTIFICATION] Error message:', error?.message);
+      console.error('[TEST NOTIFICATION] Error stack:', error?.stack);
       const errorMessage = error?.message || String(error) || '';
       if (errorMessage.includes('JSON') || errorMessage.includes('Unexpected token') || errorMessage.includes('unexpected character')) {
         Alert.alert('Server Error', 'The server is not responding correctly. Please try again later.');
