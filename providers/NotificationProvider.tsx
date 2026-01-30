@@ -8,6 +8,7 @@ import { trpcClient } from '@/lib/trpc';
 
 const PUSH_TOKEN_KEY = 'push_token';
 const NOTIFICATIONS_ENABLED_KEY = 'notifications_enabled';
+const NOTIFICATION_PERMISSION_ASKED_KEY = 'notification_permission_asked';
 
 // Check if running on a real device (safe check without expo-device)
 const isRealDevice = (): boolean => {
@@ -44,6 +45,7 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasAskedPermission, setHasAskedPermission] = useState(true); // Default true to prevent flash
   const notificationListener = useRef<Notifications.EventSubscription | null>(null);
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
 
@@ -52,6 +54,7 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
     setupNotificationHandler();
     
     loadNotificationSettings();
+    checkAndRequestPermissionOnFirstLaunch();
 
     if (Platform.OS !== 'web') {
       try {
@@ -100,6 +103,53 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
       console.error('Failed to load notification settings:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const checkAndRequestPermissionOnFirstLaunch = async () => {
+    if (Platform.OS === 'web') {
+      setHasAskedPermission(true);
+      return;
+    }
+
+    try {
+      const hasAsked = await AsyncStorage.getItem(NOTIFICATION_PERMISSION_ASKED_KEY);
+      
+      if (hasAsked === 'true') {
+        setHasAskedPermission(true);
+        return;
+      }
+
+      // Mark that we've asked (do this before asking to prevent duplicate prompts)
+      await AsyncStorage.setItem(NOTIFICATION_PERMISSION_ASKED_KEY, 'true');
+      setHasAskedPermission(true);
+
+      // Small delay to let the app settle before showing permission dialog
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      console.log('Requesting notification permission on first launch...');
+      
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      
+      if (existingStatus === 'granted') {
+        console.log('Notification permission already granted');
+        return;
+      }
+
+      const { status } = await Notifications.requestPermissionsAsync();
+      console.log('Notification permission result:', status);
+      
+      if (status === 'granted') {
+        // Try to register for push notifications
+        try {
+          await registerForPushNotifications();
+        } catch (error) {
+          console.warn('Auto-registration after permission grant failed:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check/request notification permission:', error);
+      setHasAskedPermission(true);
     }
   };
 
@@ -291,6 +341,7 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
     pushToken,
     notificationsEnabled,
     isLoading,
+    hasAskedPermission,
     registerForPushNotifications,
     disableNotifications,
     scheduleLocalNotification,
