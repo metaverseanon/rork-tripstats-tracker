@@ -450,12 +450,25 @@ export default function ProfileScreen() {
     }
     setIsResetting(true);
     try {
-      await trpcClient.user.requestPasswordReset.mutate({ email: resetEmail.trim() });
-      setResetStep('code');
-      Alert.alert('Code Sent', 'If an account exists with this email, a reset code has been sent.');
-    } catch (error) {
+      const result = await trpcClient.user.requestPasswordReset.mutate({ email: resetEmail.trim() });
+      if (result.success) {
+        setResetStep('code');
+        if (result.emailSent === false) {
+          Alert.alert('Notice', 'Reset code generated. Please check your email (email delivery may be delayed).');
+        } else {
+          Alert.alert('Code Sent', 'If an account exists with this email, a reset code has been sent.');
+        }
+      } else {
+        Alert.alert('Error', 'Failed to send reset code. Please try again.');
+      }
+    } catch (error: any) {
       console.error('Failed to request reset code:', error);
-      Alert.alert('Error', 'Failed to send reset code. Please try again.');
+      const message = error?.message || String(error) || '';
+      if (message.includes('network') || message.includes('fetch')) {
+        Alert.alert('Error', 'Network error. Please check your connection and try again.');
+      } else {
+        Alert.alert('Error', 'Failed to send reset code. Please try again.');
+      }
     } finally {
       setIsResetting(false);
     }

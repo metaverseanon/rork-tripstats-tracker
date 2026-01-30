@@ -10,7 +10,7 @@ import { useState } from 'react';
 export default function SettingsScreen() {
   const { settings, colors, setSpeedUnit, setDistanceUnit, setTheme } = useSettings();
   const { user, isAuthenticated, getCarDisplayName } = useUser();
-  const { notificationsEnabled, registerForPushNotifications, disableNotifications, pushToken } = useNotifications();
+  const { notificationsEnabled, registerForPushNotifications, disableNotifications } = useNotifications();
   const [isTogglingNotifications, setIsTogglingNotifications] = useState(false);
 
   const speedOptions: { value: SpeedUnit; label: string }[] = [
@@ -54,7 +54,7 @@ export default function SettingsScreen() {
       }
     } catch (error: any) {
       console.error('Failed to toggle notifications:', error);
-      const message = error?.message || 'Unknown error';
+      const message = error?.message || String(error) || 'Unknown error';
       if (message.includes('Permission denied')) {
         Alert.alert(
           'Permission Required',
@@ -67,16 +67,22 @@ export default function SettingsScreen() {
           'Push notifications require a physical device. They won\'t work on simulators.',
           [{ text: 'OK' }]
         );
-      } else if (message.includes('production build') || message.includes('development mode')) {
+      } else if (message.includes('production build') || message.includes('development mode') || message.includes('Expo Go')) {
         Alert.alert(
           'Production Build Required',
           'Push notifications are only available in TestFlight or App Store builds. They cannot be enabled in development mode.',
           [{ text: 'OK' }]
         );
+      } else if (message.includes('APNS') || message.includes('certificate') || message.includes('entitlement') || message.includes('not configured')) {
+        Alert.alert(
+          'Configuration Required',
+          'Push notifications are not fully configured for this app. Please ensure APNs is set up correctly.',
+          [{ text: 'OK' }]
+        );
       } else {
         Alert.alert(
           'Error',
-          'Failed to enable notifications. Please try again.',
+          message.includes('Failed to enable') ? message : `Failed to enable notifications: ${message}`,
           [{ text: 'OK' }]
         );
       }
