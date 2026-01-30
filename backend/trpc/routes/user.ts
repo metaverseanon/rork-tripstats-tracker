@@ -306,10 +306,10 @@ const getPasswordResetEmailHtml = (displayName: string, code: string) => `
 </html>
 `;
 
-async function sendPasswordResetEmail(email: string, displayName: string, code: string): Promise<{ sent: boolean; error?: string }> {
+async function sendPasswordResetEmail(email: string, displayName: string, code: string): Promise<{ sent: boolean; error?: string; resendId?: string }> {
   console.log("[PASSWORD_RESET] Starting sendPasswordResetEmail");
   console.log("[PASSWORD_RESET] RESEND_API_KEY exists:", !!RESEND_API_KEY);
-  console.log("[PASSWORD_RESET] RESEND_API_KEY length:", RESEND_API_KEY?.length || 0);
+  console.log("[PASSWORD_RESET] RESEND_API_KEY prefix:", RESEND_API_KEY?.substring(0, 10) + "...");
   
   if (!RESEND_API_KEY) {
     console.error("[PASSWORD_RESET] RESEND_API_KEY not configured");
@@ -319,13 +319,14 @@ async function sendPasswordResetEmail(email: string, displayName: string, code: 
   const emailPayload = {
     from: "RedLine <info@redlineapp.io>",
     to: [email],
-    subject: "Password Reset Code - RedLine 🔐",
+    subject: "Password Reset Code - RedLine",
     html: getPasswordResetEmailHtml(displayName, code),
   };
 
   try {
     console.log("[PASSWORD_RESET] Sending email to:", email);
-    console.log("[PASSWORD_RESET] Payload (without html):", { ...emailPayload, html: "[HTML CONTENT]" });
+    console.log("[PASSWORD_RESET] From:", emailPayload.from);
+    console.log("[PASSWORD_RESET] Subject:", emailPayload.subject);
     
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -337,16 +338,36 @@ async function sendPasswordResetEmail(email: string, displayName: string, code: 
     });
 
     console.log("[PASSWORD_RESET] Response status:", response.status);
+    console.log("[PASSWORD_RESET] Response headers:", Object.fromEntries(response.headers.entries()));
+    
     const responseText = await response.text();
     console.log("[PASSWORD_RESET] Response body:", responseText);
 
     if (!response.ok) {
       console.error("[PASSWORD_RESET] Failed:", response.status, responseText);
-      return { sent: false, error: `Email delivery failed: ${response.status} - ${responseText}` };
+      let errorMessage = `Email delivery failed (${response.status})`;
+      try {
+        const errorJson = JSON.parse(responseText);
+        if (errorJson.message) {
+          errorMessage = errorJson.message;
+        }
+      } catch (e) {
+        errorMessage = responseText || errorMessage;
+      }
+      return { sent: false, error: errorMessage };
+    }
+
+    let resendId = '';
+    try {
+      const responseJson = JSON.parse(responseText);
+      resendId = responseJson.id || '';
+      console.log("[PASSWORD_RESET] Resend email ID:", resendId);
+    } catch (e) {
+      console.log("[PASSWORD_RESET] Could not parse response as JSON");
     }
 
     console.log("[PASSWORD_RESET] Email sent successfully to:", email);
-    return { sent: true };
+    return { sent: true, resendId };
   } catch (error) {
     console.error("[PASSWORD_RESET] Exception:", error);
     return { sent: false, error: `Network error: ${error instanceof Error ? error.message : String(error)}` };
@@ -518,10 +539,12 @@ export const userRouter = createTRPCRouter({
       }
       
       console.log("[PASSWORD_RESET] ===== SUCCESS =====");
+      console.log("[PASSWORD_RESET] Resend ID:", emailResult.resendId);
       return { 
         success: true, 
         emailSent: true,
-        message: "Reset code sent to your email."
+        message: "Reset code sent to your email.",
+        resendId: emailResult.resendId
       };
     }),
 
