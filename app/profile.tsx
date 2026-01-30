@@ -452,22 +452,36 @@ export default function ProfileScreen() {
     try {
       console.log('Requesting password reset for:', resetEmail.trim());
       const result = await trpcClient.user.requestPasswordReset.mutate({ email: resetEmail.trim() });
-      console.log('Password reset result:', result);
+      console.log('Password reset result:', JSON.stringify(result, null, 2));
       
       if (result.success && result.emailSent) {
         setResetStep('code');
         Alert.alert('Code Sent', 'A reset code has been sent to your email. Please check your inbox.');
       } else {
-        const errorMessage = (result as any).error || 'Failed to send reset code. Please try again.';
+        const errorMessage = (result as { error?: string }).error || 'Failed to send reset code. Please try again.';
+        console.log('Password reset error message:', errorMessage);
         Alert.alert('Error', errorMessage);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to request reset code:', error);
-      const message = error?.message || String(error) || '';
-      if (message.includes('network') || message.includes('fetch')) {
+      let errorMessage = 'Failed to send reset code. Please try again.';
+      
+      if (error && typeof error === 'object') {
+        const err = error as { message?: string; data?: { message?: string }; shape?: { message?: string } };
+        if (err.message) {
+          errorMessage = err.message;
+        } else if (err.data?.message) {
+          errorMessage = err.data.message;
+        } else if (err.shape?.message) {
+          errorMessage = err.shape.message;
+        }
+      }
+      
+      const lowerMessage = errorMessage.toLowerCase();
+      if (lowerMessage.includes('network') || lowerMessage.includes('fetch') || lowerMessage.includes('failed to fetch')) {
         Alert.alert('Error', 'Network error. Please check your connection and try again.');
       } else {
-        Alert.alert('Error', 'Failed to send reset code. Please try again.');
+        Alert.alert('Error', errorMessage);
       }
     } finally {
       setIsResetting(false);
@@ -1174,7 +1188,11 @@ export default function ProfileScreen() {
       </KeyboardAvoidingView>
 
       {showForgotPassword && (
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView 
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
@@ -1288,7 +1306,7 @@ export default function ProfileScreen() {
               </>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       )}
     </>
   );
@@ -1735,7 +1753,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'flex-start',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 80,
+    paddingTop: 40,
   },
   modalContent: {
     backgroundColor: colors.cardLight,
