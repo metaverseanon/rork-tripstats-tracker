@@ -12,7 +12,7 @@ app.use("*", cors());
 // Log all incoming requests
 app.use("*", async (c, next) => {
   const requestId = Math.random().toString(36).substring(7);
-  console.log(`[HONO:${requestId}] ===== INCOMING REQUEST =====");
+  console.log(`[HONO:${requestId}] ===== INCOMING REQUEST =====`);
   console.log(`[HONO:${requestId}] Method: ${c.req.method}`);
   console.log(`[HONO:${requestId}] Path: ${c.req.path}`);
   console.log(`[HONO:${requestId}] URL: ${c.req.url}`);
