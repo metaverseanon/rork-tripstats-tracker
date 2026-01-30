@@ -450,16 +450,16 @@ export default function ProfileScreen() {
     }
     setIsResetting(true);
     try {
+      console.log('Requesting password reset for:', resetEmail.trim());
       const result = await trpcClient.user.requestPasswordReset.mutate({ email: resetEmail.trim() });
-      if (result.success) {
+      console.log('Password reset result:', result);
+      
+      if (result.success && result.emailSent) {
         setResetStep('code');
-        if (result.emailSent === false) {
-          Alert.alert('Notice', 'Reset code generated. Please check your email (email delivery may be delayed).');
-        } else {
-          Alert.alert('Code Sent', 'If an account exists with this email, a reset code has been sent.');
-        }
+        Alert.alert('Code Sent', 'A reset code has been sent to your email. Please check your inbox.');
       } else {
-        Alert.alert('Error', 'Failed to send reset code. Please try again.');
+        const errorMessage = (result as any).error || 'Failed to send reset code. Please try again.';
+        Alert.alert('Error', errorMessage);
       }
     } catch (error: any) {
       console.error('Failed to request reset code:', error);
