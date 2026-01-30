@@ -9,6 +9,23 @@ const app = new Hono();
 
 app.use("*", cors());
 
+// Log all incoming requests
+app.use("*", async (c, next) => {
+  const requestId = Math.random().toString(36).substring(7);
+  console.log(`[HONO:${requestId}] ===== INCOMING REQUEST =====");
+  console.log(`[HONO:${requestId}] Method: ${c.req.method}`);
+  console.log(`[HONO:${requestId}] Path: ${c.req.path}`);
+  console.log(`[HONO:${requestId}] URL: ${c.req.url}`);
+  
+  const start = Date.now();
+  await next();
+  const duration = Date.now() - start;
+  
+  console.log(`[HONO:${requestId}] Response status: ${c.res.status}`);
+  console.log(`[HONO:${requestId}] Duration: ${duration}ms`);
+  console.log(`[HONO:${requestId}] ===== REQUEST COMPLETE =====`);
+});
+
 app.use(
   "/trpc/*",
   trpcServer({
@@ -26,7 +43,10 @@ app.get("/", (c) => {
 });
 
 app.notFound((c) => {
-  return c.json({ error: "Not Found", path: c.req.path }, 404);
+  console.error(`[HONO] 404 NOT FOUND - Path: ${c.req.path}`);
+  console.error(`[HONO] 404 NOT FOUND - Full URL: ${c.req.url}`);
+  console.error(`[HONO] 404 NOT FOUND - Method: ${c.req.method}`);
+  return c.json({ error: "Not Found", path: c.req.path, method: c.req.method }, 404);
 });
 
 app.onError((err, c) => {
