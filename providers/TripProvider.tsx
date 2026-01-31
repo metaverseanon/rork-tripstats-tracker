@@ -17,7 +17,6 @@ const BACKGROUND_LOCATION_TASK = 'background-location-task';
 const SPEED_STALE_TIMEOUT = 3000;
 const CURRENT_SPEED_KEY = 'current_speed';
 const LAST_LOCATION_TIME_KEY = 'last_location_time';
-const LOCATION_PERMISSION_ASKED_KEY = 'location_permission_asked';
 
 let backgroundLocationCallback: ((location: ExpoLocation.LocationObject) => void) | null = null;
 let processLocationRef: ((location: ExpoLocation.LocationObject) => void) | null = null;
@@ -157,6 +156,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       setCurrentSpeed(0);
       currentSpeedRef.current = 0;
     }
+    // processLocationUpdateBackground uses refs internally and is stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -182,38 +183,6 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       subscription.remove();
     };
   }, [refreshSpeedFromStorage, fetchFreshLocation]);
-
-  const checkAndRequestLocationOnFirstLaunch = useCallback(async () => {
-    if (Platform.OS === 'web') {
-      return;
-    }
-
-    try {
-      const hasAsked = await AsyncStorage.getItem(LOCATION_PERMISSION_ASKED_KEY);
-      
-      if (hasAsked === 'true') {
-        return;
-      }
-
-      await AsyncStorage.setItem(LOCATION_PERMISSION_ASKED_KEY, 'true');
-
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      console.log('Requesting location permission on first launch...');
-      
-      const { status: existingStatus } = await ExpoLocation.getForegroundPermissionsAsync();
-      
-      if (existingStatus === 'granted') {
-        console.log('Location permission already granted');
-        return;
-      }
-
-      const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
-      console.log('Location permission result:', status);
-    } catch (error) {
-      console.error('Failed to check/request location permission:', error);
-    }
-  }, []);
 
   useEffect(() => {
     loadTrips();
@@ -344,6 +313,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     backgroundLocationCallback = (location: ExpoLocation.LocationObject) => {
       processLocationUpdateBackground(location);
     };
+    // processLocationUpdateBackground uses refs internally and is stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -354,6 +325,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     return () => {
       processLocationRef = null;
     };
+    // processLocationUpdateBackground uses refs internally and is stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const debouncedSaveTrip = useCallback((trip: TripStats) => {
@@ -924,7 +897,6 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     time0to300.current = null;
     lastLocationUpdateTime.current = 0;
     pendingLocationsRef.current = [];
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTrip, trips]);
 
   const clearLastSavedTrip = useCallback(() => {
