@@ -191,7 +191,14 @@ export default function RecentScreen() {
           </View>
           <View style={dynamicStyles.mainStatCard}>
             <Clock size={24} color={colors.accent} />
-            <Text style={dynamicStyles.mainStatValue}>{formatDuration(lastTrip.duration)}</Text>
+            <Text 
+              style={dynamicStyles.mainStatValue} 
+              numberOfLines={1} 
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {formatDuration(lastTrip.duration)}
+            </Text>
             <Text style={dynamicStyles.mainStatLabel}>Duration</Text>
           </View>
         </View>

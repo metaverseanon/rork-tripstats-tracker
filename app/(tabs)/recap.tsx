@@ -183,7 +183,14 @@ export default function RecapScreen() {
       </View>
       <Text style={styles.statTitle}>{title}</Text>
       <View style={styles.statValueRow}>
-        <Text style={[styles.statValue, large && styles.statValueLarge]}>{value}</Text>
+        <Text 
+          style={[styles.statValue, large && styles.statValueLarge]} 
+          numberOfLines={1} 
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+        >
+          {value}
+        </Text>
         {unit ? <Text style={styles.statUnit}>{unit}</Text> : null}
       </View>
     </View>
