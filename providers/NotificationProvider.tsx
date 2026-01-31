@@ -6,290 +6,208 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trpcClient } from '@/lib/trpc';
 
-const PUSH_TOKEN_KEY = 'push_token';
-const NOTIFICATIONS_ENABLED_KEY = 'notifications_enabled';
-const NOTIFICATION_PERMISSION_ASKED_KEY = 'notification_permission_asked';
+const PUSH_TOKEN_KEY = 'push_notification_token';
+const NOTIFICATIONS_ENABLED_KEY = 'push_notifications_enabled';
 
-// Check if running on a real device (safe check without expo-device)
-const isRealDevice = (): boolean => {
-  if (Platform.OS === 'web') return false;
-  // In production builds, always assume real device
-  // expo-device can cause crashes in some build configurations
-  return true;
-};
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
 
-// Notification handler is now set lazily inside the provider to avoid TurboModule crashes
-let notificationHandlerSet = false;
-
-const setupNotificationHandler = () => {
-  if (notificationHandlerSet || Platform.OS === 'web') return;
+async function getExpoPushToken(): Promise<string> {
+  console.log('[PUSH] Getting Expo push token...');
   
-  try {
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
-      }),
-    });
-    notificationHandlerSet = true;
-    console.log('Notification handler set successfully');
-  } catch (error) {
-    console.warn('Failed to set notification handler:', error);
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  console.log('[PUSH] Current permission status:', existingStatus);
+  
+  let finalStatus = existingStatus;
+  
+  if (existingStatus !== 'granted') {
+    console.log('[PUSH] Requesting permission...');
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+    console.log('[PUSH] Permission result:', status);
   }
-};
+  
+  if (finalStatus !== 'granted') {
+    throw new Error('Push notification permission not granted');
+  }
+  
+  const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+  console.log('[PUSH] EAS Project ID:', projectId);
+  console.log('[PUSH] App ownership:', Constants.appOwnership);
+  
+  let tokenData;
+  
+  if (projectId) {
+    console.log('[PUSH] Using EAS projectId for token');
+    tokenData = await Notifications.getExpoPushTokenAsync({
+      projectId: projectId,
+    });
+  } else {
+    console.log('[PUSH] No EAS projectId, using default');
+    tokenData = await Notifications.getExpoPushTokenAsync();
+  }
+  
+  console.log('[PUSH] Token obtained:', tokenData.data);
+  return tokenData.data;
+}
+
+async function setupAndroidChannels() {
+  if (Platform.OS !== 'android') return;
+  
+  console.log('[PUSH] Setting up Android notification channels...');
+  
+  await Notifications.setNotificationChannelAsync('default', {
+    name: 'Default',
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#CC0000',
+  });
+  
+  await Notifications.setNotificationChannelAsync('weekly-recap', {
+    name: 'Weekly Recap',
+    description: 'Weekly driving statistics',
+    importance: Notifications.AndroidImportance.HIGH,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#CC0000',
+  });
+  
+  console.log('[PUSH] Android channels configured');
+}
 
 export const [NotificationProvider, useNotifications] = createContextHook(() => {
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [hasAskedPermission, setHasAskedPermission] = useState(true); // Default true to prevent flash
-  const notificationListener = useRef<Notifications.EventSubscription | null>(null);
-  const responseListener = useRef<Notifications.EventSubscription | null>(null);
+  const [permissionStatus, setPermissionStatus] = useState<string | null>(null);
+  
+  const notificationListener = useRef<Notifications.Subscription | null>(null);
+  const responseListener = useRef<Notifications.Subscription | null>(null);
 
-  const loadNotificationSettings = async () => {
-    try {
-      const [storedToken, storedEnabled] = await Promise.all([
-        AsyncStorage.getItem(PUSH_TOKEN_KEY),
-        AsyncStorage.getItem(NOTIFICATIONS_ENABLED_KEY),
-      ]);
-      
-      if (storedToken) {
-        setPushToken(storedToken);
-      }
-      setNotificationsEnabled(storedEnabled === 'true');
-    } catch (error) {
-      console.error('Failed to load notification settings:', error);
-    } finally {
+  useEffect(() => {
+    if (Platform.OS === 'web') {
       setIsLoading(false);
+      return;
     }
-  };
+
+    const loadStoredState = async () => {
+      try {
+        const [storedToken, storedEnabled] = await Promise.all([
+          AsyncStorage.getItem(PUSH_TOKEN_KEY),
+          AsyncStorage.getItem(NOTIFICATIONS_ENABLED_KEY),
+        ]);
+        
+        console.log('[PUSH] Loaded stored token:', storedToken ? 'exists' : 'none');
+        console.log('[PUSH] Loaded stored enabled:', storedEnabled);
+        
+        if (storedToken) {
+          setPushToken(storedToken);
+        }
+        setNotificationsEnabled(storedEnabled === 'true');
+      } catch (error) {
+        console.error('[PUSH] Error loading stored state:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    const checkPermission = async () => {
+      try {
+        const { status } = await Notifications.getPermissionsAsync();
+        setPermissionStatus(status);
+        console.log('[PUSH] Permission status on mount:', status);
+      } catch (error) {
+        console.error('[PUSH] Error checking permission:', error);
+      }
+    };
+
+    loadStoredState();
+    checkPermission();
+    setupAndroidChannels();
+
+    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+      console.log('[PUSH] Notification received:', notification.request.content.title);
+    });
+
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+      console.log('[PUSH] Notification tapped:', response.notification.request.content.title);
+    });
+
+    return () => {
+      if (notificationListener.current) {
+        notificationListener.current.remove();
+      }
+      if (responseListener.current) {
+        responseListener.current.remove();
+      }
+    };
+  }, []);
 
   const registerForPushNotifications = useCallback(async (userId?: string): Promise<string | null> => {
-    console.log('registerForPushNotifications called, Platform:', Platform.OS);
+    console.log('[PUSH] registerForPushNotifications called');
     
     if (Platform.OS === 'web') {
-      console.log('Push notifications not supported on web');
-      throw new Error('Push notifications not supported on web');
-    }
-
-    const deviceIsReal = isRealDevice();
-    console.log('isRealDevice:', deviceIsReal);
-    if (!deviceIsReal) {
-      console.log('Push notifications require a physical device');
-      throw new Error('Push notifications require a physical device');
+      console.log('[PUSH] Web platform - not supported');
+      throw new Error('Push notifications are not supported on web');
     }
 
     try {
-      console.log('Checking existing permissions...');
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      console.log('Existing permission status:', existingStatus);
-      let finalStatus = existingStatus;
-
-      if (existingStatus !== 'granted') {
-        console.log('Requesting permissions...');
-        const { status } = await Notifications.requestPermissionsAsync();
-        console.log('New permission status:', status);
-        finalStatus = status;
-      }
-
-      if (finalStatus !== 'granted') {
-        console.log('Push notification permission denied');
-        throw new Error('Permission denied');
-      }
-
-      // Get EAS project ID - must be a valid UUID format
-      // Do NOT use EXPO_PUBLIC_PROJECT_ID as that's the Rork project ID, not EAS
-      const easProjectId = Constants.expoConfig?.extra?.eas?.projectId;
-      const appOwnership = Constants.appOwnership;
-      // In production builds (TestFlight/App Store), appOwnership is null or undefined
-      // In Expo Go, appOwnership is 'expo'
-      const isExpoGo = appOwnership === 'expo';
-      const isProductionBuild = !isExpoGo;
+      const token = await getExpoPushToken();
       
-      console.log('EAS projectId from config:', easProjectId);
-      console.log('App ownership:', appOwnership);
-      console.log('Is Expo Go:', isExpoGo);
-      console.log('Is production build:', isProductionBuild);
-      console.log('experienceId:', Constants.expoConfig?.slug ? `@${Constants.expoConfig?.owner || 'anonymous'}/${Constants.expoConfig?.slug}` : undefined);
-      
-      let tokenData;
-      
-      if (easProjectId) {
-        // Production: use EAS project ID
-        console.log('Using EAS projectId for push token');
-        tokenData = await Notifications.getExpoPushTokenAsync({
-          projectId: easProjectId,
-        });
-      } else if (isProductionBuild) {
-        // Production build (TestFlight/App Store) without explicit EAS projectId
-        // Try to get token - EAS Build should have injected the projectId at build time
-        console.log('Production build without explicit EAS projectId, attempting to get token...');
-        try {
-          tokenData = await Notifications.getExpoPushTokenAsync();
-        } catch (productionError: any) {
-          console.error('Production push token failed:', productionError);
-          const errorMessage = productionError?.message || String(productionError);
-          // Check for common APNs/FCM configuration issues
-          if (errorMessage.includes('APNS') || errorMessage.includes('certificate') || errorMessage.includes('entitlement')) {
-            throw new Error('Push notifications are not configured for this app. Please check APNs configuration in App Store Connect.');
-          }
-          // Generic error for production builds
-          throw new Error(`Failed to enable notifications: ${errorMessage}`);
-        }
-      } else {
-        // Development in Expo Go: try without projectId (uses experienceId)
-        console.log('Expo Go mode, attempting to get token...');
-        try {
-          tokenData = await Notifications.getExpoPushTokenAsync();
-        } catch (expoGoError: any) {
-          console.error('Expo Go push token failed:', expoGoError);
-          throw new Error('Push notifications are not fully supported in Expo Go. Please use a development or production build.');
-        }
-      }
-      const token = tokenData.data;
-
-      console.log('Push token obtained:', token);
-
       await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
       await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'true');
+      
       setPushToken(token);
       setNotificationsEnabled(true);
-
+      
       if (userId) {
         try {
+          console.log('[PUSH] Syncing token to backend for user:', userId);
           await trpcClient.user.updatePushToken.mutate({ userId, pushToken: token });
-          console.log('Push token synced to backend');
-        } catch (error) {
-          console.error('Failed to sync push token to backend:', error);
+          console.log('[PUSH] Token synced to backend');
+        } catch (backendError) {
+          console.error('[PUSH] Failed to sync token to backend:', backendError);
         }
       }
-
-      if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('default', {
-          name: 'Default',
-          importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#CC0000',
-        });
-
-        await Notifications.setNotificationChannelAsync('weekly-recap', {
-          name: 'Weekly Recap',
-          description: 'Weekly driving statistics and highlights',
-          importance: Notifications.AndroidImportance.HIGH,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#CC0000',
-        });
-      }
-
+      
+      console.log('[PUSH] Registration complete');
       return token;
-    } catch (error) {
-      console.error('Failed to register for push notifications:', error);
+    } catch (error: any) {
+      console.error('[PUSH] Registration failed:', error);
       throw error;
     }
   }, []);
 
-  const checkAndRequestPermissionOnFirstLaunch = useCallback(async () => {
-    if (Platform.OS === 'web') {
-      setHasAskedPermission(true);
-      return;
-    }
-
-    try {
-      const hasAsked = await AsyncStorage.getItem(NOTIFICATION_PERMISSION_ASKED_KEY);
-      
-      if (hasAsked === 'true') {
-        setHasAskedPermission(true);
-        return;
-      }
-
-      await AsyncStorage.setItem(NOTIFICATION_PERMISSION_ASKED_KEY, 'true');
-      setHasAskedPermission(true);
-
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      console.log('Requesting notification permission on first launch...');
-      
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      
-      if (existingStatus === 'granted') {
-        console.log('Notification permission already granted');
-        return;
-      }
-
-      const { status } = await Notifications.requestPermissionsAsync();
-      console.log('Notification permission result:', status);
-      
-      if (status === 'granted') {
-        try {
-          await registerForPushNotifications();
-        } catch (error) {
-          console.warn('Auto-registration after permission grant failed:', error);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to check/request notification permission:', error);
-      setHasAskedPermission(true);
-    }
-  }, [registerForPushNotifications]);
-
-  useEffect(() => {
-    setupNotificationHandler();
-    
-    loadNotificationSettings();
-    checkAndRequestPermissionOnFirstLaunch();
-
-    if (Platform.OS !== 'web') {
-      try {
-        notificationListener.current = Notifications.addNotificationReceivedListener((notification: Notifications.Notification) => {
-          console.log('Notification received:', notification);
-        });
-
-        responseListener.current = Notifications.addNotificationResponseReceivedListener((response: Notifications.NotificationResponse) => {
-          console.log('Notification response:', response);
-        });
-      } catch (error) {
-        console.warn('Failed to setup notification listeners:', error);
-      }
-    }
-
-    return () => {
-      if (notificationListener.current) {
-        try {
-          notificationListener.current.remove();
-        } catch (e) {
-          console.warn('Failed to remove notification listener:', e);
-        }
-      }
-      if (responseListener.current) {
-        try {
-          responseListener.current.remove();
-        } catch (e) {
-          console.warn('Failed to remove response listener:', e);
-        }
-      }
-    };
-  }, [checkAndRequestPermissionOnFirstLaunch]);
-
   const disableNotifications = useCallback(async (userId?: string) => {
+    console.log('[PUSH] disableNotifications called');
+    
     try {
       await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'false');
       await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
+      
       setNotificationsEnabled(false);
-      setPushToken(null);
-
+      
       if (userId && pushToken) {
         try {
+          console.log('[PUSH] Removing token from backend');
           await trpcClient.user.updatePushToken.mutate({ userId, pushToken: null });
-          console.log('Push token removed from backend');
         } catch (error) {
-          console.error('Failed to remove push token from backend:', error);
+          console.error('[PUSH] Failed to remove token from backend:', error);
         }
       }
+      
+      setPushToken(null);
+      console.log('[PUSH] Notifications disabled');
     } catch (error) {
-      console.error('Failed to disable notifications:', error);
+      console.error('[PUSH] Error disabling notifications:', error);
     }
   }, [pushToken]);
 
@@ -298,9 +216,8 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
     body: string,
     data?: Record<string, unknown>,
     trigger?: Notifications.NotificationTriggerInput
-  ) => {
+  ): Promise<string | null> => {
     if (Platform.OS === 'web') {
-      console.log('Local notifications not supported on web');
       return null;
     }
 
@@ -314,10 +231,10 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
         },
         trigger: trigger || null,
       });
-      console.log('Local notification scheduled:', id);
+      console.log('[PUSH] Local notification scheduled:', id);
       return id;
     } catch (error) {
-      console.error('Failed to schedule local notification:', error);
+      console.error('[PUSH] Failed to schedule notification:', error);
       return null;
     }
   }, []);
@@ -327,9 +244,9 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
     
     try {
       await Notifications.cancelAllScheduledNotificationsAsync();
-      console.log('All scheduled notifications cancelled');
+      console.log('[PUSH] All notifications cancelled');
     } catch (error) {
-      console.error('Failed to cancel notifications:', error);
+      console.error('[PUSH] Failed to cancel notifications:', error);
     }
   }, []);
 
@@ -337,7 +254,7 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
     pushToken,
     notificationsEnabled,
     isLoading,
-    hasAskedPermission,
+    permissionStatus,
     registerForPushNotifications,
     disableNotifications,
     scheduleLocalNotification,

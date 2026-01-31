@@ -50,41 +50,28 @@ export default function SettingsScreen() {
     setIsTogglingNotifications(true);
     try {
       if (value) {
+        console.log('[SETTINGS] Enabling notifications...');
         await registerForPushNotifications(user?.id);
+        console.log('[SETTINGS] Notifications enabled successfully');
       } else {
+        console.log('[SETTINGS] Disabling notifications...');
         await disableNotifications(user?.id);
+        console.log('[SETTINGS] Notifications disabled');
       }
     } catch (error: any) {
-      console.error('Failed to toggle notifications:', error);
+      console.error('[SETTINGS] Failed to toggle notifications:', error);
       const message = error?.message || String(error) || 'Unknown error';
-      if (message.includes('Permission denied')) {
+      
+      if (message.includes('not granted') || message.includes('Permission')) {
         Alert.alert(
           'Permission Required',
-          'Please enable notifications in your device settings to receive weekly recaps.',
-          [{ text: 'OK' }]
-        );
-      } else if (message.includes('physical device')) {
-        Alert.alert(
-          'Device Required',
-          'Push notifications require a physical device. They won\'t work on simulators.',
-          [{ text: 'OK' }]
-        );
-      } else if (message.includes('production build') || message.includes('development mode') || message.includes('Expo Go')) {
-        Alert.alert(
-          'Production Build Required',
-          'Push notifications are only available in TestFlight or App Store builds. They cannot be enabled in development mode.',
-          [{ text: 'OK' }]
-        );
-      } else if (message.includes('APNS') || message.includes('certificate') || message.includes('entitlement') || message.includes('not configured')) {
-        Alert.alert(
-          'Configuration Required',
-          'Push notifications are not fully configured for this app. Please ensure APNs is set up correctly.',
+          'Please enable notifications in your device settings.',
           [{ text: 'OK' }]
         );
       } else {
         Alert.alert(
           'Error',
-          message.includes('Failed to enable') ? message : `Failed to enable notifications: ${message}`,
+          `Failed to enable notifications: ${message}`,
           [{ text: 'OK' }]
         );
       }

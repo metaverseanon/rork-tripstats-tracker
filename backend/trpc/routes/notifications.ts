@@ -1,10 +1,12 @@
 import * as z from "zod";
 import { createTRPCRouter, publicProcedure } from "../create-context";
-import type { DriveMeetup, MeetupStatus } from "@/types/meetup";
+import type { DriveMeetup } from "@/types/meetup";
 
 const DB_ENDPOINT = process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT;
 const DB_NAMESPACE = process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE;
 const DB_TOKEN = process.env.EXPO_PUBLIC_RORK_DB_TOKEN;
+
+const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
 interface UserWithToken {
   id: string;
@@ -23,8 +25,6 @@ interface TripData {
   duration: number;
   topSpeed: number;
   avgSpeed: number;
-  maxGForce?: number;
-  time0to100?: number;
   corners: number;
 }
 
@@ -36,9 +36,115 @@ interface WeeklyStats {
   corners: number;
 }
 
+interface ExpoPushMessage {
+  to: string;
+  title: string;
+  body: string;
+  sound?: string;
+  data?: Record<string, unknown>;
+  channelId?: string;
+}
+
+interface ExpoPushTicket {
+  status: "ok" | "error";
+  id?: string;
+  message?: string;
+  details?: { error?: string };
+}
+
+async function sendExpoPushNotification(message: ExpoPushMessage): Promise<boolean> {
+  console.log("[PUSH] Sending notification to:", message.to.substring(0, 30) + "...");
+  
+  try {
+    const response = await fetch(EXPO_PUSH_URL, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Accept-Encoding": "gzip, deflate",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to: message.to,
+        title: message.title,
+        body: message.body,
+        sound: message.sound || "default",
+        data: message.data || {},
+        channelId: message.channelId || "default",
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("[PUSH] API error:", response.status, errorText);
+      return false;
+    }
+
+    const result = await response.json();
+    console.log("[PUSH] API response:", JSON.stringify(result));
+    
+    const ticket = result.data?.[0] as ExpoPushTicket | undefined;
+    if (ticket?.status === "error") {
+      console.error("[PUSH] Ticket error:", ticket.message, ticket.details);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("[PUSH] Network error:", error);
+    return false;
+  }
+}
+
+async function sendBatchNotifications(messages: ExpoPushMessage[]): Promise<{ sent: number; failed: number }> {
+  let sent = 0;
+  let failed = 0;
+
+  const chunks: ExpoPushMessage[][] = [];
+  const chunkSize = 100;
+  
+  for (let i = 0; i < messages.length; i += chunkSize) {
+    chunks.push(messages.slice(i, i + chunkSize));
+  }
+
+  for (const chunk of chunks) {
+    try {
+      const response = await fetch(EXPO_PUSH_URL, {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Accept-Encoding": "gzip, deflate",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(chunk.map(msg => ({
+          to: msg.to,
+          title: msg.title,
+          body: msg.body,
+          sound: msg.sound || "default",
+          data: msg.data || {},
+          channelId: msg.channelId || "default",
+        }))),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const tickets = (result.data || []) as ExpoPushTicket[];
+        sent += tickets.filter(t => t.status === "ok").length;
+        failed += tickets.filter(t => t.status !== "ok").length;
+      } else {
+        failed += chunk.length;
+      }
+    } catch (error) {
+      console.error("[PUSH] Batch error:", error);
+      failed += chunk.length;
+    }
+  }
+
+  return { sent, failed };
+}
+
 async function getUsersWithPushTokens(): Promise<UserWithToken[]> {
   if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) {
-    console.log("Database not configured");
+    console.log("[PUSH] Database not configured");
     return [];
   }
 
@@ -52,7 +158,7 @@ async function getUsersWithPushTokens(): Promise<UserWithToken[]> {
     });
 
     if (!response.ok) {
-      console.error("Failed to fetch users");
+      console.error("[PUSH] Failed to fetch users");
       return [];
     }
 
@@ -60,7 +166,7 @@ async function getUsersWithPushTokens(): Promise<UserWithToken[]> {
     const users = data.items || data || [];
     return users.filter((u: any) => u.pushToken);
   } catch (error) {
-    console.error("Error fetching users:", error);
+    console.error("[PUSH] Error fetching users:", error);
     return [];
   }
 }
@@ -79,22 +185,18 @@ async function getAllMeetups(): Promise<DriveMeetup[]> {
       },
     });
 
-    if (!response.ok) {
-      return [];
-    }
+    if (!response.ok) return [];
 
     const data = await response.json();
     return data.items || data || [];
   } catch (error) {
-    console.error("Error fetching meetups:", error);
+    console.error("[PUSH] Error fetching meetups:", error);
     return [];
   }
 }
 
 async function storeMeetup(meetup: DriveMeetup): Promise<boolean> {
-  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) {
-    return false;
-  }
+  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) return false;
 
   try {
     const response = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/meetups`, {
@@ -108,15 +210,13 @@ async function storeMeetup(meetup: DriveMeetup): Promise<boolean> {
 
     return response.ok;
   } catch (error) {
-    console.error("Error storing meetup:", error);
+    console.error("[PUSH] Error storing meetup:", error);
     return false;
   }
 }
 
 async function updateMeetup(meetupId: string, updates: Partial<DriveMeetup>): Promise<boolean> {
-  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) {
-    return false;
-  }
+  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) return false;
 
   try {
     const response = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/meetups/${meetupId}`, {
@@ -130,15 +230,13 @@ async function updateMeetup(meetupId: string, updates: Partial<DriveMeetup>): Pr
 
     return response.ok;
   } catch (error) {
-    console.error("Error updating meetup:", error);
+    console.error("[PUSH] Error updating meetup:", error);
     return false;
   }
 }
 
 async function getAllTrips(): Promise<TripData[]> {
-  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) {
-    return [];
-  }
+  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) return [];
 
   try {
     const response = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/trips`, {
@@ -149,14 +247,12 @@ async function getAllTrips(): Promise<TripData[]> {
       },
     });
 
-    if (!response.ok) {
-      return [];
-    }
+    if (!response.ok) return [];
 
     const data = await response.json();
     return data.items || data || [];
   } catch (error) {
-    console.error("Error fetching trips:", error);
+    console.error("[PUSH] Error fetching trips:", error);
     return [];
   }
 }
@@ -184,13 +280,7 @@ function calculateUserWeeklyStats(trips: TripData[], userId: string, weekStart: 
   });
 
   if (userTrips.length === 0) {
-    return {
-      totalTrips: 0,
-      totalDistance: 0,
-      topSpeed: 0,
-      totalDuration: 0,
-      corners: 0,
-    };
+    return { totalTrips: 0, totalDistance: 0, topSpeed: 0, totalDuration: 0, corners: 0 };
   }
 
   return {
@@ -201,18 +291,6 @@ function calculateUserWeeklyStats(trips: TripData[], userId: string, weekStart: 
     corners: userTrips.reduce((sum, t) => sum + t.corners, 0),
   };
 }
-
-function formatDuration(seconds: number): string {
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  if (hrs > 0) {
-    return `${hrs}h ${mins}m`;
-  }
-  return `${mins}m`;
-}
-
-// Export for potential future use
-export { formatDuration };
 
 function generateNotificationContent(displayName: string, stats: WeeklyStats): { title: string; body: string } {
   if (stats.totalTrips === 0) {
@@ -242,100 +320,37 @@ function generateNotificationContent(displayName: string, stats: WeeklyStats): {
   };
 }
 
-async function sendExpoPushNotification(
-  pushToken: string,
-  title: string,
-  body: string,
-  data?: Record<string, unknown>
-): Promise<boolean> {
-  try {
-    const response = await fetch("https://exp.host/--/api/v2/push/send", {
-      method: "POST",
-      headers: {
-        "Accept": "application/json",
-        "Accept-Encoding": "gzip, deflate",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        to: pushToken,
+export const notificationsRouter = createTRPCRouter({
+  sendTestNotification: publicProcedure
+    .input(z.object({
+      pushToken: z.string(),
+      title: z.string().optional(),
+      body: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      console.log("[PUSH] sendTestNotification called");
+      console.log("[PUSH] Token:", input.pushToken.substring(0, 30) + "...");
+      
+      const title = input.title || "🚗 Test Notification";
+      const body = input.body || "Push notifications are working! You'll receive weekly recaps here.";
+
+      const success = await sendExpoPushNotification({
+        to: input.pushToken,
         title,
         body,
-        sound: "default",
-        data: data || { type: "weekly_recap" },
-        channelId: "weekly-recap",
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error("Failed to send push notification:", error);
-      return false;
-    }
-
-    const result = await response.json();
-    console.log("Push notification sent:", result);
-    return true;
-  } catch (error) {
-    console.error("Error sending push notification:", error);
-    return false;
-  }
-}
-
-async function sendBatchPushNotifications(
-  messages: { to: string; title: string; body: string; data?: Record<string, unknown> }[]
-): Promise<{ sent: number; failed: number }> {
-  let sent = 0;
-  let failed = 0;
-
-  const chunks: typeof messages[] = [];
-  const chunkSize = 100;
-  for (let i = 0; i < messages.length; i += chunkSize) {
-    chunks.push(messages.slice(i, i + chunkSize));
-  }
-
-  for (const chunk of chunks) {
-    try {
-      const response = await fetch("https://exp.host/--/api/v2/push/send", {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "Accept-Encoding": "gzip, deflate",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(chunk.map(msg => ({
-          to: msg.to,
-          title: msg.title,
-          body: msg.body,
-          sound: "default",
-          data: msg.data || { type: "weekly_recap" },
-          channelId: "weekly-recap",
-        }))),
+        data: { type: "test" },
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        const tickets = result.data || [];
-        sent += tickets.filter((t: any) => t.status === "ok").length;
-        failed += tickets.filter((t: any) => t.status !== "ok").length;
-      } else {
-        failed += chunk.length;
-      }
-    } catch (error) {
-      console.error("Error sending batch notifications:", error);
-      failed += chunk.length;
-    }
-  }
+      console.log("[PUSH] sendTestNotification result:", success);
+      return { success };
+    }),
 
-  return { sent, failed };
-}
-
-export const notificationsRouter = createTRPCRouter({
   sendWeeklyRecapNotifications: publicProcedure
     .input(z.object({
       userId: z.string().optional(),
     }).optional())
     .mutation(async ({ input }) => {
-      console.log("Starting weekly recap push notifications job...");
+      console.log("[PUSH] Starting weekly recap notifications...");
 
       const users = await getUsersWithPushTokens();
       const trips = await getAllTrips();
@@ -346,15 +361,10 @@ export const notificationsRouter = createTRPCRouter({
         : users;
 
       if (usersToNotify.length === 0) {
-        return {
-          success: true,
-          message: "No users with push tokens found",
-          sent: 0,
-          failed: 0,
-        };
+        return { success: true, message: "No users with push tokens", sent: 0, failed: 0 };
       }
 
-      const messages = usersToNotify.map(user => {
+      const messages: ExpoPushMessage[] = usersToNotify.map(user => {
         const stats = calculateUserWeeklyStats(trips, user.id, start, end);
         const { title, body } = generateNotificationContent(user.displayName, stats);
         return {
@@ -362,34 +372,14 @@ export const notificationsRouter = createTRPCRouter({
           title,
           body,
           data: { type: "weekly_recap", stats },
+          channelId: "weekly-recap",
         };
       });
 
-      const { sent, failed } = await sendBatchPushNotifications(messages);
+      const { sent, failed } = await sendBatchNotifications(messages);
 
-      console.log(`Weekly recap notifications: ${sent} sent, ${failed} failed`);
-
-      return {
-        success: true,
-        totalUsers: usersToNotify.length,
-        sent,
-        failed,
-      };
-    }),
-
-  sendTestNotification: publicProcedure
-    .input(z.object({
-      pushToken: z.string(),
-      title: z.string().optional(),
-      body: z.string().optional(),
-    }))
-    .mutation(async ({ input }) => {
-      const title = input.title || "🚗 Test Notification";
-      const body = input.body || "If you see this, push notifications are working!";
-
-      const success = await sendExpoPushNotification(input.pushToken, title, body, { type: "test" });
-
-      return { success };
+      console.log(`[PUSH] Weekly recap: ${sent} sent, ${failed} failed`);
+      return { success: true, totalUsers: usersToNotify.length, sent, failed };
     }),
 
   sendCustomNotification: publicProcedure
@@ -407,27 +397,18 @@ export const notificationsRouter = createTRPCRouter({
         : users;
 
       if (usersToNotify.length === 0) {
-        return {
-          success: false,
-          message: "No users with push tokens found",
-          sent: 0,
-        };
+        return { success: false, message: "No users with push tokens", sent: 0 };
       }
 
-      const messages = usersToNotify.map(user => ({
+      const messages: ExpoPushMessage[] = usersToNotify.map(user => ({
         to: user.pushToken,
         title: input.title,
         body: input.body,
         data: input.data,
       }));
 
-      const { sent, failed } = await sendBatchPushNotifications(messages);
-
-      return {
-        success: true,
-        sent,
-        failed,
-      };
+      const { sent, failed } = await sendBatchNotifications(messages);
+      return { success: true, sent, failed };
     }),
 
   sendDrivePing: publicProcedure
@@ -440,16 +421,13 @@ export const notificationsRouter = createTRPCRouter({
       toUserCar: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
-      console.log("Sending drive ping from", input.fromUserName, "to user", input.toUserId);
+      console.log("[PUSH] Drive ping from", input.fromUserName, "to", input.toUserId);
       
       const users = await getUsersWithPushTokens();
       const targetUser = users.find(u => u.id === input.toUserId);
 
       if (!targetUser) {
-        return {
-          success: false,
-          message: "User not found or notifications not enabled",
-        };
+        return { success: false, message: "User not found or notifications not enabled" };
       }
 
       const meetupId = `meetup_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -468,20 +446,17 @@ export const notificationsRouter = createTRPCRouter({
       await storeMeetup(meetup);
 
       const carInfo = input.fromUserCar ? ` (${input.fromUserCar})` : '';
-      const title = "🚗 Drive Invite!";
-      const body = `${input.fromUserName}${carInfo} wants to go for a drive with you!`;
-
-      const success = await sendExpoPushNotification(
-        targetUser.pushToken,
-        title,
-        body,
-        { 
+      const success = await sendExpoPushNotification({
+        to: targetUser.pushToken,
+        title: "🚗 Drive Invite!",
+        body: `${input.fromUserName}${carInfo} wants to go for a drive with you!`,
+        data: { 
           type: "drive_ping", 
           meetupId,
           fromUserId: input.fromUserId,
           fromUserName: input.fromUserName,
-        }
-      );
+        },
+      });
 
       return { success, meetupId };
     }),
@@ -494,50 +469,39 @@ export const notificationsRouter = createTRPCRouter({
       responderName: z.string(),
     }))
     .mutation(async ({ input }) => {
-      console.log("Responding to ping:", input.meetupId, input.response);
-      
       const meetups = await getAllMeetups();
       const meetup = meetups.find(m => m.id === input.meetupId);
 
-      if (!meetup) {
-        return { success: false, message: "Meetup not found" };
-      }
-
-      if (meetup.toUserId !== input.responderId) {
-        return { success: false, message: "Not authorized to respond" };
-      }
+      if (!meetup) return { success: false, message: "Meetup not found" };
+      if (meetup.toUserId !== input.responderId) return { success: false, message: "Not authorized" };
 
       const updated = await updateMeetup(input.meetupId, {
         status: input.response,
         respondedAt: Date.now(),
       });
 
-      if (!updated) {
-        return { success: false, message: "Failed to update meetup" };
-      }
+      if (!updated) return { success: false, message: "Failed to update meetup" };
 
       const users = await getUsersWithPushTokens();
       const pinger = users.find(u => u.id === meetup.fromUserId);
 
       if (pinger) {
-        const title = input.response === 'accepted' 
-          ? "✅ Drive Accepted!" 
-          : "❌ Drive Declined";
+        const title = input.response === 'accepted' ? "✅ Drive Accepted!" : "❌ Drive Declined";
         const body = input.response === 'accepted'
-          ? `${input.responderName} accepted your drive invite! Get ready to meet up.`
+          ? `${input.responderName} accepted your drive invite!`
           : `${input.responderName} declined your drive invite.`;
 
-        await sendExpoPushNotification(
-          pinger.pushToken,
+        await sendExpoPushNotification({
+          to: pinger.pushToken,
           title,
           body,
-          {
+          data: {
             type: input.response === 'accepted' ? 'ping_accepted' : 'ping_declined',
             meetupId: input.meetupId,
             fromUserId: input.responderId,
             fromUserName: input.responderName,
-          }
-        );
+          },
+        });
       }
 
       return { success: true, status: input.response };
@@ -552,25 +516,16 @@ export const notificationsRouter = createTRPCRouter({
       longitude: z.number(),
     }))
     .mutation(async ({ input }) => {
-      console.log("Sharing location for meetup:", input.meetupId);
-      
       const meetups = await getAllMeetups();
       const meetup = meetups.find(m => m.id === input.meetupId);
 
-      if (!meetup) {
-        return { success: false, message: "Meetup not found" };
-      }
-
-      if (meetup.status !== 'accepted') {
-        return { success: false, message: "Meetup not accepted" };
-      }
+      if (!meetup) return { success: false, message: "Meetup not found" };
+      if (meetup.status !== 'accepted') return { success: false, message: "Meetup not accepted" };
 
       const isFromUser = meetup.fromUserId === input.userId;
       const isToUser = meetup.toUserId === input.userId;
 
-      if (!isFromUser && !isToUser) {
-        return { success: false, message: "Not authorized" };
-      }
+      if (!isFromUser && !isToUser) return { success: false, message: "Not authorized" };
 
       const locationData = {
         latitude: input.latitude,
@@ -579,44 +534,34 @@ export const notificationsRouter = createTRPCRouter({
       };
 
       const updateField = isToUser ? 'toUserLocation' : 'fromUserLocation';
-      const updated = await updateMeetup(input.meetupId, {
-        [updateField]: locationData,
-      });
+      const updated = await updateMeetup(input.meetupId, { [updateField]: locationData });
 
-      if (!updated) {
-        return { success: false, message: "Failed to share location" };
-      }
+      if (!updated) return { success: false, message: "Failed to share location" };
 
       const users = await getUsersWithPushTokens();
       const otherUserId = isToUser ? meetup.fromUserId : meetup.toUserId;
       const otherUser = users.find(u => u.id === otherUserId);
 
       if (otherUser) {
-        const title = "📍 Location Shared!";
-        const body = `${input.userName} shared their location for the meetup.`;
-
-        await sendExpoPushNotification(
-          otherUser.pushToken,
-          title,
-          body,
-          {
+        await sendExpoPushNotification({
+          to: otherUser.pushToken,
+          title: "📍 Location Shared!",
+          body: `${input.userName} shared their location for the meetup.`,
+          data: {
             type: 'location_shared',
             meetupId: input.meetupId,
             fromUserId: input.userId,
-            fromUserName: input.userName,
             latitude: input.latitude,
             longitude: input.longitude,
-          }
-        );
+          },
+        });
       }
 
       return { success: true };
     }),
 
   getMeetups: publicProcedure
-    .input(z.object({
-      userId: z.string(),
-    }))
+    .input(z.object({ userId: z.string() }))
     .query(async ({ input }) => {
       const meetups = await getAllMeetups();
       
@@ -639,14 +584,10 @@ export const notificationsRouter = createTRPCRouter({
       const meetups = await getAllMeetups();
       const meetup = meetups.find(m => m.id === input.meetupId);
 
-      if (!meetup) {
-        return { success: false, message: "Meetup not found" };
-      }
+      if (!meetup) return { success: false, message: "Meetup not found" };
 
       const isParticipant = meetup.fromUserId === input.userId || meetup.toUserId === input.userId;
-      if (!isParticipant) {
-        return { success: false, message: "Not authorized" };
-      }
+      if (!isParticipant) return { success: false, message: "Not authorized" };
 
       await updateMeetup(input.meetupId, { status: 'cancelled' });
 
@@ -655,12 +596,12 @@ export const notificationsRouter = createTRPCRouter({
       const otherUser = users.find(u => u.id === otherUserId);
 
       if (otherUser) {
-        await sendExpoPushNotification(
-          otherUser.pushToken,
-          "❌ Meetup Cancelled",
-          `${input.userName} cancelled the drive meetup.`,
-          { type: 'meetup_cancelled', meetupId: input.meetupId }
-        );
+        await sendExpoPushNotification({
+          to: otherUser.pushToken,
+          title: "❌ Meetup Cancelled",
+          body: `${input.userName} cancelled the drive meetup.`,
+          data: { type: 'meetup_cancelled', meetupId: input.meetupId },
+        });
       }
 
       return { success: true };
