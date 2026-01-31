@@ -737,11 +737,13 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       
       await ExpoLocation.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
         accuracy: ExpoLocation.Accuracy.BestForNavigation,
-        timeInterval: 1000,
-        distanceInterval: 1,
+        timeInterval: 500,
+        distanceInterval: 0,
         showsBackgroundLocationIndicator: true,
         activityType: ExpoLocation.ActivityType.AutomotiveNavigation,
         pausesUpdatesAutomatically: false,
+        deferredUpdatesInterval: 500,
+        deferredUpdatesDistance: 0,
         foregroundService: {
           notificationTitle: 'TripStats Tracking',
           notificationBody: 'Recording your trip in the background',
@@ -756,7 +758,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       locationSubscription.current = await ExpoLocation.watchPositionAsync(
         {
           accuracy: ExpoLocation.Accuracy.BestForNavigation,
-          timeInterval: 1000,
+          timeInterval: 500,
           distanceInterval: 0,
         },
         (location) => processLocationUpdate(location)
