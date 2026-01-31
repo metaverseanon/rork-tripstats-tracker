@@ -79,7 +79,7 @@ export default function ProfileScreen() {
 
   const [request, response, promptAsync] = Google.useAuthRequest({
     webClientId: '229508757301-qu9290kh0vb6ijl7jpmftbkmbpotnn6m.apps.googleusercontent.com',
-    iosClientId: '229508757301-qu9290kh0vb6ijl7jpmftbkmbpotnn6m.apps.googleusercontent.com',
+    iosClientId: '229508757301-kdqacnt706ifo720d6ftp617s8itd825.apps.googleusercontent.com',
     androidClientId: '229508757301-qu9290kh0vb6ijl7jpmftbkmbpotnn6m.apps.googleusercontent.com',
   });
 
