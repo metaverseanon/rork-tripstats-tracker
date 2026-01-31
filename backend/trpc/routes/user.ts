@@ -10,6 +10,7 @@ interface StoredUser {
   id: string;
   email: string;
   displayName: string;
+  passwordHash?: string;
   country?: string;
   city?: string;
   carBrand?: string;
@@ -17,6 +18,23 @@ interface StoredUser {
   createdAt: number;
   welcomeEmailSent: boolean;
   pushToken?: string | null;
+}
+
+function hashPassword(password: string): string {
+  let hash = 0;
+  const salt = 'redline_salt_2024';
+  const salted = salt + password + salt;
+  for (let i = 0; i < salted.length; i++) {
+    const char = salted.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  const hex = Math.abs(hash).toString(16);
+  return 'rl_' + hex.padStart(16, '0');
+}
+
+function verifyPassword(password: string, storedHash: string): boolean {
+  return hashPassword(password) === storedHash;
 }
 
 interface PasswordResetCode {
@@ -450,16 +468,37 @@ export const userRouter = createTRPCRouter({
       id: z.string(),
       email: z.string().email(),
       displayName: z.string(),
+      password: z.string().min(6).optional(),
       country: z.string().optional(),
       city: z.string().optional(),
       carBrand: z.string().optional(),
       carModel: z.string().optional(),
+      authProvider: z.enum(['email', 'google']).optional(),
     }))
     .mutation(async ({ input }) => {
       console.log("Registering new user:", input.email);
 
+      const existingUsers = await getAllUsers();
+      const existingUser = existingUsers.find(
+        u => u.email.toLowerCase() === input.email.toLowerCase()
+      );
+      if (existingUser) {
+        return {
+          success: false,
+          error: 'An account with this email already exists.',
+        };
+      }
+
+      const passwordHash = input.password ? hashPassword(input.password) : undefined;
       const storedUser: StoredUser = {
-        ...input,
+        id: input.id,
+        email: input.email,
+        displayName: input.displayName,
+        passwordHash,
+        country: input.country,
+        city: input.city,
+        carBrand: input.carBrand,
+        carModel: input.carModel,
         createdAt: Date.now(),
         welcomeEmailSent: false,
       };
@@ -476,6 +515,58 @@ export const userRouter = createTRPCRouter({
         success: true,
         stored,
         welcomeEmailSent: emailSent,
+      };
+    }),
+
+  login: publicProcedure
+    .input(z.object({
+      email: z.string().email(),
+      password: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      console.log("Login attempt for:", input.email);
+
+      const users = await getAllUsers();
+      const user = users.find(
+        u => u.email.toLowerCase() === input.email.toLowerCase()
+      );
+
+      if (!user) {
+        return {
+          success: false,
+          error: 'not_found',
+          message: 'No account found with this email address.',
+        };
+      }
+
+      if (!user.passwordHash) {
+        return {
+          success: false,
+          error: 'no_password',
+          message: 'This account was created with Google. Please sign in with Google.',
+        };
+      }
+
+      if (!verifyPassword(input.password, user.passwordHash)) {
+        return {
+          success: false,
+          error: 'incorrect_password',
+          message: 'Incorrect password.',
+        };
+      }
+
+      return {
+        success: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          displayName: user.displayName,
+          country: user.country,
+          city: user.city,
+          carBrand: user.carBrand,
+          carModel: user.carModel,
+          createdAt: user.createdAt,
+        },
       };
     }),
 
@@ -625,6 +716,40 @@ export const userRouter = createTRPCRouter({
       if (existingCode) {
         await deleteResetCode(existingCode.id);
       }
+      return { success: true };
+    }),
+
+  resetPassword: publicProcedure
+    .input(z.object({
+      email: z.string().email(),
+      newPassword: z.string().min(6),
+    }))
+    .mutation(async ({ input }) => {
+      console.log("Resetting password for:", input.email);
+
+      const users = await getAllUsers();
+      const user = users.find(
+        u => u.email.toLowerCase() === input.email.toLowerCase()
+      );
+
+      if (!user) {
+        return {
+          success: false,
+          error: 'No account found with this email address.',
+        };
+      }
+
+      const newPasswordHash = hashPassword(input.newPassword);
+      const updated = await updateUserInDb(user.id, { passwordHash: newPasswordHash });
+
+      if (!updated) {
+        return {
+          success: false,
+          error: 'Failed to update password. Please try again.',
+        };
+      }
+
+      console.log("Password reset successful for:", input.email);
       return { success: true };
     }),
 });

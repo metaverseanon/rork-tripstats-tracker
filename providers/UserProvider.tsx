@@ -66,10 +66,32 @@ export const [UserProvider, useUser] = createContextHook(() => {
       cars.push(...additionalCars);
     }
     const userId = Date.now().toString();
+
+    try {
+      const result = await trpcClient.user.register.mutate({
+        id: userId,
+        email,
+        displayName,
+        password,
+        country,
+        city,
+        carBrand,
+        carModel,
+      });
+      
+      if (!result.success) {
+        const errorMsg = (result as { error?: string }).error || 'Registration failed';
+        throw new Error(errorMsg);
+      }
+      console.log('User registered on backend');
+    } catch (error) {
+      console.error('Failed to register user on backend:', error);
+      throw error;
+    }
+
     const newUser: UserProfile = {
       id: userId,
       email,
-      password,
       displayName,
       profilePicture,
       country,
@@ -82,38 +104,50 @@ export const [UserProvider, useUser] = createContextHook(() => {
     };
     await saveUser(newUser);
 
-    try {
-      await trpcClient.user.register.mutate({
-        id: userId,
-        email,
-        displayName,
-        country,
-        city,
-        carBrand,
-        carModel,
-      });
-      console.log('User registered and welcome email sent');
-    } catch (error) {
-      console.error('Failed to register user on backend:', error);
-    }
-
     return newUser;
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const stored = await AsyncStorage.getItem(USER_KEY);
-    if (stored) {
-      const userData = JSON.parse(stored);
-      if (userData.email === email) {
-        if (userData.password === password) {
-          setUser(userData);
-          return { success: true, user: userData };
-        } else {
-          return { success: false, error: 'incorrect_password' };
-        }
+    try {
+      const result = await trpcClient.user.login.mutate({ email, password });
+      
+      if (!result.success) {
+        return { 
+          success: false, 
+          error: result.error || 'incorrect_password',
+          message: result.message 
+        };
       }
+
+      const stored = await AsyncStorage.getItem(USER_KEY);
+      let userData: UserProfile;
+      
+      if (stored) {
+        const localData = JSON.parse(stored);
+        if (localData.email?.toLowerCase() === email.toLowerCase()) {
+          userData = {
+            ...localData,
+            ...result.user,
+          };
+        } else {
+          userData = {
+            ...result.user,
+            createdAt: result.user?.createdAt || Date.now(),
+          } as UserProfile;
+        }
+      } else {
+        userData = {
+          ...result.user,
+          createdAt: result.user?.createdAt || Date.now(),
+        } as UserProfile;
+      }
+
+      await saveUser(userData);
+      return { success: true, user: userData };
+    } catch (error) {
+      console.error('Login error:', error);
+      return { success: false, error: 'network_error', message: 'Failed to connect. Please try again.' };
     }
-    return { success: false, error: 'not_found' };
   }, []);
 
   const signOut = useCallback(async () => {

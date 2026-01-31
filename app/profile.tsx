@@ -18,7 +18,6 @@ import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { useSettings } from '@/providers/SettingsProvider';
 import { ThemeColors } from '@/constants/colors';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUser } from '@/providers/UserProvider';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
@@ -72,7 +71,9 @@ export default function ProfileScreen() {
   const [resetEmail, setResetEmail] = useState('');
   const [resetCode, setResetCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
   const [resetStep, setResetStep] = useState<'email' | 'code' | 'newPassword'>('email');
   const [isResetting, setIsResetting] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
@@ -581,23 +582,29 @@ export default function ProfileScreen() {
       Alert.alert('Error', 'Password must be at least 6 characters');
       return;
     }
+    if (newPassword !== confirmNewPassword) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
     setIsResetting(true);
     try {
-      const stored = await AsyncStorage.getItem('user_profile');
-      if (stored) {
-        const userData = JSON.parse(stored);
-        if (userData.email.toLowerCase() === resetEmail.toLowerCase()) {
-          userData.password = newPassword;
-          await AsyncStorage.setItem('user_profile', JSON.stringify(userData));
-          await trpcClient.user.clearResetCode.mutate({ email: resetEmail });
-          setShowForgotPassword(false);
-          setPassword(newPassword);
-          Alert.alert('Success', 'Your password has been reset. You can now sign in.');
-        } else {
-          Alert.alert('Error', 'Email does not match the stored account.');
-        }
+      const result = await trpcClient.user.resetPassword.mutate({
+        email: resetEmail.trim(),
+        newPassword: newPassword,
+      });
+
+      if (result.success) {
+        setShowForgotPassword(false);
+        setPassword(newPassword);
+        setResetEmail('');
+        setResetCode('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setResetStep('email');
+        Alert.alert('Success', 'Your password has been reset. You can now sign in.');
       } else {
-        Alert.alert('Error', 'No account found on this device.');
+        const errorMsg = (result as { error?: string }).error || 'Failed to reset password.';
+        Alert.alert('Error', errorMsg);
       }
     } catch (error) {
       console.error('Failed to reset password:', error);
@@ -1379,6 +1386,30 @@ export default function ProfileScreen() {
                     </TouchableOpacity>
                   </View>
                   <Text style={styles.passwordHint}>Must be at least 6 characters</Text>
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Confirm Password</Text>
+                  <View style={styles.passwordContainer}>
+                    <TextInput
+                      style={styles.passwordInput}
+                      value={confirmNewPassword}
+                      onChangeText={setConfirmNewPassword}
+                      placeholder="Confirm new password"
+                      placeholderTextColor={colors.textLight}
+                      secureTextEntry={!showConfirmNewPassword}
+                      autoCapitalize="none"
+                    />
+                    <TouchableOpacity
+                      style={styles.passwordToggle}
+                      onPress={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
+                    >
+                      {showConfirmNewPassword ? (
+                        <EyeOff size={20} color={colors.textLight} />
+                      ) : (
+                        <Eye size={20} color={colors.textLight} />
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 <TouchableOpacity
                   style={[styles.saveButton, isResetting && styles.saveButtonDisabled]}
