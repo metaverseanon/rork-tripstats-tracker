@@ -40,21 +40,18 @@ async function getExpoPushToken(): Promise<string> {
     throw new Error('Push notification permission not granted');
   }
   
-  const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-  console.log('[PUSH] EAS Project ID:', projectId);
+  const projectId = process.env.EXPO_PUBLIC_PROJECT_ID || Constants.expoConfig?.extra?.eas?.projectId;
+  console.log('[PUSH] Project ID:', projectId);
   console.log('[PUSH] App ownership:', Constants.appOwnership);
   
-  let tokenData;
-  
-  if (projectId) {
-    console.log('[PUSH] Using EAS projectId for token');
-    tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: projectId,
-    });
-  } else {
-    console.log('[PUSH] No EAS projectId, using default');
-    tokenData = await Notifications.getExpoPushTokenAsync();
+  if (!projectId) {
+    throw new Error('No project ID configured for push notifications');
   }
+  
+  console.log('[PUSH] Getting token with projectId:', projectId);
+  const tokenData = await Notifications.getExpoPushTokenAsync({
+    projectId: projectId,
+  });
   
   console.log('[PUSH] Token obtained:', tokenData.data);
   return tokenData.data;
