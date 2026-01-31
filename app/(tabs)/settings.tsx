@@ -293,6 +293,12 @@ export default function SettingsScreen() {
       color: colors.textLight,
       marginTop: 2,
     },
+    linkItemDisabled: {
+      opacity: 0.5,
+    },
+    linkTextDisabled: {
+      color: colors.textLight,
+    },
   });
 
   return (
@@ -479,20 +485,22 @@ export default function SettingsScreen() {
             )}
           </View>
 
-          {Platform.OS !== 'web' && notificationsEnabled && (
+          {Platform.OS !== 'web' && (
             <>
               <View style={styles.divider} />
               <TouchableOpacity 
-                style={styles.linkItem} 
-                onPress={handleSendTestNotification}
+                style={[styles.linkItem, !notificationsEnabled && styles.linkItemDisabled]} 
+                onPress={notificationsEnabled ? handleSendTestNotification : () => {
+                  Alert.alert('Enable Notifications', 'Please enable notifications first using the toggle above.');
+                }}
                 activeOpacity={0.7}
                 disabled={sendTestMutation.isPending}
               >
                 <View style={styles.linkContent}>
                   <View style={styles.settingIconContainer}>
-                    <Bell size={20} color={colors.accent} />
+                    <Bell size={20} color={notificationsEnabled ? colors.accent : colors.textLight} />
                   </View>
-                  <Text style={styles.linkText}>Send Test Notification</Text>
+                  <Text style={[styles.linkText, !notificationsEnabled && styles.linkTextDisabled]}>Send Test Notification</Text>
                 </View>
                 {sendTestMutation.isPending ? (
                   <ActivityIndicator size="small" color={colors.accent} />
