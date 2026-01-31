@@ -20,12 +20,99 @@ interface StoredUser {
 }
 
 interface PasswordResetCode {
+  id: string;
   email: string;
   code: string;
   expiresAt: number;
+  createdAt: number;
 }
 
-const passwordResetCodes: Map<string, PasswordResetCode> = new Map();
+async function storeResetCode(resetCode: PasswordResetCode): Promise<boolean> {
+  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) {
+    console.log("Database not configured");
+    return false;
+  }
+
+  try {
+    const response = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/password_reset_codes`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${DB_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(resetCode),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("Failed to store reset code:", error);
+      return false;
+    }
+
+    console.log("Reset code stored for:", resetCode.email);
+    return true;
+  } catch (error) {
+    console.error("Error storing reset code:", error);
+    return false;
+  }
+}
+
+async function getResetCode(email: string): Promise<PasswordResetCode | null> {
+  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) {
+    console.log("Database not configured");
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/password_reset_codes`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${DB_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      console.error("Failed to fetch reset codes");
+      return null;
+    }
+
+    const data = await response.json();
+    const codes = data.items || data || [];
+    const code = codes.find((c: PasswordResetCode) => c.email.toLowerCase() === email.toLowerCase());
+    return code || null;
+  } catch (error) {
+    console.error("Error fetching reset code:", error);
+    return null;
+  }
+}
+
+async function deleteResetCode(id: string): Promise<boolean> {
+  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) {
+    console.log("Database not configured");
+    return false;
+  }
+
+  try {
+    const response = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/password_reset_codes/${id}`, {
+      method: "DELETE",
+      headers: {
+        "Authorization": `Bearer ${DB_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      console.error("Failed to delete reset code");
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error deleting reset code:", error);
+    return false;
+  }
+}
 
 const getWelcomeEmailHtml = (displayName: string) => `
 <!DOCTYPE html>
@@ -474,14 +561,25 @@ export const userRouter = createTRPCRouter({
         return { success: false, emailSent: false, error: "No account found with this email address." };
       }
 
+      const existingCode = await getResetCode(input.email);
+      if (existingCode) {
+        await deleteResetCode(existingCode.id);
+      }
+
       const code = generateResetCode();
       const expiresAt = Date.now() + 15 * 60 * 1000;
-      
-      passwordResetCodes.set(input.email.toLowerCase(), {
+      const resetCode: PasswordResetCode = {
+        id: `reset_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         email: input.email.toLowerCase(),
         code,
         expiresAt,
-      });
+        createdAt: Date.now(),
+      };
+      
+      const stored = await storeResetCode(resetCode);
+      if (!stored) {
+        return { success: false, emailSent: false, error: "Failed to process request. Please try again." };
+      }
 
       const emailSent = await sendPasswordResetEmail(input.email, user.displayName, code);
       
@@ -499,14 +597,14 @@ export const userRouter = createTRPCRouter({
     }))
     .mutation(async ({ input }) => {
       console.log("Verifying reset code for:", input.email);
-      const storedData = passwordResetCodes.get(input.email.toLowerCase());
+      const storedData = await getResetCode(input.email);
       
       if (!storedData) {
         return { valid: false, error: "No reset code found. Please request a new one." };
       }
 
       if (Date.now() > storedData.expiresAt) {
-        passwordResetCodes.delete(input.email.toLowerCase());
+        await deleteResetCode(storedData.id);
         return { valid: false, error: "Reset code has expired. Please request a new one." };
       }
 
@@ -514,6 +612,7 @@ export const userRouter = createTRPCRouter({
         return { valid: false, error: "Invalid code. Please try again." };
       }
 
+      await deleteResetCode(storedData.id);
       return { valid: true };
     }),
 
@@ -522,7 +621,10 @@ export const userRouter = createTRPCRouter({
       email: z.string().email(),
     }))
     .mutation(async ({ input }) => {
-      passwordResetCodes.delete(input.email.toLowerCase());
+      const existingCode = await getResetCode(input.email);
+      if (existingCode) {
+        await deleteResetCode(existingCode.id);
+      }
       return { success: true };
     }),
 });
