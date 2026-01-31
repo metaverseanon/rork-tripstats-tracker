@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,10 +20,14 @@ import { useSettings } from '@/providers/SettingsProvider';
 import { ThemeColors } from '@/constants/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUser } from '@/providers/UserProvider';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 import { CAR_BRANDS, getModelsForBrand } from '@/constants/cars';
 import { trpcClient } from '@/lib/trpc';
 import { COUNTRIES, getCitiesForCountry } from '@/constants/countries';
 import { UserCar } from '@/types/user';
+
+WebBrowser.maybeCompleteAuthSession();
 
 interface AdditionalCar {
   id: string;
@@ -33,7 +37,7 @@ interface AdditionalCar {
 }
 
 export default function ProfileScreen() {
-  const { user, isAuthenticated, signUp, signIn, signOut, updateProfile, updateCar, updateLocation, addCar, removeCar, setPrimaryCar } = useUser();
+  const { user, isAuthenticated, signUp, signIn, signOut, updateProfile, updateCar, updateLocation, addCar, removeCar, setPrimaryCar, signInWithGoogle } = useUser();
   const [authMode, setAuthMode] = useState<'signup' | 'signin'>('signin');
   const { colors } = useSettings();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -71,6 +75,58 @@ export default function ProfileScreen() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [resetStep, setResetStep] = useState<'email' | 'code' | 'newPassword'>('email');
   const [isResetting, setIsResetting] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    webClientId: '000000000000-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com',
+    iosClientId: '000000000000-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com',
+    androidClientId: '000000000000-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com',
+  });
+
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const accessToken = response.authentication?.accessToken;
+      if (accessToken) {
+        (async () => {
+          setIsGoogleLoading(true);
+          try {
+            const userInfoResponse = await fetch(
+              'https://www.googleapis.com/userinfo/v2/me',
+              { headers: { Authorization: `Bearer ${accessToken}` } }
+            );
+            const googleUser = await userInfoResponse.json();
+            console.log('Google user info:', googleUser);
+            
+            if (googleUser.email) {
+              await signInWithGoogle(
+                googleUser.email,
+                googleUser.name || googleUser.email.split('@')[0],
+                googleUser.picture
+              );
+              Alert.alert('Success', 'Signed in with Google successfully');
+              router.back();
+            } else {
+              Alert.alert('Error', 'Could not retrieve email from Google account');
+            }
+          } catch (error) {
+            console.error('Google sign in error:', error);
+            Alert.alert('Error', 'Failed to sign in with Google. Please try again.');
+          } finally {
+            setIsGoogleLoading(false);
+          }
+        })();
+      }
+    }
+  }, [response, signInWithGoogle]);
+
+  const handleGoogleButtonPress = async () => {
+    try {
+      await promptAsync();
+    } catch (error) {
+      console.error('Google prompt error:', error);
+      Alert.alert('Error', 'Failed to open Google sign in. Please try again.');
+    }
+  };
 
   const availableModels = useMemo(() => {
     return selectedBrand ? getModelsForBrand(selectedBrand) : [];
@@ -1165,17 +1221,43 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           {!isAuthenticated && (
-            <TouchableOpacity
-              style={styles.switchAuthButton}
-              onPress={() => setAuthMode(authMode === 'signin' ? 'signup' : 'signin')}
-            >
-              <Text style={styles.switchAuthText}>
-                {authMode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
-                <Text style={styles.switchAuthLink}>
-                  {authMode === 'signin' ? 'Sign Up' : 'Sign In'}
+            <>
+              <View style={styles.dividerContainer}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>or</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.googleButton, (isGoogleLoading || !request) && styles.googleButtonDisabled]}
+                onPress={handleGoogleButtonPress}
+                disabled={isGoogleLoading || !request}
+                activeOpacity={0.7}
+              >
+                {isGoogleLoading ? (
+                  <ActivityIndicator size="small" color="#4285F4" />
+                ) : (
+                  <>
+                    <View style={styles.googleIconContainer}>
+                      <Text style={styles.googleIcon}>G</Text>
+                    </View>
+                    <Text style={styles.googleButtonText}>Continue with Google</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.switchAuthButton}
+                onPress={() => setAuthMode(authMode === 'signin' ? 'signup' : 'signin')}
+              >
+                <Text style={styles.switchAuthText}>
+                  {authMode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
+                  <Text style={styles.switchAuthLink}>
+                    {authMode === 'signin' ? 'Sign Up' : 'Sign In'}
+                  </Text>
                 </Text>
-              </Text>
-            </TouchableOpacity>
+              </TouchableOpacity>
+            </>
           )}
 
           {isAuthenticated && (
@@ -1733,6 +1815,54 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   switchAuthLink: {
     color: colors.accent,
     fontFamily: 'Orbitron_600SemiBold',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    marginHorizontal: 16,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.cardLight,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 12,
+  },
+  googleButtonDisabled: {
+    opacity: 0.6,
+  },
+  googleIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  googleIcon: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: '#4285F4',
+  },
+  googleButtonText: {
+    fontSize: 16,
+    fontFamily: 'Orbitron_500Medium',
+    color: colors.text,
   },
   forgotPasswordButton: {
     marginTop: 12,

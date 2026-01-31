@@ -228,6 +228,49 @@ export const [UserProvider, useUser] = createContextHook(() => {
     return null;
   }, [user]);
 
+  const signInWithGoogle = useCallback(async (
+    email: string,
+    displayName: string,
+    profilePicture?: string
+  ) => {
+    const stored = await AsyncStorage.getItem(USER_KEY);
+    if (stored) {
+      const userData = JSON.parse(stored);
+      if (userData.email?.toLowerCase() === email.toLowerCase()) {
+        if (profilePicture && !userData.profilePicture) {
+          userData.profilePicture = profilePicture;
+        }
+        userRef.current = userData;
+        setUser(userData);
+        return { success: true, user: userData };
+      }
+    }
+    
+    const userId = Date.now().toString();
+    const newUser: UserProfile = {
+      id: userId,
+      email,
+      displayName,
+      profilePicture,
+      createdAt: Date.now(),
+      authProvider: 'google',
+    };
+    await saveUser(newUser);
+
+    try {
+      await trpcClient.user.register.mutate({
+        id: userId,
+        email,
+        displayName,
+      });
+      console.log('Google user registered');
+    } catch (error) {
+      console.error('Failed to register Google user on backend:', error);
+    }
+
+    return { success: true, user: newUser };
+  }, []);
+
   return {
     user,
     isAuthenticated: !!user,
@@ -235,6 +278,7 @@ export const [UserProvider, useUser] = createContextHook(() => {
     signUp,
     signIn,
     signOut,
+    signInWithGoogle,
     updateProfile,
     updateCar,
     addCar,

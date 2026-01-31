@@ -21,6 +21,7 @@ export interface UserProfile {
   createdAt: number;
   pushToken?: string;
   notificationsEnabled?: boolean;
+  authProvider?: 'email' | 'google';
 }
 
 export interface AuthState {
