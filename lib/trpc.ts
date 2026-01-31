@@ -21,7 +21,7 @@ const getBaseUrl = () => {
 export const trpcClient = trpc.createClient({
   links: [
     httpLink({
-      url: `${getBaseUrl()}/trpc`,
+      url: `${getBaseUrl()}/api/trpc`,
       transformer: superjson,
       fetch: async (url, options) => {
         const requestId = Math.random().toString(36).substring(7);
