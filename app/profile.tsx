@@ -534,8 +534,12 @@ export default function ProfileScreen() {
       }
       
       const lowerMessage = errorMessage.toLowerCase();
-      if (lowerMessage.includes('network') || lowerMessage.includes('fetch') || lowerMessage.includes('failed to fetch')) {
+      if (lowerMessage.includes('429') || lowerMessage.includes('rate') || lowerMessage.includes('too many')) {
+        Alert.alert('Please Wait', 'Too many requests. Please wait a minute and try again.');
+      } else if (lowerMessage.includes('network') || lowerMessage.includes('fetch') || lowerMessage.includes('failed to fetch')) {
         Alert.alert('Error', 'Network error. Please check your connection and try again.');
+      } else if (lowerMessage.includes('non-json') || lowerMessage.includes('html')) {
+        Alert.alert('Server Busy', 'The server is temporarily busy. Please try again in a moment.');
       } else {
         Alert.alert('Error', errorMessage);
       }
