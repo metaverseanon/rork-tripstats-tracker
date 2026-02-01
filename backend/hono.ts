@@ -1,3 +1,4 @@
+// Backend deployed: 2026-02-01
 import { trpcServer } from "@hono/trpc-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
