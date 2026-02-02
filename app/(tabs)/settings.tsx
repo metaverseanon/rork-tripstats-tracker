@@ -128,11 +128,22 @@ export default function SettingsScreen() {
       flex: 1,
       backgroundColor: colors.background,
     },
+    navHeader: {
+      paddingHorizontal: 20,
+      paddingTop: 12,
+      paddingBottom: 12,
+    },
+    navTitle: {
+      fontSize: 28,
+      fontWeight: '700' as const,
+      color: colors.text,
+    },
     scrollView: {
       flex: 1,
     },
     scrollContent: {
       padding: 20,
+      paddingTop: 8,
       paddingBottom: 40,
     },
     sectionTitle: {
@@ -304,6 +315,9 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.navHeader}>
+        <Text style={styles.navTitle}>Settings</Text>
+      </View>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <Text style={styles.sectionTitle}>Account</Text>
         

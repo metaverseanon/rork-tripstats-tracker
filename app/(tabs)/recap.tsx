@@ -404,13 +404,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.background,
   },
   navHeader: {
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderBottomWidth: 0,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 12,
   },
   navTitle: {
-    fontSize: 17,
-    fontFamily: 'Orbitron_600SemiBold',
+    fontSize: 28,
+    fontFamily: 'Orbitron_700Bold',
     color: colors.text,
   },
   scrollView: {

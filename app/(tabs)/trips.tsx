@@ -163,6 +163,9 @@ export default function RecentScreen() {
   if (!lastTrip) {
     return (
       <SafeAreaView style={dynamicStyles.container} edges={['top']}>
+        <View style={styles.navHeader}>
+          <Text style={[styles.navTitle, { color: colors.text }]}>Recent Trip</Text>
+        </View>
         <View style={styles.emptyState}>
           <Route size={64} color={colors.textLight} />
           <Text style={dynamicStyles.emptyText}>No recent trip</Text>
@@ -174,6 +177,9 @@ export default function RecentScreen() {
 
   return (
     <SafeAreaView style={dynamicStyles.container} edges={['top']}>
+      <View style={styles.navHeader}>
+        <Text style={[styles.navTitle, { color: colors.text }]}>Recent Trip</Text>
+      </View>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={dynamicStyles.headerCard}>
           <View style={styles.headerRow}>
@@ -284,11 +290,21 @@ export default function RecentScreen() {
 }
 
 const styles = StyleSheet.create({
+  navHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  navTitle: {
+    fontSize: 28,
+    fontFamily: 'Orbitron_700Bold',
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     padding: 20,
+    paddingTop: 8,
   },
   emptyState: {
     flex: 1,

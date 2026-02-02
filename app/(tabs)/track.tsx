@@ -127,7 +127,10 @@ export default function TrackScreen() {
 
   return (
     <View style={dynamicStyles.container}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 20 }]}>
+      <View style={[styles.navHeader, { paddingTop: insets.top + 12 }]}>
+        <Text style={[styles.navTitle, { color: colors.text }]}>Track</Text>
+      </View>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.speedometerSection}>
           <View style={dynamicStyles.speedometerCircle}>
             <Text style={dynamicStyles.speedValue}>
@@ -222,6 +225,14 @@ export default function TrackScreen() {
 }
 
 const styles = StyleSheet.create({
+  navHeader: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+  },
+  navTitle: {
+    fontSize: 28,
+    fontFamily: 'Orbitron_700Bold',
+  },
   scrollView: {
     flex: 1,
   },

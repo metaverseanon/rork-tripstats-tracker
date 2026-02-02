@@ -643,6 +643,9 @@ export default function LeaderboardScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.navHeader}>
+        <Text style={styles.navTitle}>Leaderboard</Text>
+      </View>
       {userLocation && (
         <View style={styles.userLocationBanner}>
           <MapPin size={14} color={colors.primary} />
@@ -1564,6 +1567,16 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  navHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  navTitle: {
+    fontSize: 28,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.text,
   },
   userLocationBanner: {
     flexDirection: 'row',
