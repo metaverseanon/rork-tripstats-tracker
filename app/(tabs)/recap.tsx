@@ -199,6 +199,9 @@ export default function RecapScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.navHeader}>
+        <Text style={styles.navTitle}>Recap</Text>
+      </View>
     <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
         <View style={styles.headerIconContainer}>
@@ -399,6 +402,16 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  navHeader: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderBottomWidth: 0,
+  },
+  navTitle: {
+    fontSize: 17,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.text,
   },
   scrollView: {
     flex: 1,
