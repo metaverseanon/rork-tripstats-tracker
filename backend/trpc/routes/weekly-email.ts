@@ -5,6 +5,7 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const DB_ENDPOINT = process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT;
 const DB_NAMESPACE = process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE;
 const DB_TOKEN = process.env.EXPO_PUBLIC_RORK_DB_TOKEN;
+const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
 interface WeeklyStats {
   totalTrips: number;
@@ -44,6 +45,7 @@ interface UserTripData {
   displayName: string;
   country?: string;
   city?: string;
+  pushToken?: string;
   trips: {
     id: string;
     startTime: number;
@@ -620,6 +622,105 @@ function calculateRegionalLeaderboard(
   return { leaderboard: top10, userRank };
 }
 
+interface ExpoPushMessage {
+  to: string;
+  title: string;
+  body: string;
+  sound?: string;
+  data?: Record<string, unknown>;
+  channelId?: string;
+}
+
+async function sendPushNotification(message: ExpoPushMessage): Promise<boolean> {
+  try {
+    const response = await fetch(EXPO_PUSH_URL, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Accept-Encoding": "gzip, deflate",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to: message.to,
+        title: message.title,
+        body: message.body,
+        sound: message.sound || "default",
+        data: message.data || {},
+        channelId: message.channelId || "weekly-recap",
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("[PUSH] API error:", response.status);
+      return false;
+    }
+
+    const result = await response.json();
+    const ticket = result.data?.[0];
+    return ticket?.status !== "error";
+  } catch (error) {
+    console.error("[PUSH] Network error:", error);
+    return false;
+  }
+}
+
+function generatePushContent(
+  displayName: string,
+  stats: WeeklyStats,
+  personalRecords: PersonalRecord[],
+  milestones: Milestone[]
+): { title: string; body: string } {
+  if (stats.totalTrips === 0) {
+    return {
+      title: "📊 Weekly Recap Ready",
+      body: `Hey ${displayName}! No trips this week? Time to hit the road! 🛣️`,
+    };
+  }
+
+  const highlights: string[] = [];
+  highlights.push(`${stats.totalTrips} trip${stats.totalTrips > 1 ? 's' : ''}`);
+  highlights.push(`${stats.totalDistance.toFixed(1)} km`);
+  
+  if (stats.topSpeed >= 150) {
+    highlights.push(`⚡ ${Math.round(stats.topSpeed)} km/h top`);
+  }
+
+  let title = "📊 Your Weekly Recap is Ready!";
+  let body = `Hey ${displayName}! This week: ${highlights.join(' • ')}.`;
+
+  if (personalRecords.length > 0) {
+    title = "🏅 New Personal Records!";
+    body += ` You set ${personalRecords.length} new record${personalRecords.length > 1 ? 's' : ''}!`;
+  } else if (milestones.length > 0) {
+    title = "🎯 Milestone Unlocked!";
+    body += ` ${milestones[0].label}!`;
+  }
+
+  return { title, body: body + " Tap to see full stats!" };
+}
+
+async function sendWeeklyPushNotification(
+  pushToken: string,
+  displayName: string,
+  stats: WeeklyStats,
+  personalRecords: PersonalRecord[],
+  milestones: Milestone[]
+): Promise<boolean> {
+  const { title, body } = generatePushContent(displayName, stats, personalRecords, milestones);
+  
+  return sendPushNotification({
+    to: pushToken,
+    title,
+    body,
+    data: { 
+      type: "weekly_recap",
+      hasRecords: personalRecords.length > 0,
+      hasMilestones: milestones.length > 0,
+    },
+    channelId: "weekly-recap",
+  });
+}
+
 async function sendWeeklyEmail(
   email: string,
   displayName: string,
@@ -685,8 +786,6 @@ export const weeklyEmailRouter = createTRPCRouter({
         : users;
 
       for (const user of usersToProcess) {
-        if (!user.email) continue;
-
         const stats = calculateWeeklyStats(user.trips, start, end);
         const country = user.country || 'Global';
         const { leaderboard, userRank } = calculateRegionalLeaderboard(users, country, user.id);
@@ -697,22 +796,25 @@ export const weeklyEmailRouter = createTRPCRouter({
         }), start);
         const milestones = calculateMilestones(user.trips, start, end);
 
-        const success = await sendWeeklyEmail(
-          user.email,
-          user.displayName,
-          stats,
-          leaderboard,
-          userRank,
-          country,
-          label,
-          personalRecords,
-          milestones
-        );
+        let emailSuccess = false;
+        if (user.email) {
+          emailSuccess = await sendWeeklyEmail(
+            user.email,
+            user.displayName,
+            stats,
+            leaderboard,
+            userRank,
+            country,
+            label,
+            personalRecords,
+            milestones
+          );
+        }
 
-        results.push({ email: user.email, success });
-        if (success) {
+        results.push({ email: user.email || 'no-email', success: emailSuccess });
+        if (emailSuccess) {
           sentCount++;
-        } else {
+        } else if (user.email) {
           failedCount++;
         }
       }
@@ -726,6 +828,79 @@ export const weeklyEmailRouter = createTRPCRouter({
         failed: failedCount,
         weekRange: label,
         results,
+      };
+    }),
+
+  sendWeeklyRecapWithPush: publicProcedure
+    .input(z.object({
+      userId: z.string().optional(),
+    }).optional())
+    .mutation(async ({ input }) => {
+      console.log("Starting weekly recap (email + push) job...");
+      
+      const users = await getAllUsersWithTrips();
+      const { start, end, label } = getWeekRange();
+      
+      let emailsSent = 0;
+      let emailsFailed = 0;
+      let pushSent = 0;
+      let pushFailed = 0;
+
+      const usersToProcess = input?.userId 
+        ? users.filter(u => u.id === input.userId)
+        : users;
+
+      for (const user of usersToProcess) {
+        const stats = calculateWeeklyStats(user.trips, start, end);
+        const country = user.country || 'Global';
+        const { leaderboard, userRank } = calculateRegionalLeaderboard(users, country, user.id);
+
+        const personalRecords = calculatePersonalRecords(user.trips, user.trips.filter(t => {
+          const d = new Date(t.startTime);
+          return d >= start && d <= end;
+        }), start);
+        const milestones = calculateMilestones(user.trips, start, end);
+
+        // Send email if user has email
+        if (user.email) {
+          const emailSuccess = await sendWeeklyEmail(
+            user.email,
+            user.displayName,
+            stats,
+            leaderboard,
+            userRank,
+            country,
+            label,
+            personalRecords,
+            milestones
+          );
+          if (emailSuccess) emailsSent++;
+          else emailsFailed++;
+        }
+
+        // Send push notification if user has push token
+        if (user.pushToken) {
+          const pushSuccess = await sendWeeklyPushNotification(
+            user.pushToken,
+            user.displayName,
+            stats,
+            personalRecords,
+            milestones
+          );
+          if (pushSuccess) pushSent++;
+          else pushFailed++;
+        }
+      }
+
+      console.log(`Weekly recap completed: ${emailsSent} emails, ${pushSent} push notifications sent`);
+      
+      return {
+        success: true,
+        totalUsers: usersToProcess.length,
+        emails: { sent: emailsSent, failed: emailsFailed },
+        push: { sent: pushSent, failed: pushFailed },
+        weekRange: label,
+        scheduledFor: "Sundays at 9:00 PM",
       };
     }),
 
