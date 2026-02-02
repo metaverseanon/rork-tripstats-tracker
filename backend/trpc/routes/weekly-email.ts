@@ -47,6 +47,7 @@ interface UserTripData {
   city?: string;
   pushToken?: string;
   timezone?: string;
+  weeklyRecapEnabled?: boolean;
   trips: {
     id: string;
     startTime: number;
@@ -818,6 +819,11 @@ export const weeklyEmailRouter = createTRPCRouter({
         : users;
 
       for (const user of usersToProcess) {
+        if (user.weeklyRecapEnabled === false) {
+          console.log(`Skipping weekly recap for ${user.email} - user has disabled weekly recaps`);
+          continue;
+        }
+
         const stats = calculateWeeklyStats(user.trips, start, end);
         const country = user.country || 'Global';
         const { leaderboard, userRank } = calculateRegionalLeaderboard(users, country, user.id);
@@ -883,6 +889,11 @@ export const weeklyEmailRouter = createTRPCRouter({
         : users;
 
       for (const user of usersToProcess) {
+        if (user.weeklyRecapEnabled === false) {
+          console.log(`Skipping weekly recap for ${user.email} - user has disabled weekly recaps`);
+          continue;
+        }
+
         const stats = calculateWeeklyStats(user.trips, start, end);
         const country = user.country || 'Global';
         const { leaderboard, userRank } = calculateRegionalLeaderboard(users, country, user.id);
@@ -974,6 +985,11 @@ export const weeklyEmailRouter = createTRPCRouter({
           }
         }
         
+        if (user.weeklyRecapEnabled === false) {
+          console.log(`Skipping weekly recap for ${user.email} - user has disabled weekly recaps`);
+          continue;
+        }
+
         eligibleUsers.push(`${user.displayName} (${userTimezone})`);
         
         const stats = calculateWeeklyStats(user.trips, start, end);

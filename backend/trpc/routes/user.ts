@@ -26,6 +26,7 @@ interface StoredUser {
   welcomeEmailSent: boolean;
   pushToken?: string | null;
   timezone?: string;
+  weeklyRecapEnabled?: boolean;
 }
 
 function hashPassword(password: string): string {
@@ -803,5 +804,32 @@ export const userRouter = createTRPCRouter({
       }
       
       return { success: true, timezone: input.timezone };
+    }),
+
+  updateWeeklyRecapEnabled: publicProcedure
+    .input(z.object({
+      userId: z.string(),
+      enabled: z.boolean(),
+    }))
+    .mutation(async ({ input }) => {
+      console.log("Updating weekly recap preference for user:", input.userId, "to:", input.enabled);
+      
+      const updated = await updateUserInDb(input.userId, { weeklyRecapEnabled: input.enabled });
+      
+      if (!updated) {
+        return { success: false, error: 'Failed to update weekly recap preference' };
+      }
+      
+      return { success: true, enabled: input.enabled };
+    }),
+
+  getWeeklyRecapEnabled: publicProcedure
+    .input(z.object({
+      userId: z.string(),
+    }))
+    .query(async ({ input }) => {
+      const users = await getAllUsers();
+      const user = users.find(u => u.id === input.userId);
+      return { enabled: user?.weeklyRecapEnabled ?? true };
     }),
 });

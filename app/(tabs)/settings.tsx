@@ -2,12 +2,13 @@ import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Linking, Image, S
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { router } from 'expo-router';
-import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle, Bell } from 'lucide-react-native';
+import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle, Bell, Mail } from 'lucide-react-native';
 import { useSettings, SpeedUnit, DistanceUnit } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
 import { useNotifications } from '@/providers/NotificationProvider';
 import { ThemeType } from '@/constants/colors';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { trpc } from '@/lib/trpc';
 
 export default function SettingsScreen() {
   const { settings, colors, setSpeedUnit, setDistanceUnit, setTheme } = useSettings();
@@ -15,6 +16,21 @@ export default function SettingsScreen() {
   const { notificationsEnabled, pushToken, registerForPushNotifications, disableNotifications } = useNotifications();
 
   const [isTogglingNotifications, setIsTogglingNotifications] = useState(false);
+  const [isTogglingWeeklyRecap, setIsTogglingWeeklyRecap] = useState(false);
+  const [weeklyRecapEnabled, setWeeklyRecapEnabled] = useState(true);
+
+  const weeklyRecapQuery = trpc.user.getWeeklyRecapEnabled.useQuery(
+    { userId: user?.id || '' },
+    { enabled: !!user?.id }
+  );
+
+  const updateWeeklyRecapMutation = trpc.user.updateWeeklyRecapEnabled.useMutation();
+
+  useEffect(() => {
+    if (weeklyRecapQuery.data !== undefined) {
+      setWeeklyRecapEnabled(weeklyRecapQuery.data.enabled);
+    }
+  }, [weeklyRecapQuery.data]);
 
   const speedOptions: { value: SpeedUnit; label: string }[] = [
     { value: 'kmh', label: 'km/h' },
@@ -83,6 +99,27 @@ export default function SettingsScreen() {
 
   const openProfile = () => {
     router.push('/profile' as any);
+  };
+
+  const handleWeeklyRecapToggle = async (value: boolean) => {
+    if (!user?.id) return;
+    
+    setIsTogglingWeeklyRecap(true);
+    setWeeklyRecapEnabled(value);
+    
+    try {
+      await updateWeeklyRecapMutation.mutateAsync({
+        userId: user.id,
+        enabled: value,
+      });
+      console.log('[SETTINGS] Weekly recap preference updated to:', value);
+    } catch (error) {
+      console.error('[SETTINGS] Failed to update weekly recap preference:', error);
+      setWeeklyRecapEnabled(!value);
+      Alert.alert('Error', 'Failed to update preference. Please try again.');
+    } finally {
+      setIsTogglingWeeklyRecap(false);
+    }
   };
 
 
@@ -444,11 +481,11 @@ export default function SettingsScreen() {
                 <Bell size={20} color={colors.accent} />
               </View>
               <View style={styles.notificationTextContainer}>
-                <Text style={styles.settingLabel}>Weekly Recap</Text>
+                <Text style={styles.settingLabel}>Push Notifications</Text>
                 <Text style={styles.notificationDescription}>
                   {Platform.OS === 'web' 
                     ? 'Not available on web'
-                    : 'Get notified about your weekly driving stats'
+                    : 'Get notified about your trips'
                   }
                 </Text>
               </View>
@@ -467,7 +504,32 @@ export default function SettingsScreen() {
             )}
           </View>
 
+          <View style={styles.divider} />
 
+          <View style={styles.notificationItem}>
+            <View style={styles.notificationContent}>
+              <View style={styles.settingIconContainer}>
+                <Mail size={20} color={colors.accent} />
+              </View>
+              <View style={styles.notificationTextContainer}>
+                <Text style={styles.settingLabel}>Weekly Recap Email</Text>
+                <Text style={styles.notificationDescription}>
+                  Receive weekly email with your driving stats
+                </Text>
+              </View>
+            </View>
+            {isTogglingWeeklyRecap ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : (
+              <Switch
+                value={weeklyRecapEnabled}
+                onValueChange={handleWeeklyRecapToggle}
+                trackColor={{ false: colors.border, true: colors.accent + '80' }}
+                thumbColor={weeklyRecapEnabled ? colors.accent : colors.textLight}
+                disabled={!isAuthenticated}
+              />
+            )}
+          </View>
         </View>
 
         <Text style={styles.sectionTitle}>Legal</Text>
