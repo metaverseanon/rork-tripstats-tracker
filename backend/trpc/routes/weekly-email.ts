@@ -627,7 +627,9 @@ async function sendWeeklyEmail(
   leaderboard: LeaderboardEntry[],
   userRank: number | null,
   country: string,
-  weekRange: string
+  weekRange: string,
+  personalRecords: PersonalRecord[],
+  milestones: Milestone[]
 ): Promise<boolean> {
   if (!RESEND_API_KEY) {
     console.log("RESEND_API_KEY not configured, skipping weekly email");
@@ -645,7 +647,7 @@ async function sendWeeklyEmail(
         from: "RedLine <info@redlineapp.io>",
         to: [email],
         subject: `Your Weekly RedLine Recap 📊 - ${stats.totalTrips} trips, ${stats.totalDistance.toFixed(1)} km`,
-        html: getWeeklyEmailHtml(displayName, stats, leaderboard, userRank, country, weekRange),
+        html: getWeeklyEmailHtml(displayName, stats, leaderboard, userRank, country, weekRange, personalRecords, milestones),
       }),
     });
 
