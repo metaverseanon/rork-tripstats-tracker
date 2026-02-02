@@ -981,30 +981,12 @@ export const [TripProvider, useTrips] = createContextHook(() => {
         { type: 'trip_complete', tripId: finalTrip.id }
       );
       
-      // Check for personal records
-      const newRecords = await checkAndUpdateRecords(finalTrip);
-      if (newRecords.length > 0) {
-        setTimeout(async () => {
-          await sendLocalNotification(
-            '🏆 New Personal Record!',
-            newRecords.join(' '),
-            { type: 'personal_record', tripId: finalTrip.id }
-          );
-        }, 2000);
-      }
+      // Check for personal records (stored for weekly recap, no push notification)
+      await checkAndUpdateRecords(finalTrip);
       
-      // Check for milestones
+      // Check for milestones (stored for weekly recap, no push notification)
       const totalDistance = updatedTrips.reduce((sum, t) => sum + t.distance, 0);
-      const milestone = await checkMilestones(updatedTrips.length, totalDistance);
-      if (milestone) {
-        setTimeout(async () => {
-          await sendLocalNotification(
-            '🎯 Milestone Reached!',
-            milestone,
-            { type: 'milestone' }
-          );
-        }, 4000);
-      }
+      await checkMilestones(updatedTrips.length, totalDistance);
     }
 
     setIsTracking(false);
