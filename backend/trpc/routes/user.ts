@@ -1,10 +1,17 @@
 import * as z from "zod";
 import { createTRPCRouter, publicProcedure } from "../create-context";
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const DB_ENDPOINT = process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT;
-const DB_NAMESPACE = process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE;
-const DB_TOKEN = process.env.EXPO_PUBLIC_RORK_DB_TOKEN;
+function getResendApiKey() {
+  return process.env.RESEND_API_KEY;
+}
+
+function getDbConfig() {
+  return {
+    endpoint: process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT,
+    namespace: process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE,
+    token: process.env.EXPO_PUBLIC_RORK_DB_TOKEN,
+  };
+}
 
 interface StoredUser {
   id: string;
@@ -47,16 +54,17 @@ interface PasswordResetCode {
 }
 
 async function storeResetCode(resetCode: PasswordResetCode): Promise<boolean> {
-  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) {
+  const { endpoint, namespace, token } = getDbConfig();
+  if (!endpoint || !namespace || !token) {
     console.log("Database not configured");
     return false;
   }
 
   try {
-    const response = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/password_reset_codes`, {
+    const response = await fetch(`${endpoint}/${namespace}/password_reset_codes`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${DB_TOKEN}`,
+        "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(resetCode),
@@ -77,16 +85,17 @@ async function storeResetCode(resetCode: PasswordResetCode): Promise<boolean> {
 }
 
 async function getResetCode(email: string): Promise<PasswordResetCode | null> {
-  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) {
+  const { endpoint, namespace, token } = getDbConfig();
+  if (!endpoint || !namespace || !token) {
     console.log("Database not configured");
     return null;
   }
 
   try {
-    const response = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/password_reset_codes`, {
+    const response = await fetch(`${endpoint}/${namespace}/password_reset_codes`, {
       method: "GET",
       headers: {
-        "Authorization": `Bearer ${DB_TOKEN}`,
+        "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
       },
     });
@@ -107,16 +116,17 @@ async function getResetCode(email: string): Promise<PasswordResetCode | null> {
 }
 
 async function deleteResetCode(id: string): Promise<boolean> {
-  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) {
+  const { endpoint, namespace, token } = getDbConfig();
+  if (!endpoint || !namespace || !token) {
     console.log("Database not configured");
     return false;
   }
 
   try {
-    const response = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/password_reset_codes/${id}`, {
+    const response = await fetch(`${endpoint}/${namespace}/password_reset_codes/${id}`, {
       method: "DELETE",
       headers: {
-        "Authorization": `Bearer ${DB_TOKEN}`,
+        "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
       },
     });
@@ -227,6 +237,7 @@ const getWelcomeEmailHtml = (displayName: string) => `
 `;
 
 async function sendWelcomeEmail(email: string, displayName: string): Promise<boolean> {
+  const RESEND_API_KEY = getResendApiKey();
   if (!RESEND_API_KEY) {
     console.log("RESEND_API_KEY not configured, skipping welcome email");
     return false;
@@ -262,16 +273,17 @@ async function sendWelcomeEmail(email: string, displayName: string): Promise<boo
 }
 
 async function storeUserInDb(user: StoredUser): Promise<boolean> {
-  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) {
+  const { endpoint, namespace, token } = getDbConfig();
+  if (!endpoint || !namespace || !token) {
     console.log("Database not configured, skipping user storage");
     return false;
   }
 
   try {
-    const response = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/users`, {
+    const response = await fetch(`${endpoint}/${namespace}/users`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${DB_TOKEN}`,
+        "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(user),
@@ -292,16 +304,17 @@ async function storeUserInDb(user: StoredUser): Promise<boolean> {
 }
 
 async function updateUserInDb(userId: string, updates: Partial<StoredUser>): Promise<boolean> {
-  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) {
+  const { endpoint, namespace, token } = getDbConfig();
+  if (!endpoint || !namespace || !token) {
     console.log("Database not configured");
     return false;
   }
 
   try {
-    const response = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/users/${userId}`, {
+    const response = await fetch(`${endpoint}/${namespace}/users/${userId}`, {
       method: "PATCH",
       headers: {
-        "Authorization": `Bearer ${DB_TOKEN}`,
+        "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(updates),
@@ -327,16 +340,17 @@ async function getUsersWithPushTokens(): Promise<StoredUser[]> {
 }
 
 async function getAllUsers(): Promise<StoredUser[]> {
-  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) {
+  const { endpoint, namespace, token } = getDbConfig();
+  if (!endpoint || !namespace || !token) {
     console.log("Database not configured");
     return [];
   }
 
   try {
-    const response = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/users`, {
+    const response = await fetch(`${endpoint}/${namespace}/users`, {
       method: "GET",
       headers: {
-        "Authorization": `Bearer ${DB_TOKEN}`,
+        "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
       },
     });
@@ -413,6 +427,7 @@ const getPasswordResetEmailHtml = (displayName: string, code: string) => `
 `;
 
 async function sendPasswordResetEmail(email: string, displayName: string, code: string): Promise<boolean> {
+  const RESEND_API_KEY = getResendApiKey();
   if (!RESEND_API_KEY) {
     console.log("RESEND_API_KEY not configured, skipping password reset email");
     return false;
