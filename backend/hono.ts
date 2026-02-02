@@ -18,7 +18,7 @@ app.use(
   })
 );
 
-app.get("/", (c) => c.json({ status: "ok", message: "API is running" }));
+app.get("/", (c) => c.json({ status: "ok", message: "API is running", version: "1.0.1" }));
 
 // Cron endpoint for weekly recap (Sunday 9pm)
 // Use with cron-job.org or similar: GET https://your-app.rork.app/api/cron/weekly-recap
