@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Linking, Image, Switch, Platform, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { trpc } from '@/lib/trpc';
+
 import { router } from 'expo-router';
 import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle, Bell } from 'lucide-react-native';
 import { useSettings, SpeedUnit, DistanceUnit } from '@/providers/SettingsProvider';
@@ -13,7 +13,7 @@ export default function SettingsScreen() {
   const { settings, colors, setSpeedUnit, setDistanceUnit, setTheme } = useSettings();
   const { user, isAuthenticated, getCarDisplayName } = useUser();
   const { notificationsEnabled, pushToken, registerForPushNotifications, disableNotifications } = useNotifications();
-  const sendTestMutation = trpc.notifications.sendTestNotification.useMutation();
+
   const [isTogglingNotifications, setIsTogglingNotifications] = useState(false);
 
   const speedOptions: { value: SpeedUnit; label: string }[] = [
@@ -85,41 +85,7 @@ export default function SettingsScreen() {
     router.push('/profile' as any);
   };
 
-  const handleSendTestNotification = async () => {
-    console.log('[TEST NOTIFICATION] Button pressed');
-    console.log('[TEST NOTIFICATION] pushToken:', pushToken);
-    console.log('[TEST NOTIFICATION] notificationsEnabled:', notificationsEnabled);
-    
-    if (!pushToken) {
-      console.log('[TEST NOTIFICATION] No push token available');
-      Alert.alert('Error', 'Push notifications are not enabled. Please enable them first.');
-      return;
-    }
 
-    try {
-      console.log('[TEST NOTIFICATION] Calling sendTestNotification mutation...');
-      const result = await sendTestMutation.mutateAsync({ pushToken });
-      console.log('[TEST NOTIFICATION] Mutation result:', JSON.stringify(result));
-      
-      if (result.success) {
-        Alert.alert('Success', 'Test notification sent! You should receive it shortly.');
-      } else {
-        Alert.alert('Error', 'Failed to send test notification.');
-      }
-    } catch (error: any) {
-      console.error('[TEST NOTIFICATION] Error:', error);
-      console.error('[TEST NOTIFICATION] Error message:', error?.message);
-      console.error('[TEST NOTIFICATION] Error stack:', error?.stack);
-      const errorMessage = error?.message || String(error) || '';
-      if (errorMessage.includes('JSON') || errorMessage.includes('Unexpected token') || errorMessage.includes('unexpected character')) {
-        Alert.alert('Server Error', 'The server is not responding correctly. Please try again later.');
-      } else if (errorMessage.includes('Network') || errorMessage.includes('fetch')) {
-        Alert.alert('Network Error', 'Could not connect to the server. Please check your internet connection.');
-      } else {
-        Alert.alert('Error', 'Failed to send test notification. Please try again.');
-      }
-    }
-  };
 
   const carName = getCarDisplayName();
 
@@ -501,31 +467,7 @@ export default function SettingsScreen() {
             )}
           </View>
 
-          {Platform.OS !== 'web' && (
-            <>
-              <View style={styles.divider} />
-              <TouchableOpacity 
-                style={[styles.linkItem, !notificationsEnabled && styles.linkItemDisabled]} 
-                onPress={notificationsEnabled ? handleSendTestNotification : () => {
-                  Alert.alert('Enable Notifications', 'Please enable notifications first using the toggle above.');
-                }}
-                activeOpacity={0.7}
-                disabled={sendTestMutation.isPending}
-              >
-                <View style={styles.linkContent}>
-                  <View style={styles.settingIconContainer}>
-                    <Bell size={20} color={notificationsEnabled ? colors.accent : colors.textLight} />
-                  </View>
-                  <Text style={[styles.linkText, !notificationsEnabled && styles.linkTextDisabled]}>Send Test Notification</Text>
-                </View>
-                {sendTestMutation.isPending ? (
-                  <ActivityIndicator size="small" color={colors.accent} />
-                ) : (
-                  <ChevronRight size={20} color={colors.textLight} />
-                )}
-              </TouchableOpacity>
-            </>
-          )}
+
         </View>
 
         <Text style={styles.sectionTitle}>Legal</Text>
