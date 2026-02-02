@@ -630,6 +630,8 @@ export default function ProfileScreen() {
           title: isAuthenticated ? 'Edit Profile' : authMode === 'signin' ? 'Sign In' : 'Create Account',
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
+          headerTitleStyle: { fontSize: 16, fontWeight: '600' as const },
+          headerTitleAlign: 'center',
         }}
       />
       <KeyboardAvoidingView
