@@ -121,7 +121,7 @@ export default function TrackScreen() {
     buttonContainer: {
       padding: 20,
       paddingBottom: 30,
-      backgroundColor: isDark ? '#000000' : colors.background,
+      backgroundColor: colors.background,
     },
   });
 
