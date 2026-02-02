@@ -18,12 +18,12 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.tabBarActive,
-        tabBarInactiveTintColor: colors.tabBarInactive,
+        tabBarActiveTintColor: colors?.tabBarActive || '#1C1C1E',
+        tabBarInactiveTintColor: colors?.tabBarInactive || '#8E8E93',
         tabBarStyle: {
-          backgroundColor: colors.tabBarBackground,
+          backgroundColor: colors?.tabBarBackground || '#FFFFFF',
           borderTopWidth: 1,
-          borderTopColor: colors.border,
+          borderTopColor: colors?.border || '#E5E5EA',
         },
       }}
     >
