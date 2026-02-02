@@ -479,13 +479,24 @@ export const userRouter = createTRPCRouter({
       console.log("Registering new user:", input.email);
 
       const existingUsers = await getAllUsers();
-      const existingUser = existingUsers.find(
+      
+      const existingEmail = existingUsers.find(
         u => u.email.toLowerCase() === input.email.toLowerCase()
       );
-      if (existingUser) {
+      if (existingEmail) {
         return {
           success: false,
           error: 'An account with this email already exists.',
+        };
+      }
+
+      const existingUsername = existingUsers.find(
+        u => u.displayName.toLowerCase() === input.displayName.toLowerCase()
+      );
+      if (existingUsername) {
+        return {
+          success: false,
+          error: 'This username is already taken. Please choose a different one.',
         };
       }
 
