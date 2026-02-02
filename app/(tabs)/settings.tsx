@@ -132,10 +132,11 @@ export default function SettingsScreen() {
       paddingHorizontal: 20,
       paddingTop: 12,
       paddingBottom: 12,
+      alignItems: 'center' as const,
     },
     navTitle: {
-      fontSize: 28,
-      fontWeight: '700' as const,
+      fontSize: 16,
+      fontFamily: 'Orbitron_700Bold',
       color: colors.text,
     },
     scrollView: {

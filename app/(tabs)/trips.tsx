@@ -294,9 +294,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 12,
+    alignItems: 'center' as const,
   },
   navTitle: {
-    fontSize: 28,
+    fontSize: 16,
     fontFamily: 'Orbitron_700Bold',
   },
   scrollView: {
