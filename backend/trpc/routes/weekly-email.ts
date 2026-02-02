@@ -17,6 +17,20 @@ interface WeeklyStats {
   corners: number;
 }
 
+interface PersonalRecord {
+  type: 'topSpeed' | 'distance' | 'gForce' | '0to100' | 'longestTrip' | 'corners';
+  label: string;
+  value: string;
+  previousValue?: string;
+  icon: string;
+}
+
+interface Milestone {
+  label: string;
+  description: string;
+  icon: string;
+}
+
 interface LeaderboardEntry {
   rank: number;
   displayName: string;
@@ -53,7 +67,9 @@ const getWeeklyEmailHtml = (
   leaderboard: LeaderboardEntry[],
   userRank: number | null,
   country: string,
-  weekRange: string
+  weekRange: string,
+  personalRecords: PersonalRecord[],
+  milestones: Milestone[]
 ) => `
 <!DOCTYPE html>
 <html>
@@ -158,6 +174,67 @@ const getWeeklyEmailHtml = (
               </table>
             </td>
           </tr>
+          
+          <!-- Personal Records Section -->
+          ${personalRecords.length > 0 ? `
+          <tr>
+            <td style="padding: 0 40px 30px; background-color: #1a1a1a;">
+              <h2 style="margin: 0 0 20px; font-size: 18px; font-weight: 600; color: #ffffff; border-bottom: 1px solid #333; padding-bottom: 10px;">
+                🏅 New Personal Records!
+              </h2>
+              
+              <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                ${personalRecords.map((record, index) => `
+                <tr>
+                  <td style="padding: 14px 16px; background: linear-gradient(135deg, #2d1f1f 0%, #1f1a1a 100%); border-radius: ${index === 0 ? '12px 12px' : '0'} ${index === 0 ? '12px 12px' : '0'} ${index === personalRecords.length - 1 ? '12px 12px' : '0 0'}; ${index < personalRecords.length - 1 ? 'border-bottom: 1px solid #333;' : ''}">
+                    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                      <tr>
+                        <td style="width: 40px; font-size: 24px;">${record.icon}</td>
+                        <td>
+                          <p style="margin: 0; font-size: 14px; color: #f87171; font-weight: 600;">${record.label}</p>
+                          <p style="margin: 4px 0 0; font-size: 13px; color: #888;">${record.previousValue ? `Previous: ${record.previousValue}` : 'First record!'}</p>
+                        </td>
+                        <td style="text-align: right;">
+                          <p style="margin: 0; font-size: 20px; font-weight: 700; color: #ffffff;">${record.value}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                `).join('')}
+              </table>
+            </td>
+          </tr>
+          ` : ''}
+          
+          <!-- Milestones Section -->
+          ${milestones.length > 0 ? `
+          <tr>
+            <td style="padding: 0 40px 30px; background-color: #1a1a1a;">
+              <h2 style="margin: 0 0 20px; font-size: 18px; font-weight: 600; color: #ffffff; border-bottom: 1px solid #333; padding-bottom: 10px;">
+                🎯 Milestones Unlocked!
+              </h2>
+              
+              <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                ${milestones.map((milestone, index) => `
+                <tr>
+                  <td style="padding: 16px; background: linear-gradient(135deg, #1f2d1f 0%, #1a1f1a 100%); border-radius: ${index === 0 ? '12px 12px' : '0'} ${index === 0 ? '12px 12px' : '0'} ${index === milestones.length - 1 ? '12px 12px' : '0 0'}; ${index < milestones.length - 1 ? 'border-bottom: 1px solid #333;' : ''}">
+                    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                      <tr>
+                        <td style="width: 50px; font-size: 28px; text-align: center;">${milestone.icon}</td>
+                        <td>
+                          <p style="margin: 0; font-size: 15px; color: #4ade80; font-weight: 600;">${milestone.label}</p>
+                          <p style="margin: 4px 0 0; font-size: 13px; color: #888;">${milestone.description}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                `).join('')}
+              </table>
+            </td>
+          </tr>
+          ` : ''}
           
           <!-- Leaderboard Section -->
           ${leaderboard.length > 0 ? `
@@ -362,6 +439,156 @@ function calculateWeeklyStats(trips: UserTripData['trips'], weekStart: Date, wee
   };
 }
 
+function calculatePersonalRecords(
+  allTrips: UserTripData['trips'],
+  weeklyTrips: UserTripData['trips'],
+  weekStart: Date
+): PersonalRecord[] {
+  const records: PersonalRecord[] = [];
+  
+  if (weeklyTrips.length === 0) return records;
+  
+  const tripsBeforeThisWeek = allTrips.filter(t => new Date(t.startTime) < weekStart);
+  
+  const weekTopSpeed = Math.max(...weeklyTrips.map(t => t.topSpeed));
+  const prevTopSpeed = tripsBeforeThisWeek.length > 0 ? Math.max(...tripsBeforeThisWeek.map(t => t.topSpeed)) : 0;
+  if (weekTopSpeed > prevTopSpeed && weekTopSpeed > 0) {
+    records.push({
+      type: 'topSpeed',
+      label: 'Top Speed',
+      value: `${Math.round(weekTopSpeed)} km/h`,
+      previousValue: prevTopSpeed > 0 ? `${Math.round(prevTopSpeed)} km/h` : undefined,
+      icon: '⚡',
+    });
+  }
+  
+  const weekLongestTrip = Math.max(...weeklyTrips.map(t => t.distance));
+  const prevLongestTrip = tripsBeforeThisWeek.length > 0 ? Math.max(...tripsBeforeThisWeek.map(t => t.distance)) : 0;
+  if (weekLongestTrip > prevLongestTrip && weekLongestTrip > 0) {
+    records.push({
+      type: 'longestTrip',
+      label: 'Longest Trip',
+      value: `${weekLongestTrip.toFixed(1)} km`,
+      previousValue: prevLongestTrip > 0 ? `${prevLongestTrip.toFixed(1)} km` : undefined,
+      icon: '🛣️',
+    });
+  }
+  
+  const weekMaxGForce = Math.max(...weeklyTrips.map(t => t.maxGForce || 0));
+  const prevMaxGForce = tripsBeforeThisWeek.length > 0 ? Math.max(...tripsBeforeThisWeek.map(t => t.maxGForce || 0)) : 0;
+  if (weekMaxGForce > prevMaxGForce && weekMaxGForce > 0) {
+    records.push({
+      type: 'gForce',
+      label: 'Max G-Force',
+      value: `${weekMaxGForce.toFixed(2)} G`,
+      previousValue: prevMaxGForce > 0 ? `${prevMaxGForce.toFixed(2)} G` : undefined,
+      icon: '🎢',
+    });
+  }
+  
+  const weekTimes0to100 = weeklyTrips.map(t => t.time0to100).filter((t): t is number => t !== undefined && t > 0);
+  const prevTimes0to100 = tripsBeforeThisWeek.map(t => t.time0to100).filter((t): t is number => t !== undefined && t > 0);
+  const weekBest0to100 = weekTimes0to100.length > 0 ? Math.min(...weekTimes0to100) : null;
+  const prevBest0to100 = prevTimes0to100.length > 0 ? Math.min(...prevTimes0to100) : null;
+  if (weekBest0to100 && (!prevBest0to100 || weekBest0to100 < prevBest0to100)) {
+    records.push({
+      type: '0to100',
+      label: 'Best 0-100 km/h',
+      value: `${weekBest0to100.toFixed(1)} sec`,
+      previousValue: prevBest0to100 ? `${prevBest0to100.toFixed(1)} sec` : undefined,
+      icon: '🚀',
+    });
+  }
+  
+  const weekMostCorners = Math.max(...weeklyTrips.map(t => t.corners));
+  const prevMostCorners = tripsBeforeThisWeek.length > 0 ? Math.max(...tripsBeforeThisWeek.map(t => t.corners)) : 0;
+  if (weekMostCorners > prevMostCorners && weekMostCorners > 0) {
+    records.push({
+      type: 'corners',
+      label: 'Most Corners in a Trip',
+      value: `${weekMostCorners}`,
+      previousValue: prevMostCorners > 0 ? `${prevMostCorners}` : undefined,
+      icon: '🔄',
+    });
+  }
+  
+  return records;
+}
+
+function calculateMilestones(
+  allTrips: UserTripData['trips'],
+  weekStart: Date,
+  weekEnd: Date
+): Milestone[] {
+  const milestones: Milestone[] = [];
+  
+  const tripsBeforeThisWeek = allTrips.filter(t => new Date(t.startTime) < weekStart);
+  const tripsUpToThisWeek = allTrips.filter(t => new Date(t.startTime) <= weekEnd);
+  
+  const prevTotalDistance = tripsBeforeThisWeek.reduce((sum, t) => sum + t.distance, 0);
+  const totalDistance = tripsUpToThisWeek.reduce((sum, t) => sum + t.distance, 0);
+  
+  const distanceMilestones = [100, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
+  for (const milestone of distanceMilestones) {
+    if (prevTotalDistance < milestone && totalDistance >= milestone) {
+      milestones.push({
+        label: `${milestone.toLocaleString()} km Club`,
+        description: `You've driven a total of ${milestone.toLocaleString()} kilometers!`,
+        icon: milestone >= 10000 ? '🏆' : milestone >= 1000 ? '🥇' : '🎖️',
+      });
+    }
+  }
+  
+  const prevTotalTrips = tripsBeforeThisWeek.length;
+  const totalTrips = tripsUpToThisWeek.length;
+  
+  const tripMilestones = [10, 25, 50, 100, 250, 500, 1000];
+  for (const milestone of tripMilestones) {
+    if (prevTotalTrips < milestone && totalTrips >= milestone) {
+      milestones.push({
+        label: `${milestone} Trips`,
+        description: `You've completed ${milestone} trips!`,
+        icon: milestone >= 100 ? '🌟' : '⭐',
+      });
+    }
+  }
+  
+  const weeklyTrips = allTrips.filter(t => {
+    const d = new Date(t.startTime);
+    return d >= weekStart && d <= weekEnd;
+  });
+  
+  const prevTopSpeed = tripsBeforeThisWeek.length > 0 ? Math.max(...tripsBeforeThisWeek.map(t => t.topSpeed)) : 0;
+  const weekTopSpeed = weeklyTrips.length > 0 ? Math.max(...weeklyTrips.map(t => t.topSpeed)) : 0;
+  
+  const speedMilestones = [100, 150, 200, 250, 300];
+  for (const milestone of speedMilestones) {
+    if (prevTopSpeed < milestone && weekTopSpeed >= milestone) {
+      milestones.push({
+        label: `${milestone} km/h Club`,
+        description: `You reached ${milestone} km/h for the first time!`,
+        icon: milestone >= 200 ? '🔥' : '💨',
+      });
+    }
+  }
+  
+  const prevTotalCorners = tripsBeforeThisWeek.reduce((sum, t) => sum + t.corners, 0);
+  const totalCorners = tripsUpToThisWeek.reduce((sum, t) => sum + t.corners, 0);
+  
+  const cornerMilestones = [100, 500, 1000, 5000, 10000];
+  for (const milestone of cornerMilestones) {
+    if (prevTotalCorners < milestone && totalCorners >= milestone) {
+      milestones.push({
+        label: `Corner Master (${milestone.toLocaleString()})`,
+        description: `You've taken ${milestone.toLocaleString()} corners total!`,
+        icon: '🔄',
+      });
+    }
+  }
+  
+  return milestones;
+}
+
 function calculateRegionalLeaderboard(
   users: UserTripData[],
   country: string,
@@ -462,6 +689,12 @@ export const weeklyEmailRouter = createTRPCRouter({
         const country = user.country || 'Global';
         const { leaderboard, userRank } = calculateRegionalLeaderboard(users, country, user.id);
 
+        const personalRecords = calculatePersonalRecords(user.trips, user.trips.filter(t => {
+          const d = new Date(t.startTime);
+          return d >= start && d <= end;
+        }), start);
+        const milestones = calculateMilestones(user.trips, start, end);
+
         const success = await sendWeeklyEmail(
           user.email,
           user.displayName,
@@ -469,7 +702,9 @@ export const weeklyEmailRouter = createTRPCRouter({
           leaderboard,
           userRank,
           country,
-          label
+          label,
+          personalRecords,
+          milestones
         );
 
         results.push({ email: user.email, success });
@@ -519,6 +754,16 @@ export const weeklyEmailRouter = createTRPCRouter({
         { rank: 5, displayName: 'TurboMax', value: 165, isCurrentUser: false },
       ];
 
+      const mockRecords: PersonalRecord[] = [
+        { type: 'topSpeed', label: 'Top Speed', value: '185 km/h', previousValue: '172 km/h', icon: '⚡' },
+        { type: 'longestTrip', label: 'Longest Trip', value: '89.5 km', previousValue: '67.2 km', icon: '🛣️' },
+      ];
+
+      const mockMilestones: Milestone[] = [
+        { label: '1,000 km Club', description: "You've driven a total of 1,000 kilometers!", icon: '🥇' },
+        { label: '50 Trips', description: "You've completed 50 trips!", icon: '⭐' },
+      ];
+
       return {
         html: getWeeklyEmailHtml(
           input.displayName,
@@ -526,7 +771,9 @@ export const weeklyEmailRouter = createTRPCRouter({
           mockLeaderboard,
           3,
           input.country || 'Global',
-          label
+          label,
+          mockRecords,
+          mockMilestones
         ),
         weekRange: label,
       };
