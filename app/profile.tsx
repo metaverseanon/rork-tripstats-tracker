@@ -467,8 +467,9 @@ export default function ProfileScreen() {
         Alert.alert('Success', 'Account created successfully');
         router.back();
       }
-    } catch {
-      Alert.alert('Error', 'Failed to save profile');
+    } catch (error: any) {
+      console.error('Profile save error:', error);
+      Alert.alert('Error', `Failed to save profile: ${error?.message || error}`);
     } finally {
       setIsSubmitting(false);
     }
