@@ -15,6 +15,34 @@ export const [UserProvider, useUser] = createContextHook(() => {
     loadUser();
   }, []);
 
+  useEffect(() => {
+    const syncTimezone = async () => {
+      const currentUser = userRef.current;
+      if (!currentUser) return;
+      
+      const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (detectedTimezone && currentUser.timezone !== detectedTimezone) {
+        console.log('Updating user timezone:', detectedTimezone);
+        const updatedUser = { ...currentUser, timezone: detectedTimezone };
+        await saveUser(updatedUser);
+        
+        try {
+          await trpcClient.user.updateTimezone.mutate({
+            userId: currentUser.id,
+            timezone: detectedTimezone,
+          });
+          console.log('Timezone synced to backend');
+        } catch (error) {
+          console.error('Failed to sync timezone to backend:', error);
+        }
+      }
+    };
+    
+    if (user && !isLoading) {
+      syncTimezone();
+    }
+  }, [user, isLoading]);
+
   const loadUser = async () => {
     try {
       const stored = await AsyncStorage.getItem(USER_KEY);

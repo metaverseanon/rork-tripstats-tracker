@@ -18,6 +18,7 @@ interface StoredUser {
   createdAt: number;
   welcomeEmailSent: boolean;
   pushToken?: string | null;
+  timezone?: string;
 }
 
 function hashPassword(password: string): string {
@@ -770,5 +771,22 @@ export const userRouter = createTRPCRouter({
 
       console.log("Password reset successful for:", input.email);
       return { success: true };
+    }),
+
+  updateTimezone: publicProcedure
+    .input(z.object({
+      userId: z.string(),
+      timezone: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      console.log("Updating timezone for user:", input.userId, "to:", input.timezone);
+      
+      const updated = await updateUserInDb(input.userId, { timezone: input.timezone });
+      
+      if (!updated) {
+        return { success: false, error: 'Failed to update timezone' };
+      }
+      
+      return { success: true, timezone: input.timezone };
     }),
 });

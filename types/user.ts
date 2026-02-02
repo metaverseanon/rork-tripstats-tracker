@@ -22,6 +22,7 @@ export interface UserProfile {
   pushToken?: string;
   notificationsEnabled?: boolean;
   authProvider?: 'email' | 'google';
+  timezone?: string;
 }
 
 export interface AuthState {

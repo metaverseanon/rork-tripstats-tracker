@@ -46,6 +46,7 @@ interface UserTripData {
   country?: string;
   city?: string;
   pushToken?: string;
+  timezone?: string;
   trips: {
     id: string;
     startTime: number;
@@ -622,6 +623,37 @@ function calculateRegionalLeaderboard(
   return { leaderboard: top10, userRank };
 }
 
+function isTargetHourInTimezone(timezone: string, targetHour: number): boolean {
+  try {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      hour: 'numeric',
+      hour12: false,
+    });
+    const hourStr = formatter.format(now);
+    const currentHour = parseInt(hourStr, 10);
+    return currentHour === targetHour;
+  } catch (error) {
+    console.error(`Invalid timezone: ${timezone}`, error);
+    return false;
+  }
+}
+
+function isSundayInTimezone(timezone: string): boolean {
+  try {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      weekday: 'long',
+    });
+    return formatter.format(now) === 'Sunday';
+  } catch (error) {
+    console.error(`Invalid timezone: ${timezone}`, error);
+    return false;
+  }
+}
+
 interface ExpoPushMessage {
   to: string;
   title: string;
@@ -900,7 +932,102 @@ export const weeklyEmailRouter = createTRPCRouter({
         emails: { sent: emailsSent, failed: emailsFailed },
         push: { sent: pushSent, failed: pushFailed },
         weekRange: label,
-        scheduledFor: "Sundays at 9:00 PM",
+        scheduledFor: "Sundays at 9:00 PM (user's local time)",
+      };
+    }),
+
+  sendWeeklyRecapByTimezone: publicProcedure
+    .input(z.object({
+      targetHour: z.number().min(0).max(23).default(21),
+      forceSend: z.boolean().default(false),
+    }).optional())
+    .mutation(async ({ input }) => {
+      const targetHour = input?.targetHour ?? 21;
+      const forceSend = input?.forceSend ?? false;
+      
+      console.log(`Starting timezone-aware weekly recap job (target hour: ${targetHour}:00)...`);
+      
+      const users = await getAllUsersWithTrips();
+      const { start, end, label } = getWeekRange();
+      
+      let emailsSent = 0;
+      let emailsFailed = 0;
+      let pushSent = 0;
+      let pushFailed = 0;
+      let skippedTimezone = 0;
+      let skippedNotSunday = 0;
+      
+      const eligibleUsers: string[] = [];
+
+      for (const user of users) {
+        const userTimezone = user.timezone || 'UTC';
+        
+        if (!forceSend) {
+          if (!isSundayInTimezone(userTimezone)) {
+            skippedNotSunday++;
+            continue;
+          }
+          
+          if (!isTargetHourInTimezone(userTimezone, targetHour)) {
+            skippedTimezone++;
+            continue;
+          }
+        }
+        
+        eligibleUsers.push(`${user.displayName} (${userTimezone})`);
+        
+        const stats = calculateWeeklyStats(user.trips, start, end);
+        const country = user.country || 'Global';
+        const { leaderboard, userRank } = calculateRegionalLeaderboard(users, country, user.id);
+
+        const personalRecords = calculatePersonalRecords(user.trips, user.trips.filter(t => {
+          const d = new Date(t.startTime);
+          return d >= start && d <= end;
+        }), start);
+        const milestones = calculateMilestones(user.trips, start, end);
+
+        if (user.email) {
+          const emailSuccess = await sendWeeklyEmail(
+            user.email,
+            user.displayName,
+            stats,
+            leaderboard,
+            userRank,
+            country,
+            label,
+            personalRecords,
+            milestones
+          );
+          if (emailSuccess) emailsSent++;
+          else emailsFailed++;
+        }
+
+        if (user.pushToken) {
+          const pushSuccess = await sendWeeklyPushNotification(
+            user.pushToken,
+            user.displayName,
+            stats,
+            personalRecords,
+            milestones
+          );
+          if (pushSuccess) pushSent++;
+          else pushFailed++;
+        }
+      }
+
+      console.log(`Timezone-aware recap: ${emailsSent} emails, ${pushSent} push sent. Skipped: ${skippedTimezone} (wrong hour), ${skippedNotSunday} (not Sunday)`);
+      
+      return {
+        success: true,
+        totalUsers: users.length,
+        eligibleUsers: eligibleUsers.length,
+        eligibleUsersList: eligibleUsers,
+        emails: { sent: emailsSent, failed: emailsFailed },
+        push: { sent: pushSent, failed: pushFailed },
+        skipped: { wrongHour: skippedTimezone, notSunday: skippedNotSunday },
+        weekRange: label,
+        targetHour: `${targetHour}:00 (user's local time)`,
+        scheduledFor: "Sundays at 9:00 PM in each user's timezone",
       };
     }),
 
