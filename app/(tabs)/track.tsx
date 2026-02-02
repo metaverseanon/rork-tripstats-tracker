@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Play, Square } from 'lucide-react-native';
 import { useTrips } from '@/providers/TripProvider';
 import { useSettings } from '@/providers/SettingsProvider';
@@ -11,6 +12,7 @@ export default function TrackScreen() {
   const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, getAccelerationLabel, colors } = useSettings();
   const { user } = useUser();
   const [showShareCard, setShowShareCard] = useState(false);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (lastSavedTrip && !isTracking) {
@@ -125,7 +127,7 @@ export default function TrackScreen() {
 
   return (
     <View style={dynamicStyles.container}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 20 }]}>
         <View style={styles.speedometerSection}>
           <View style={dynamicStyles.speedometerCircle}>
             <Text style={dynamicStyles.speedValue}>
