@@ -504,16 +504,24 @@ export const userRouter = createTRPCRouter({
       };
 
       const stored = await storeUserInDb(storedUser);
+      
+      if (!stored) {
+        console.error("Failed to store user in database:", input.email);
+        return {
+          success: false,
+          error: 'Failed to create account. Please try again.',
+        };
+      }
+      
       const emailSent = await sendWelcomeEmail(input.email, input.displayName);
 
-      if (stored && emailSent) {
-        storedUser.welcomeEmailSent = true;
-        await storeUserInDb(storedUser);
+      if (emailSent) {
+        await updateUserInDb(storedUser.id, { welcomeEmailSent: true });
       }
 
       return {
         success: true,
-        stored,
+        stored: true,
         welcomeEmailSent: emailSent,
       };
     }),
