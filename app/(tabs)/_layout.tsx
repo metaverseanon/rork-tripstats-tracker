@@ -1,7 +1,6 @@
 import { Tabs } from "expo-router";
 import React from "react";
-import { Platform, StyleSheet } from "react-native";
-import { BlurView } from "expo-blur";
+import { Platform } from "react-native";
 import { Play, Clock, Trophy, BarChart3, Settings } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { useSettings } from "@/providers/SettingsProvider";
@@ -22,19 +21,10 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.tabBarActive,
         tabBarInactiveTintColor: colors.tabBarInactive,
         tabBarStyle: {
-          position: 'absolute',
-          borderTopWidth: 0,
-          elevation: 0,
-          backgroundColor: Platform.OS === 'ios' ? 'transparent' : 'rgba(255,255,255,0.9)',
+          backgroundColor: '#FFFFFF',
+          borderTopColor: '#E5E5E5',
+          borderTopWidth: 1,
         },
-        tabBarBackground: () => 
-          Platform.OS === 'ios' ? (
-            <BlurView
-              intensity={80}
-              tint="light"
-              style={StyleSheet.absoluteFill}
-            />
-          ) : null,
       }}
     >
       <Tabs.Screen
