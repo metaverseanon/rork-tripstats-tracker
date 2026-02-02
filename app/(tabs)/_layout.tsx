@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router";
 import { Play, History, Trophy, Settings, BarChart3 } from "lucide-react-native";
 import React from "react";
+import * as Haptics from "expo-haptics";
 import { useSettings } from "@/providers/SettingsProvider";
 
 export default function TabLayout() {
@@ -8,6 +9,11 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      screenListeners={{
+        tabPress: () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        },
+      }}
       screenOptions={{
         tabBarActiveTintColor: colors.tabBarActive,
         tabBarInactiveTintColor: colors.tabBarInactive,
