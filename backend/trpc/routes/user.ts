@@ -273,14 +273,18 @@ async function sendWelcomeEmail(email: string, displayName: string): Promise<boo
   }
 }
 
-async function storeUserInDb(user: StoredUser): Promise<boolean> {
+async function storeUserInDb(user: StoredUser): Promise<{ success: boolean; error?: string }> {
   const { endpoint, namespace, token } = getDbConfig();
   if (!endpoint || !namespace || !token) {
     console.log("Database not configured, skipping user storage");
-    return false;
+    console.log("Config check - endpoint:", !!endpoint, "namespace:", !!namespace, "token:", !!token);
+    return { success: false, error: "Database not configured" };
   }
 
   try {
+    console.log("Storing user in database:", user.email, "id:", user.id);
+    console.log("Database URL:", `${endpoint}/${namespace}/users`);
+    
     const response = await fetch(`${endpoint}/${namespace}/users`, {
       method: "POST",
       headers: {
@@ -291,16 +295,16 @@ async function storeUserInDb(user: StoredUser): Promise<boolean> {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error("Failed to store user:", error);
-      return false;
+      const errorText = await response.text();
+      console.error("Failed to store user - Status:", response.status, "Error:", errorText);
+      return { success: false, error: `Database error (${response.status}): ${errorText}` };
     }
 
-    console.log("User stored in database:", user.email);
-    return true;
+    console.log("User stored in database successfully:", user.email);
+    return { success: true };
   } catch (error) {
     console.error("Error storing user:", error);
-    return false;
+    return { success: false, error: `Network error: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -531,13 +535,13 @@ export const userRouter = createTRPCRouter({
         welcomeEmailSent: false,
       };
 
-      const stored = await storeUserInDb(storedUser);
+      const storeResult = await storeUserInDb(storedUser);
       
-      if (!stored) {
-        console.error("Failed to store user in database:", input.email);
+      if (!storeResult.success) {
+        console.error("Failed to store user in database:", input.email, "Error:", storeResult.error);
         return {
           success: false,
-          error: 'Failed to create account. Please try again.',
+          error: storeResult.error || 'Failed to create account. Please try again.',
         };
       }
       
