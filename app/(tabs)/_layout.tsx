@@ -24,6 +24,8 @@ export default function TabLayout() {
           backgroundColor: colors?.tabBarBackground || '#FFFFFF',
           borderTopWidth: 1,
           borderTopColor: colors?.border || '#E5E5EA',
+          paddingTop: 8,
+          height: Platform.OS === 'ios' ? 88 : 60,
         },
       }}
     >
