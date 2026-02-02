@@ -806,6 +806,10 @@ export const [TripProvider, useTrips] = createContextHook(() => {
           Alert.alert('Permission Required', 'Location permission is required to track trips.');
           return;
         }
+        
+        // Request background permission immediately after foreground
+        // This shows the "Always Allow" option to the user
+        await ExpoLocation.requestBackgroundPermissionsAsync();
       }
 
       const newTrip: TripStats = {
