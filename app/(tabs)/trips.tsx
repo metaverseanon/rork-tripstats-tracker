@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View, ScrollView, Dimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Clock, Gauge, TrendingUp, Navigation, Calendar, Route, Activity, Timer } from 'lucide-react-native';
 import MapView, { Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useMemo } from 'react';
@@ -161,18 +162,18 @@ export default function RecentScreen() {
 
   if (!lastTrip) {
     return (
-      <View style={dynamicStyles.container}>
+      <SafeAreaView style={dynamicStyles.container} edges={['top']}>
         <View style={styles.emptyState}>
           <Route size={64} color={colors.textLight} />
           <Text style={dynamicStyles.emptyText}>No recent trip</Text>
           <Text style={dynamicStyles.emptySubtext}>Start tracking to see your last trip here</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={dynamicStyles.container}>
+    <SafeAreaView style={dynamicStyles.container} edges={['top']}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={dynamicStyles.headerCard}>
           <View style={styles.headerRow}>
@@ -278,7 +279,7 @@ export default function RecentScreen() {
           </View>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 

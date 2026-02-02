@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, ReactNode } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, TextInput, Image, Platform, Alert, ActivityIndicator, Linking } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Trophy, Zap, Navigation, Gauge, ChevronDown, X, MapPin, Car, Filter, Activity, Route, Search, Clock, Calendar, CornerDownRight, ChevronRight, Timer, Users, Send, Bell, Check, XCircle, Share2, Navigation2, MessageCircle } from 'lucide-react-native';
 import * as Location from 'expo-location';
 import type { DriveMeetup } from '@/types/meetup';
@@ -641,7 +642,7 @@ export default function LeaderboardScreen() {
   }, [userPrimaryCar]);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {userLocation && (
         <View style={styles.userLocationBanner}>
           <MapPin size={14} color={colors.primary} />
@@ -1555,7 +1556,7 @@ export default function LeaderboardScreen() {
           </View>
         </Pressable>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 

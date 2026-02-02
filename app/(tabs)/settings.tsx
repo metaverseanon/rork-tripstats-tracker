@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Linking, Image, Switch, Platform, ActivityIndicator, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { trpc } from '@/lib/trpc';
 import { router } from 'expo-router';
 import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle, Bell } from 'lucide-react-native';
@@ -302,7 +303,7 @@ export default function SettingsScreen() {
   });
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <Text style={styles.sectionTitle}>Account</Text>
         
@@ -559,6 +560,6 @@ export default function SettingsScreen() {
           <Text style={styles.footerText}>RedLine v1.0.0</Text>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }

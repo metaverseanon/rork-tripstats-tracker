@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   BarChart3,
   Route,
@@ -197,7 +198,8 @@ export default function RecapScreen() {
   );
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+    <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
         <View style={styles.headerIconContainer}>
           <BarChart3 color={colors.accent} size={28} />
@@ -389,6 +391,7 @@ export default function RecapScreen() {
 
       <View style={styles.bottomSpacer} />
     </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -396,6 +399,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  scrollView: {
+    flex: 1,
   },
   header: {
     alignItems: 'center',
