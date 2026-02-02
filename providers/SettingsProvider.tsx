@@ -17,7 +17,7 @@ const SETTINGS_KEY = 'app_settings';
 const DEFAULT_SETTINGS: Settings = {
   speedUnit: 'kmh',
   distanceUnit: 'km',
-  theme: 'light',
+  theme: 'dark',
 };
 
 export const [SettingsProvider, useSettings] = createContextHook(() => {
