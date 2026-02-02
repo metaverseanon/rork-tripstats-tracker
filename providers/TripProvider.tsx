@@ -1,6 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import * as ExpoLocation from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+import * as Notifications from 'expo-notifications';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Alert, AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -9,6 +10,34 @@ import { TripStats, Location as LocationType, TripLocation } from '@/types/trip'
 const TRIPS_KEY = 'trips';
 const CURRENT_TRIP_KEY = 'current_trip';
 const TRACKING_STATE_KEY = 'tracking_state';
+const RECORDS_KEY = 'personal_records';
+const TOTAL_DISTANCE_KEY = 'total_distance';
+
+interface PersonalRecords {
+  topSpeed: number;
+  longestTrip: number;
+  mostCorners: number;
+  fastest0to100: number | null;
+}
+
+const sendLocalNotification = async (title: string, body: string, data?: Record<string, unknown>) => {
+  if (Platform.OS === 'web') return;
+  
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        sound: true,
+        data,
+      },
+      trigger: null,
+    });
+    console.log('[NOTIFICATION] Sent:', title);
+  } catch (error) {
+    console.error('[NOTIFICATION] Failed to send:', error);
+  }
+};
 const CORNER_THRESHOLD = 15;
 const CORNER_ACCUMULATION_THRESHOLD = 45;
 const CORNER_RESET_TIMEOUT = 3000;
@@ -819,6 +848,74 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     }
   };
 
+  const checkAndUpdateRecords = async (trip: TripStats): Promise<string[]> => {
+    const newRecords: string[] = [];
+    
+    try {
+      const storedRecords = await AsyncStorage.getItem(RECORDS_KEY);
+      const records: PersonalRecords = storedRecords 
+        ? JSON.parse(storedRecords) 
+        : { topSpeed: 0, longestTrip: 0, mostCorners: 0, fastest0to100: null };
+      
+      if (trip.topSpeed > records.topSpeed) {
+        records.topSpeed = trip.topSpeed;
+        newRecords.push(`🏎️ New top speed: ${Math.round(trip.topSpeed)} km/h!`);
+      }
+      
+      if (trip.distance > records.longestTrip) {
+        records.longestTrip = trip.distance;
+        newRecords.push(`🛣️ Longest trip: ${trip.distance.toFixed(1)} km!`);
+      }
+      
+      if (trip.corners > records.mostCorners) {
+        records.mostCorners = trip.corners;
+        newRecords.push(`🔄 Most corners: ${trip.corners}!`);
+      }
+      
+      if (trip.time0to100 && (records.fastest0to100 === null || trip.time0to100 < records.fastest0to100)) {
+        records.fastest0to100 = trip.time0to100;
+        newRecords.push(`⚡ Fastest 0-100: ${trip.time0to100.toFixed(1)}s!`);
+      }
+      
+      await AsyncStorage.setItem(RECORDS_KEY, JSON.stringify(records));
+    } catch (error) {
+      console.error('Failed to check records:', error);
+    }
+    
+    return newRecords;
+  };
+
+  const checkMilestones = async (tripCount: number, totalDistance: number): Promise<string | null> => {
+    const distanceMilestones = [100, 500, 1000, 2500, 5000, 10000];
+    const tripMilestones = [1, 5, 10, 25, 50, 100, 250, 500];
+    
+    try {
+      const storedDistance = await AsyncStorage.getItem(TOTAL_DISTANCE_KEY);
+      const previousDistance = storedDistance ? parseFloat(storedDistance) : 0;
+      
+      for (const milestone of distanceMilestones) {
+        if (previousDistance < milestone && totalDistance >= milestone) {
+          await AsyncStorage.setItem(TOTAL_DISTANCE_KEY, totalDistance.toString());
+          return `🎉 You've driven ${milestone}+ km total!`;
+        }
+      }
+      
+      await AsyncStorage.setItem(TOTAL_DISTANCE_KEY, totalDistance.toString());
+      
+      for (const milestone of tripMilestones) {
+        if (tripCount === milestone) {
+          return tripCount === 1 
+            ? `🎊 First trip completed! Welcome to the road!`
+            : `🏆 ${milestone} trips completed!`;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check milestones:', error);
+    }
+    
+    return null;
+  };
+
   const stopTracking = useCallback(async (carModel?: string) => {
     if (locationSubscription.current) {
       locationSubscription.current.remove();
@@ -874,6 +971,40 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       const updatedTrips = [finalTrip, ...trips];
       saveTrips(updatedTrips);
       setLastSavedTrip(finalTrip);
+      
+      // Send trip completion notification
+      const durationMins = Math.round(finalTrip.duration / 60);
+      const distanceKm = finalTrip.distance.toFixed(1);
+      await sendLocalNotification(
+        '🏁 Trip Complete!',
+        `${distanceKm} km in ${durationMins} min • Top speed: ${Math.round(finalTrip.topSpeed)} km/h`,
+        { type: 'trip_complete', tripId: finalTrip.id }
+      );
+      
+      // Check for personal records
+      const newRecords = await checkAndUpdateRecords(finalTrip);
+      if (newRecords.length > 0) {
+        setTimeout(async () => {
+          await sendLocalNotification(
+            '🏆 New Personal Record!',
+            newRecords.join(' '),
+            { type: 'personal_record', tripId: finalTrip.id }
+          );
+        }, 2000);
+      }
+      
+      // Check for milestones
+      const totalDistance = updatedTrips.reduce((sum, t) => sum + t.distance, 0);
+      const milestone = await checkMilestones(updatedTrips.length, totalDistance);
+      if (milestone) {
+        setTimeout(async () => {
+          await sendLocalNotification(
+            '🎯 Milestone Reached!',
+            milestone,
+            { type: 'milestone' }
+          );
+        }, 4000);
+      }
     }
 
     setIsTracking(false);
