@@ -235,6 +235,7 @@ const styles = StyleSheet.create({
   },
   statsGrid: {
     gap: 10,
+    marginTop: 16,
   },
   statsRow: {
     flexDirection: 'row',
