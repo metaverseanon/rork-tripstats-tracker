@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Play, Square } from 'lucide-react-native';
 import { useTrips } from '@/providers/TripProvider';
 import { useSettings } from '@/providers/SettingsProvider';
@@ -12,7 +12,7 @@ export default function TrackScreen() {
   const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, getAccelerationLabel, colors } = useSettings();
   const { user } = useUser();
   const [showShareCard, setShowShareCard] = useState(false);
-  const insets = useSafeAreaInsets();
+  
 
   useEffect(() => {
     if (lastSavedTrip && !isTracking) {
@@ -126,8 +126,8 @@ export default function TrackScreen() {
   });
 
   return (
-    <View style={dynamicStyles.container}>
-      <View style={[styles.navHeader, { paddingTop: insets.top + 12 }]}>
+    <SafeAreaView style={dynamicStyles.container} edges={['top']}>
+      <View style={styles.navHeader}>
         <Text style={[styles.navTitle, { color: colors.text }]}>Track</Text>
       </View>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
@@ -220,13 +220,14 @@ export default function TrackScreen() {
           onClose={handleCloseShareCard}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   navHeader: {
     paddingHorizontal: 20,
+    paddingTop: 12,
     paddingBottom: 12,
     alignItems: 'center' as const,
   },
