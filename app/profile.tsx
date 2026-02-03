@@ -469,7 +469,21 @@ export default function ProfileScreen() {
       }
     } catch (error: any) {
       console.error('Profile save error:', error);
-      Alert.alert('Error', `Failed to save profile: ${error?.message || error}`);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      
+      // Extract the most useful error message
+      let errorMessage = 'An unexpected error occurred. Please try again.';
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.data?.message) {
+        errorMessage = error.data.message;
+      } else if (error?.shape?.message) {
+        errorMessage = error.shape.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      Alert.alert('Error', errorMessage);
     } finally {
       setIsSubmitting(false);
     }

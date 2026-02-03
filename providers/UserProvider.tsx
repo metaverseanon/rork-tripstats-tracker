@@ -96,6 +96,7 @@ export const [UserProvider, useUser] = createContextHook(() => {
     const userId = Date.now().toString();
 
     try {
+      console.log('Attempting to register user:', { email, displayName, country, city, carBrand, carModel });
       const result = await trpcClient.user.register.mutate({
         id: userId,
         email,
@@ -106,15 +107,28 @@ export const [UserProvider, useUser] = createContextHook(() => {
         carBrand,
         carModel,
       });
+      console.log('Registration result:', JSON.stringify(result, null, 2));
       
       if (!result.success) {
         const errorMsg = (result as { error?: string }).error || 'Registration failed';
+        console.error('Registration failed with error:', errorMsg);
         throw new Error(errorMsg);
       }
-      console.log('User registered on backend');
-    } catch (error) {
+      console.log('User registered on backend successfully');
+    } catch (error: any) {
       console.error('Failed to register user on backend:', error);
-      throw error;
+      // Extract the most useful error message
+      let errorMessage = 'Registration failed. Please try again.';
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.data?.message) {
+        errorMessage = error.data.message;
+      } else if (error?.shape?.message) {
+        errorMessage = error.shape.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      throw new Error(errorMessage);
     }
 
     const newUser: UserProfile = {
