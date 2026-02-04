@@ -4,19 +4,13 @@ import superjson from "superjson";
 
 import { getDbConfig } from "./db";
 
-export type DbConfig = {
-  endpoint?: string;
-  namespace?: string;
-  token?: string;
-};
-
 export const createContext = async (opts: FetchCreateContextFnOptions) => {
   const db = getDbConfig();
 
   console.log("[tRPC] createContext", {
-    hasDbEndpoint: !!db.endpoint,
-    hasDbNamespace: !!db.namespace,
-    hasDbToken: !!db.token,
+    hasSupabaseUrl: !!db.url,
+    hasAnonKey: !!db.anonKey,
+    hasServiceRoleKey: !!db.serviceRoleKey,
     requestUrl: opts.req.url,
   });
 

@@ -2,9 +2,7 @@ import * as z from "zod";
 import { createTRPCRouter, publicProcedure } from "../create-context";
 import type { DriveMeetup } from "@/types/meetup";
 
-import { getDbConfig } from "../db";
-
-const { endpoint: DB_ENDPOINT, namespace: DB_NAMESPACE, token: DB_TOKEN } = getDbConfig();
+import { getSupabaseRestUrl, getSupabaseHeaders, isDbConfigured } from "../db";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
@@ -143,18 +141,15 @@ async function sendBatchNotifications(messages: ExpoPushMessage[]): Promise<{ se
 }
 
 async function getUsersWithPushTokens(): Promise<UserWithToken[]> {
-  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) {
+  if (!isDbConfigured()) {
     console.log("[PUSH] Database not configured");
     return [];
   }
 
   try {
-    const response = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/users`, {
+    const response = await fetch(getSupabaseRestUrl("users"), {
       method: "GET",
-      headers: {
-        "Authorization": `Bearer ${DB_TOKEN}`,
-        "Content-Type": "application/json",
-      },
+      headers: getSupabaseHeaders(),
     });
 
     if (!response.ok) {
@@ -172,17 +167,14 @@ async function getUsersWithPushTokens(): Promise<UserWithToken[]> {
 }
 
 async function getAllMeetups(): Promise<DriveMeetup[]> {
-  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) {
+  if (!isDbConfigured()) {
     return [];
   }
 
   try {
-    const response = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/meetups`, {
+    const response = await fetch(getSupabaseRestUrl("meetups"), {
       method: "GET",
-      headers: {
-        "Authorization": `Bearer ${DB_TOKEN}`,
-        "Content-Type": "application/json",
-      },
+      headers: getSupabaseHeaders(),
     });
 
     if (!response.ok) return [];
@@ -196,15 +188,12 @@ async function getAllMeetups(): Promise<DriveMeetup[]> {
 }
 
 async function storeMeetup(meetup: DriveMeetup): Promise<boolean> {
-  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) return false;
+  if (!isDbConfigured()) return false;
 
   try {
-    const response = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/meetups`, {
+    const response = await fetch(getSupabaseRestUrl("meetups"), {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${DB_TOKEN}`,
-        "Content-Type": "application/json",
-      },
+      headers: getSupabaseHeaders(),
       body: JSON.stringify(meetup),
     });
 
@@ -216,15 +205,12 @@ async function storeMeetup(meetup: DriveMeetup): Promise<boolean> {
 }
 
 async function updateMeetup(meetupId: string, updates: Partial<DriveMeetup>): Promise<boolean> {
-  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) return false;
+  if (!isDbConfigured()) return false;
 
   try {
-    const response = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/meetups/${meetupId}`, {
+    const response = await fetch(`${getSupabaseRestUrl("meetups")}?id=eq.${meetupId}`, {
       method: "PATCH",
-      headers: {
-        "Authorization": `Bearer ${DB_TOKEN}`,
-        "Content-Type": "application/json",
-      },
+      headers: getSupabaseHeaders(),
       body: JSON.stringify(updates),
     });
 
@@ -236,15 +222,12 @@ async function updateMeetup(meetupId: string, updates: Partial<DriveMeetup>): Pr
 }
 
 async function getAllTrips(): Promise<TripData[]> {
-  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) return [];
+  if (!isDbConfigured()) return [];
 
   try {
-    const response = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/trips`, {
+    const response = await fetch(getSupabaseRestUrl("trips"), {
       method: "GET",
-      headers: {
-        "Authorization": `Bearer ${DB_TOKEN}`,
-        "Content-Type": "application/json",
-      },
+      headers: getSupabaseHeaders(),
     });
 
     if (!response.ok) return [];

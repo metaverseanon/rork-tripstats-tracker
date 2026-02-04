@@ -1,10 +1,9 @@
 import * as z from "zod";
 import { createTRPCRouter, publicProcedure } from "../create-context";
 
-import { getDbConfig } from "../db";
+import { getSupabaseRestUrl, getSupabaseHeaders, isDbConfigured } from "../db";
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const { endpoint: DB_ENDPOINT, namespace: DB_NAMESPACE, token: DB_TOKEN } = getDbConfig();
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
 interface WeeklyStats {
@@ -357,18 +356,15 @@ function getWeekRange(): { start: Date; end: Date; label: string } {
 }
 
 async function getAllUsersWithTrips(): Promise<UserTripData[]> {
-  if (!DB_ENDPOINT || !DB_NAMESPACE || !DB_TOKEN) {
+  if (!isDbConfigured()) {
     console.log("Database not configured");
     return [];
   }
 
   try {
-    const usersResponse = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/users`, {
+    const usersResponse = await fetch(getSupabaseRestUrl("users"), {
       method: "GET",
-      headers: {
-        "Authorization": `Bearer ${DB_TOKEN}`,
-        "Content-Type": "application/json",
-      },
+      headers: getSupabaseHeaders(),
     });
 
     if (!usersResponse.ok) {
@@ -379,12 +375,9 @@ async function getAllUsersWithTrips(): Promise<UserTripData[]> {
     const usersData = await usersResponse.json();
     const users = usersData.items || usersData || [];
 
-    const tripsResponse = await fetch(`${DB_ENDPOINT}/${DB_NAMESPACE}/trips`, {
+    const tripsResponse = await fetch(getSupabaseRestUrl("trips"), {
       method: "GET",
-      headers: {
-        "Authorization": `Bearer ${DB_TOKEN}`,
-        "Content-Type": "application/json",
-      },
+      headers: getSupabaseHeaders(),
     });
 
     let allTrips: any[] = [];
