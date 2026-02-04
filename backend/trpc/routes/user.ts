@@ -275,7 +275,7 @@ async function storeUserInDb(user: StoredUser): Promise<{ success: boolean; erro
       city: user.city,
       car_brand: user.carBrand,
       car_model: user.carModel,
-      created_at: new Date(user.createdAt).toISOString(),
+      created_at: user.createdAt,
       welcome_email_sent: user.welcomeEmailSent,
       push_token: user.pushToken,
       timezone: user.timezone,
