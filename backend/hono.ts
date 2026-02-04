@@ -18,7 +18,7 @@ app.use(
   })
 );
 
-app.get("/", (c) => c.json({ status: "ok", message: "API is running", version: "1.0.3" }));
+app.get("/", (c) => c.json({ status: "ok", message: "API is running", version: "1.0.4" }));
 
 // Debug endpoint to check database config
 app.get("/health", (c) => {
@@ -43,7 +43,7 @@ app.get("/health", (c) => {
       hasNamespace: !!dbNamespace,
       hasToken: !!dbToken,
     },
-    version: "1.0.3",
+    version: "1.0.4",
     timestamp: new Date().toISOString(),
   });
 });
