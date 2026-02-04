@@ -1,7 +1,7 @@
 import * as z from "zod";
 import { createTRPCRouter, publicProcedure } from "../create-context";
 
-import { getDbConfig } from "../db";
+import { getDbConfig, isDbConfigured, getSupabaseHeaders, getSupabaseRestUrl } from "../db";
 
 function getResendApiKey() {
   return process.env.RESEND_API_KEY;
@@ -49,23 +49,15 @@ interface PasswordResetCode {
 }
 
 async function storeResetCode(resetCode: PasswordResetCode): Promise<boolean> {
-  const { endpoint, namespace, token } = getDbConfig();
-  if (!endpoint || !namespace || !token) {
-    console.log("[DB] Database not configured", {
-      hasEndpoint: !!endpoint,
-      hasNamespace: !!namespace,
-      hasToken: !!token,
-    });
+  if (!isDbConfigured()) {
+    console.log("[DB] Database not configured");
     return false;
   }
 
   try {
-    const response = await fetch(`${endpoint}/${namespace}/password_reset_codes`, {
+    const response = await fetch(getSupabaseRestUrl("password_reset_codes"), {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: getSupabaseHeaders(),
       body: JSON.stringify(resetCode),
     });
 
@@ -84,19 +76,16 @@ async function storeResetCode(resetCode: PasswordResetCode): Promise<boolean> {
 }
 
 async function getResetCode(email: string): Promise<PasswordResetCode | null> {
-  const { endpoint, namespace, token } = getDbConfig();
-  if (!endpoint || !namespace || !token) {
+  if (!isDbConfigured()) {
     console.log("Database not configured");
     return null;
   }
 
   try {
-    const response = await fetch(`${endpoint}/${namespace}/password_reset_codes`, {
+    const url = `${getSupabaseRestUrl("password_reset_codes")}?email=ilike.${encodeURIComponent(email.toLowerCase())}`;
+    const response = await fetch(url, {
       method: "GET",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: getSupabaseHeaders(),
     });
 
     if (!response.ok) {
@@ -104,10 +93,8 @@ async function getResetCode(email: string): Promise<PasswordResetCode | null> {
       return null;
     }
 
-    const data = await response.json();
-    const codes = data.items || data || [];
-    const code = codes.find((c: PasswordResetCode) => c.email.toLowerCase() === email.toLowerCase());
-    return code || null;
+    const codes = await response.json();
+    return codes[0] || null;
   } catch (error) {
     console.error("Error fetching reset code:", error);
     return null;
@@ -115,23 +102,16 @@ async function getResetCode(email: string): Promise<PasswordResetCode | null> {
 }
 
 async function deleteResetCode(id: string): Promise<boolean> {
-  const { endpoint, namespace, token } = getDbConfig();
-  if (!endpoint || !namespace || !token) {
-    console.log("[DB] Database not configured", {
-      hasEndpoint: !!endpoint,
-      hasNamespace: !!namespace,
-      hasToken: !!token,
-    });
+  if (!isDbConfigured()) {
+    console.log("[DB] Database not configured");
     return false;
   }
 
   try {
-    const response = await fetch(`${endpoint}/${namespace}/password_reset_codes/${id}`, {
+    const url = `${getSupabaseRestUrl("password_reset_codes")}?id=eq.${encodeURIComponent(id)}`;
+    const response = await fetch(url, {
       method: "DELETE",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: getSupabaseHeaders(),
     });
 
     if (!response.ok) {
@@ -276,27 +256,36 @@ async function sendWelcomeEmail(email: string, displayName: string): Promise<boo
 }
 
 async function storeUserInDb(user: StoredUser): Promise<{ success: boolean; error?: string }> {
-  const { endpoint, namespace, token } = getDbConfig();
-  if (!endpoint || !namespace || !token) {
-    console.log("[DB] Database not configured, skipping user storage", {
-      hasEndpoint: !!endpoint,
-      hasNamespace: !!namespace,
-      hasToken: !!token,
-    });
+  if (!isDbConfigured()) {
+    console.log("[DB] Database not configured, skipping user storage");
     return { success: false, error: "Database not configured" };
   }
 
   try {
     console.log("Storing user in database:", user.email, "id:", user.id);
-    console.log("Database URL:", `${endpoint}/${namespace}/users`);
+    const url = getSupabaseRestUrl("users");
+    console.log("Database URL:", url);
     
-    const response = await fetch(`${endpoint}/${namespace}/users`, {
+    const dbUser = {
+      id: user.id,
+      email: user.email,
+      display_name: user.displayName,
+      password_hash: user.passwordHash,
+      country: user.country,
+      city: user.city,
+      car_brand: user.carBrand,
+      car_model: user.carModel,
+      created_at: new Date(user.createdAt).toISOString(),
+      welcome_email_sent: user.welcomeEmailSent,
+      push_token: user.pushToken,
+      timezone: user.timezone,
+      weekly_recap_enabled: user.weeklyRecapEnabled,
+    };
+    
+    const response = await fetch(url, {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(user),
+      headers: getSupabaseHeaders(),
+      body: JSON.stringify(dbUser),
     });
 
     if (!response.ok) {
@@ -314,24 +303,29 @@ async function storeUserInDb(user: StoredUser): Promise<{ success: boolean; erro
 }
 
 async function updateUserInDb(userId: string, updates: Partial<StoredUser>): Promise<boolean> {
-  const { endpoint, namespace, token } = getDbConfig();
-  if (!endpoint || !namespace || !token) {
-    console.log("[DB] Database not configured", {
-      hasEndpoint: !!endpoint,
-      hasNamespace: !!namespace,
-      hasToken: !!token,
-    });
+  if (!isDbConfigured()) {
+    console.log("[DB] Database not configured");
     return false;
   }
 
   try {
-    const response = await fetch(`${endpoint}/${namespace}/users/${userId}`, {
+    const dbUpdates: Record<string, unknown> = {};
+    if (updates.displayName !== undefined) dbUpdates.display_name = updates.displayName;
+    if (updates.passwordHash !== undefined) dbUpdates.password_hash = updates.passwordHash;
+    if (updates.country !== undefined) dbUpdates.country = updates.country;
+    if (updates.city !== undefined) dbUpdates.city = updates.city;
+    if (updates.carBrand !== undefined) dbUpdates.car_brand = updates.carBrand;
+    if (updates.carModel !== undefined) dbUpdates.car_model = updates.carModel;
+    if (updates.welcomeEmailSent !== undefined) dbUpdates.welcome_email_sent = updates.welcomeEmailSent;
+    if (updates.pushToken !== undefined) dbUpdates.push_token = updates.pushToken;
+    if (updates.timezone !== undefined) dbUpdates.timezone = updates.timezone;
+    if (updates.weeklyRecapEnabled !== undefined) dbUpdates.weekly_recap_enabled = updates.weeklyRecapEnabled;
+
+    const url = `${getSupabaseRestUrl("users")}?id=eq.${encodeURIComponent(userId)}`;
+    const response = await fetch(url, {
       method: "PATCH",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(updates),
+      headers: getSupabaseHeaders(),
+      body: JSON.stringify(dbUpdates),
     });
 
     if (!response.ok) {
@@ -354,23 +348,15 @@ async function getUsersWithPushTokens(): Promise<StoredUser[]> {
 }
 
 async function getAllUsers(): Promise<StoredUser[]> {
-  const { endpoint, namespace, token } = getDbConfig();
-  if (!endpoint || !namespace || !token) {
-    console.log("[DB] Database not configured", {
-      hasEndpoint: !!endpoint,
-      hasNamespace: !!namespace,
-      hasToken: !!token,
-    });
+  if (!isDbConfigured()) {
+    console.log("[DB] Database not configured");
     return [];
   }
 
   try {
-    const response = await fetch(`${endpoint}/${namespace}/users`, {
+    const response = await fetch(getSupabaseRestUrl("users"), {
       method: "GET",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: getSupabaseHeaders(),
     });
 
     if (!response.ok) {
@@ -379,7 +365,21 @@ async function getAllUsers(): Promise<StoredUser[]> {
     }
 
     const data = await response.json();
-    return data.items || data || [];
+    return data.map((row: Record<string, unknown>) => ({
+      id: row.id as string,
+      email: row.email as string,
+      displayName: row.display_name as string,
+      passwordHash: row.password_hash as string | undefined,
+      country: row.country as string | undefined,
+      city: row.city as string | undefined,
+      carBrand: row.car_brand as string | undefined,
+      carModel: row.car_model as string | undefined,
+      createdAt: row.created_at ? new Date(row.created_at as string).getTime() : Date.now(),
+      welcomeEmailSent: row.welcome_email_sent as boolean,
+      pushToken: row.push_token as string | null | undefined,
+      timezone: row.timezone as string | undefined,
+      weeklyRecapEnabled: row.weekly_recap_enabled as boolean | undefined,
+    }));
   } catch (error) {
     console.error("Error fetching users:", error);
     return [];
