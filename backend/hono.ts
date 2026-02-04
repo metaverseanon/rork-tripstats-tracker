@@ -18,7 +18,35 @@ app.use(
   })
 );
 
-app.get("/", (c) => c.json({ status: "ok", message: "API is running", version: "1.0.2" }));
+app.get("/", (c) => c.json({ status: "ok", message: "API is running", version: "1.0.3" }));
+
+// Debug endpoint to check database config
+app.get("/health", (c) => {
+  const dbEndpoint = process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT;
+  const dbNamespace = process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE;
+  const dbToken = process.env.EXPO_PUBLIC_RORK_DB_TOKEN;
+  
+  const dbConfigured = !!(dbEndpoint && dbNamespace && dbToken);
+  
+  console.log("[HEALTH] DB Config check:", {
+    hasEndpoint: !!dbEndpoint,
+    hasNamespace: !!dbNamespace,
+    hasToken: !!dbToken,
+    configured: dbConfigured,
+  });
+  
+  return c.json({
+    status: dbConfigured ? "ok" : "error",
+    database: {
+      configured: dbConfigured,
+      hasEndpoint: !!dbEndpoint,
+      hasNamespace: !!dbNamespace,
+      hasToken: !!dbToken,
+    },
+    version: "1.0.3",
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // Cron endpoint for weekly recap (Sunday 9pm)
 // Use with cron-job.org or similar: GET https://your-app.rork.app/api/cron/weekly-recap
