@@ -1,16 +1,10 @@
 import * as z from "zod";
 import { createTRPCRouter, publicProcedure } from "../create-context";
 
+import { getDbConfig } from "../db";
+
 function getResendApiKey() {
   return process.env.RESEND_API_KEY;
-}
-
-function getDbConfig() {
-  return {
-    endpoint: process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT,
-    namespace: process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE,
-    token: process.env.EXPO_PUBLIC_RORK_DB_TOKEN,
-  };
 }
 
 interface StoredUser {
@@ -57,7 +51,11 @@ interface PasswordResetCode {
 async function storeResetCode(resetCode: PasswordResetCode): Promise<boolean> {
   const { endpoint, namespace, token } = getDbConfig();
   if (!endpoint || !namespace || !token) {
-    console.log("Database not configured");
+    console.log("[DB] Database not configured", {
+      hasEndpoint: !!endpoint,
+      hasNamespace: !!namespace,
+      hasToken: !!token,
+    });
     return false;
   }
 
@@ -119,7 +117,11 @@ async function getResetCode(email: string): Promise<PasswordResetCode | null> {
 async function deleteResetCode(id: string): Promise<boolean> {
   const { endpoint, namespace, token } = getDbConfig();
   if (!endpoint || !namespace || !token) {
-    console.log("Database not configured");
+    console.log("[DB] Database not configured", {
+      hasEndpoint: !!endpoint,
+      hasNamespace: !!namespace,
+      hasToken: !!token,
+    });
     return false;
   }
 
@@ -276,8 +278,11 @@ async function sendWelcomeEmail(email: string, displayName: string): Promise<boo
 async function storeUserInDb(user: StoredUser): Promise<{ success: boolean; error?: string }> {
   const { endpoint, namespace, token } = getDbConfig();
   if (!endpoint || !namespace || !token) {
-    console.log("Database not configured, skipping user storage");
-    console.log("Config check - endpoint:", !!endpoint, "namespace:", !!namespace, "token:", !!token);
+    console.log("[DB] Database not configured, skipping user storage", {
+      hasEndpoint: !!endpoint,
+      hasNamespace: !!namespace,
+      hasToken: !!token,
+    });
     return { success: false, error: "Database not configured" };
   }
 
@@ -311,7 +316,11 @@ async function storeUserInDb(user: StoredUser): Promise<{ success: boolean; erro
 async function updateUserInDb(userId: string, updates: Partial<StoredUser>): Promise<boolean> {
   const { endpoint, namespace, token } = getDbConfig();
   if (!endpoint || !namespace || !token) {
-    console.log("Database not configured");
+    console.log("[DB] Database not configured", {
+      hasEndpoint: !!endpoint,
+      hasNamespace: !!namespace,
+      hasToken: !!token,
+    });
     return false;
   }
 
@@ -347,7 +356,11 @@ async function getUsersWithPushTokens(): Promise<StoredUser[]> {
 async function getAllUsers(): Promise<StoredUser[]> {
   const { endpoint, namespace, token } = getDbConfig();
   if (!endpoint || !namespace || !token) {
-    console.log("Database not configured");
+    console.log("[DB] Database not configured", {
+      hasEndpoint: !!endpoint,
+      hasNamespace: !!namespace,
+      hasToken: !!token,
+    });
     return [];
   }
 

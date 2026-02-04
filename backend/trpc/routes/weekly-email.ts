@@ -1,10 +1,10 @@
 import * as z from "zod";
 import { createTRPCRouter, publicProcedure } from "../create-context";
 
+import { getDbConfig } from "../db";
+
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const DB_ENDPOINT = process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT;
-const DB_NAMESPACE = process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE;
-const DB_TOKEN = process.env.EXPO_PUBLIC_RORK_DB_TOKEN;
+const { endpoint: DB_ENDPOINT, namespace: DB_NAMESPACE, token: DB_TOKEN } = getDbConfig();
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
 interface WeeklyStats {

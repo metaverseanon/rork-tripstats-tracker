@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 
 import { appRouter } from "./trpc/app-router";
 import { createContext } from "./trpc/create-context";
+import { getDbConfig } from "./trpc/db";
 
 // Backend v1.0.6 - Force redeploy
 const app = new Hono();
@@ -23,19 +24,28 @@ app.get("/", (c) => c.json({ status: "ok", message: "API is running", version: "
 
 // Debug endpoint to check database config
 app.get("/health", (c) => {
-  const dbEndpoint = process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT;
-  const dbNamespace = process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE;
-  const dbToken = process.env.EXPO_PUBLIC_RORK_DB_TOKEN;
-  
+  const dbEndpoint =
+    process.env.RORK_DB_ENDPOINT ??
+    process.env.DB_ENDPOINT ??
+    process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT;
+  const dbNamespace =
+    process.env.RORK_DB_NAMESPACE ??
+    process.env.DB_NAMESPACE ??
+    process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE;
+  const dbToken =
+    process.env.RORK_DB_TOKEN ??
+    process.env.DB_TOKEN ??
+    process.env.EXPO_PUBLIC_RORK_DB_TOKEN;
+
   const dbConfigured = !!(dbEndpoint && dbNamespace && dbToken);
-  
+
   console.log("[HEALTH] DB Config check:", {
     hasEndpoint: !!dbEndpoint,
     hasNamespace: !!dbNamespace,
     hasToken: !!dbToken,
     configured: dbConfigured,
   });
-  
+
   return c.json({
     status: dbConfigured ? "ok" : "error",
     database: {
@@ -44,7 +54,7 @@ app.get("/health", (c) => {
       hasNamespace: !!dbNamespace,
       hasToken: !!dbToken,
     },
-    version: "1.0.5",
+    version: "1.0.6",
     timestamp: new Date().toISOString(),
   });
 });
@@ -64,7 +74,7 @@ app.get("/cron/weekly-recap", async (c) => {
   console.log("[CRON] Weekly recap triggered at", new Date().toISOString());
   
   try {
-    const caller = appRouter.createCaller({ req: c.req.raw });
+    const caller = appRouter.createCaller({ req: c.req.raw, db: getDbConfig() });
     const result = await caller.weeklyEmail.sendWeeklyRecapWithPush({});
     
     console.log("[CRON] Weekly recap completed:", result);

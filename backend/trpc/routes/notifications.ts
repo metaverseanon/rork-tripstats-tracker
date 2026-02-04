@@ -2,9 +2,9 @@ import * as z from "zod";
 import { createTRPCRouter, publicProcedure } from "../create-context";
 import type { DriveMeetup } from "@/types/meetup";
 
-const DB_ENDPOINT = process.env.EXPO_PUBLIC_RORK_DB_ENDPOINT;
-const DB_NAMESPACE = process.env.EXPO_PUBLIC_RORK_DB_NAMESPACE;
-const DB_TOKEN = process.env.EXPO_PUBLIC_RORK_DB_TOKEN;
+import { getDbConfig } from "../db";
+
+const { endpoint: DB_ENDPOINT, namespace: DB_NAMESPACE, token: DB_TOKEN } = getDbConfig();
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
