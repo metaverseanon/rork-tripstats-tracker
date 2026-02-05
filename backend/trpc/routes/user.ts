@@ -55,10 +55,18 @@ async function storeResetCode(resetCode: PasswordResetCode): Promise<boolean> {
   }
 
   try {
+    const dbResetCode = {
+      id: resetCode.id,
+      email: resetCode.email,
+      code: resetCode.code,
+      expires_at: resetCode.expiresAt,
+      created_at: resetCode.createdAt,
+    };
+
     const response = await fetch(getSupabaseRestUrl("password_reset_codes"), {
       method: "POST",
       headers: getSupabaseHeaders(),
-      body: JSON.stringify(resetCode),
+      body: JSON.stringify(dbResetCode),
     });
 
     if (!response.ok) {
@@ -94,7 +102,15 @@ async function getResetCode(email: string): Promise<PasswordResetCode | null> {
     }
 
     const codes = await response.json();
-    return codes[0] || null;
+    if (!codes[0]) return null;
+    const row = codes[0];
+    return {
+      id: row.id,
+      email: row.email,
+      code: row.code,
+      expiresAt: row.expires_at,
+      createdAt: row.created_at,
+    };
   } catch (error) {
     console.error("Error fetching reset code:", error);
     return null;
