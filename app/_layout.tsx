@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
   },
 });
 
-const FONT_LOAD_TIMEOUT = 3000;
+const FONT_LOAD_TIMEOUT = 10000;
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -208,6 +208,12 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
+    if (fontError) {
+      console.warn('Font loading error:', fontError);
+    }
+    if (fontsLoaded) {
+      console.log('Orbitron fonts loaded successfully');
+    }
     if (fontsLoaded || fontError || timedOut) {
       SplashScreen.hideAsync();
     }
