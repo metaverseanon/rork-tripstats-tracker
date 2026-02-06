@@ -302,6 +302,15 @@ export default function UserProfileScreen() {
                               </View>
                             </View>
                             <View style={styles.statItem}>
+                              <View style={[styles.statIconBg, { backgroundColor: colors.accent + '20' }]}>
+                                <Zap size={18} color={colors.accent} />
+                              </View>
+                              <View style={styles.statTextGroup}>
+                                <Text style={styles.statValue}>{Math.round(convertSpeed(car.topSpeed))} {getSpeedLabel()}</Text>
+                                <Text style={styles.statLabel}>Top Speed</Text>
+                              </View>
+                            </View>
+                            <View style={styles.statItem}>
                               <View style={[styles.statIconBg, { backgroundColor: colors.success + '20' }]}>
                                 <Gauge size={18} color={colors.success} />
                               </View>
