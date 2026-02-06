@@ -887,7 +887,7 @@ export const userRouter = createTRPCRouter({
         },
         body: JSON.stringify({
           from: 'RedLine Feedback <feedback@redlineapp.io>',
-          to: ['support@redlineapp.io'],
+          to: ['info@redlineapp.io'],
           subject: `Feedback from ${input.displayName}`,
           html: `
             <h2>New Feedback from RedLine</h2>
