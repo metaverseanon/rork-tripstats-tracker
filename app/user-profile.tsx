@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState, useRef } from 'react';
+import React, { useMemo, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -6,16 +6,21 @@ import {
   ScrollView,
   Image,
   TouchableOpacity,
-  Animated,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { MapPin, Car, Zap, Navigation, Gauge, Activity, CornerDownRight, Timer, Route, Trophy, Calendar } from 'lucide-react-native';
+import { MapPin, Car, Zap, Navigation, Gauge, Activity, CornerDownRight, Timer, Route, Trophy, Calendar, ChevronDown } from 'lucide-react-native';
 import { useSettings } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
 import { useTrips } from '@/providers/TripProvider';
 import { ThemeColors } from '@/constants/colors';
 import { TripStats } from '@/types/trip';
 
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface CarStats {
   carKey: string;
@@ -39,8 +44,7 @@ export default function UserProfileScreen() {
   const { user } = useUser();
   const { trips } = useTrips();
   const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, colors } = useSettings();
-  const [selectedCarIndex, setSelectedCarIndex] = useState(0);
-  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const [expandedCarKey, setExpandedCarKey] = useState<string | null>(null);
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -140,15 +144,10 @@ export default function UserProfileScreen() {
     return result;
   }, [profileUser, trips]);
 
-  const selectCar = useCallback((index: number) => {
-    Animated.sequence([
-      Animated.timing(fadeAnim, { toValue: 0.3, duration: 100, useNativeDriver: true }),
-      Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
-    ]).start();
-    setSelectedCarIndex(index);
-  }, [fadeAnim]);
-
-  const selectedCar = carStats[selectedCarIndex] || null;
+  const toggleCar = useCallback((carKey: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedCarKey(prev => prev === carKey ? null : carKey);
+  }, []);
 
   const totalTrips = trips.length;
   const totalDistance = trips.reduce((sum, t) => sum + t.distance, 0);
@@ -241,132 +240,117 @@ export default function UserProfileScreen() {
               <Text style={styles.sectionTitle}>Garage</Text>
             </View>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.carCardsContainer}
-              style={styles.carCardsScroll}
-            >
-              {carStats.map((car, index) => (
-                <TouchableOpacity
-                  key={car.carKey}
-                  style={[styles.carCard, selectedCarIndex === index && styles.carCardSelected]}
-                  onPress={() => selectCar(index)}
-                  activeOpacity={0.8}
-                >
-                  {car.picture ? (
-                    <Image source={{ uri: car.picture }} style={styles.carCardImage} />
-                  ) : (
-                    <View style={styles.carCardImagePlaceholder}>
-                      <Car size={28} color={selectedCarIndex === index ? colors.accent : colors.textLight} />
-                    </View>
-                  )}
-                  <Text style={[styles.carCardBrand, selectedCarIndex === index && styles.carCardBrandSelected]}>
-                    {car.brand}
-                  </Text>
-                  <Text style={[styles.carCardModel, selectedCarIndex === index && styles.carCardModelSelected]} numberOfLines={1}>
-                    {car.model}
-                  </Text>
-                  {car.totalTrips > 0 && (
-                    <Text style={[styles.carCardTrips, selectedCarIndex === index && styles.carCardTripsSelected]}>
-                      {car.totalTrips} {car.totalTrips === 1 ? 'trip' : 'trips'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            {selectedCar && (
-              <Animated.View style={[styles.statsContainer, { opacity: fadeAnim }]}>
-                <View style={styles.statsHeader}>
-                  <Text style={styles.statsTitle}>{selectedCar.brand} {selectedCar.model}</Text>
-                  {selectedCar.lastDriveDate > 0 && (
-                    <Text style={styles.statsSubtitle}>
-                      Last drive: {new Date(selectedCar.lastDriveDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </Text>
-                  )}
-                </View>
-
-                <View style={styles.statsGrid}>
-                  <View style={styles.statItem}>
-                    <View style={[styles.statIconBg, { backgroundColor: colors.warning + '20' }]}>
-                      <Zap size={16} color={colors.warning} />
-                    </View>
-                    <Text style={styles.statValue}>{Math.round(convertSpeed(selectedCar.topSpeed))} {getSpeedLabel()}</Text>
-                    <Text style={styles.statLabel}>Top Speed</Text>
-                  </View>
-
-                  <View style={styles.statItem}>
-                    <View style={[styles.statIconBg, { backgroundColor: colors.accent + '20' }]}>
-                      <Navigation size={16} color={colors.accent} />
-                    </View>
-                    <Text style={styles.statValue}>{convertDistance(selectedCar.totalDistance).toFixed(1)} {getDistanceLabel()}</Text>
-                    <Text style={styles.statLabel}>Distance</Text>
-                  </View>
-
-                  <View style={styles.statItem}>
-                    <View style={[styles.statIconBg, { backgroundColor: colors.success + '20' }]}>
-                      <Gauge size={16} color={colors.success} />
-                    </View>
-                    <Text style={styles.statValue}>{Math.round(convertSpeed(selectedCar.avgSpeed))} {getSpeedLabel()}</Text>
-                    <Text style={styles.statLabel}>Avg Speed</Text>
-                  </View>
-
-                  <View style={styles.statItem}>
-                    <View style={[styles.statIconBg, { backgroundColor: colors.primary + '20' }]}>
-                      <CornerDownRight size={16} color={colors.primary} />
-                    </View>
-                    <Text style={styles.statValue}>
-                      {selectedCar.topCornerSpeed > 0
-                        ? `${Math.round(convertSpeed(selectedCar.topCornerSpeed))} ${getSpeedLabel()}`
-                        : '—'}
-                    </Text>
-                    <Text style={styles.statLabel}>Corner Speed</Text>
-                  </View>
-
-                  <View style={styles.statItem}>
-                    <View style={[styles.statIconBg, { backgroundColor: colors.danger + '20' }]}>
-                      <Activity size={16} color={colors.danger} />
-                    </View>
-                    <Text style={styles.statValue}>{selectedCar.maxGForce > 0 ? `${selectedCar.maxGForce.toFixed(2)} G` : '—'}</Text>
-                    <Text style={styles.statLabel}>Max G-Force</Text>
-                  </View>
-
-                  <View style={styles.statItem}>
-                    <View style={[styles.statIconBg, { backgroundColor: colors.warning + '20' }]}>
-                      <Timer size={16} color={colors.warning} />
-                    </View>
-                    <Text style={styles.statValue}>{selectedCar.best0to100 ? `${selectedCar.best0to100.toFixed(2)}s` : '—'}</Text>
-                    <Text style={styles.statLabel}>0-100</Text>
-                  </View>
-
-                  {selectedCar.best0to200 && (
-                    <View style={styles.statItem}>
-                      <View style={[styles.statIconBg, { backgroundColor: colors.accent + '20' }]}>
-                        <Timer size={16} color={colors.accent} />
+            <View style={styles.garageList}>
+              {carStats.map((car) => {
+                const isExpanded = expandedCarKey === car.carKey;
+                return (
+                  <View key={car.carKey} style={[styles.garageItem, isExpanded && styles.garageItemExpanded]}>
+                    <TouchableOpacity
+                      style={styles.garageItemRow}
+                      onPress={() => toggleCar(car.carKey)}
+                      activeOpacity={0.7}
+                    >
+                      {car.picture ? (
+                        <Image source={{ uri: car.picture }} style={styles.garageItemImage} />
+                      ) : (
+                        <View style={styles.garageItemImagePlaceholder}>
+                          <Car size={22} color={isExpanded ? colors.accent : colors.textLight} />
+                        </View>
+                      )}
+                      <View style={styles.garageItemInfo}>
+                        <Text style={styles.garageItemBrand}>{car.brand}</Text>
+                        <Text style={styles.garageItemModel}>{car.model}</Text>
+                        {car.totalTrips > 0 && (
+                          <Text style={styles.garageItemTrips}>{car.totalTrips} {car.totalTrips === 1 ? 'trip' : 'trips'}</Text>
+                        )}
                       </View>
-                      <Text style={styles.statValue}>{selectedCar.best0to200.toFixed(2)}s</Text>
-                      <Text style={styles.statLabel}>0-200</Text>
-                    </View>
-                  )}
+                      <View style={[styles.garageChevron, isExpanded && styles.garageChevronExpanded]}>
+                        <ChevronDown size={18} color={colors.textLight} />
+                      </View>
+                    </TouchableOpacity>
 
-                  <View style={styles.statItem}>
-                    <View style={[styles.statIconBg, { backgroundColor: colors.textLight + '20' }]}>
-                      <Trophy size={16} color={colors.textLight} />
-                    </View>
-                    <Text style={styles.statValue}>{formatDuration(selectedCar.totalDuration)}</Text>
-                    <Text style={styles.statLabel}>Drive Time</Text>
+                    {isExpanded && (
+                      <View style={styles.garageStatsPanel}>
+                        {car.lastDriveDate > 0 && (
+                          <Text style={styles.garageLastDrive}>
+                            Last drive: {new Date(car.lastDriveDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </Text>
+                        )}
+                        {car.totalTrips === 0 ? (
+                          <View style={styles.garageNoStats}>
+                            <Car size={24} color={colors.textLight} />
+                            <Text style={styles.garageNoStatsText}>No trips recorded yet</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.statsGrid}>
+                            <View style={styles.statItem}>
+                              <View style={[styles.statIconBg, { backgroundColor: colors.warning + '20' }]}>
+                                <Zap size={16} color={colors.warning} />
+                              </View>
+                              <Text style={styles.statValue}>{Math.round(convertSpeed(car.topSpeed))} {getSpeedLabel()}</Text>
+                              <Text style={styles.statLabel}>Top Speed</Text>
+                            </View>
+                            <View style={styles.statItem}>
+                              <View style={[styles.statIconBg, { backgroundColor: colors.accent + '20' }]}>
+                                <Navigation size={16} color={colors.accent} />
+                              </View>
+                              <Text style={styles.statValue}>{convertDistance(car.totalDistance).toFixed(1)} {getDistanceLabel()}</Text>
+                              <Text style={styles.statLabel}>Distance</Text>
+                            </View>
+                            <View style={styles.statItem}>
+                              <View style={[styles.statIconBg, { backgroundColor: colors.success + '20' }]}>
+                                <Gauge size={16} color={colors.success} />
+                              </View>
+                              <Text style={styles.statValue}>{Math.round(convertSpeed(car.avgSpeed))} {getSpeedLabel()}</Text>
+                              <Text style={styles.statLabel}>Avg Speed</Text>
+                            </View>
+                            <View style={styles.statItem}>
+                              <View style={[styles.statIconBg, { backgroundColor: colors.primary + '20' }]}>
+                                <CornerDownRight size={16} color={colors.primary} />
+                              </View>
+                              <Text style={styles.statValue}>
+                                {car.topCornerSpeed > 0 ? `${Math.round(convertSpeed(car.topCornerSpeed))} ${getSpeedLabel()}` : '—'}
+                              </Text>
+                              <Text style={styles.statLabel}>Corner Speed</Text>
+                            </View>
+                            <View style={styles.statItem}>
+                              <View style={[styles.statIconBg, { backgroundColor: colors.danger + '20' }]}>
+                                <Activity size={16} color={colors.danger} />
+                              </View>
+                              <Text style={styles.statValue}>{car.maxGForce > 0 ? `${car.maxGForce.toFixed(2)} G` : '—'}</Text>
+                              <Text style={styles.statLabel}>Max G-Force</Text>
+                            </View>
+                            <View style={styles.statItem}>
+                              <View style={[styles.statIconBg, { backgroundColor: colors.warning + '20' }]}>
+                                <Timer size={16} color={colors.warning} />
+                              </View>
+                              <Text style={styles.statValue}>{car.best0to100 ? `${car.best0to100.toFixed(2)}s` : '—'}</Text>
+                              <Text style={styles.statLabel}>0-100</Text>
+                            </View>
+                            {car.best0to200 && (
+                              <View style={styles.statItem}>
+                                <View style={[styles.statIconBg, { backgroundColor: colors.accent + '20' }]}>
+                                  <Timer size={16} color={colors.accent} />
+                                </View>
+                                <Text style={styles.statValue}>{car.best0to200.toFixed(2)}s</Text>
+                                <Text style={styles.statLabel}>0-200</Text>
+                              </View>
+                            )}
+                            <View style={styles.statItem}>
+                              <View style={[styles.statIconBg, { backgroundColor: colors.textLight + '20' }]}>
+                                <Trophy size={16} color={colors.textLight} />
+                              </View>
+                              <Text style={styles.statValue}>{formatDuration(car.totalDuration)}</Text>
+                              <Text style={styles.statLabel}>Drive Time</Text>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    )}
                   </View>
-                </View>
-              </Animated.View>
-            )}
-
-            {carStats.length > 0 && selectedCar && selectedCar.totalTrips === 0 && (
-              <View style={styles.noStatsCard}>
-                <Car size={32} color={colors.textLight} />
-                <Text style={styles.noStatsText}>No trips recorded with this car yet</Text>
-              </View>
-            )}
+                );
+              })}
+            </View>
           </>
         )}
 
@@ -493,93 +477,92 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: 'Orbitron_600SemiBold',
     color: colors.text,
   },
-  carCardsScroll: {
+  garageList: {
+    paddingHorizontal: 16,
+    gap: 10,
     marginBottom: 20,
   },
-  carCardsContainer: {
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  carCard: {
-    width: 140,
+  garageItem: {
     backgroundColor: colors.cardLight,
     borderRadius: 14,
-    padding: 12,
-    alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: colors.border,
+    overflow: 'hidden',
   },
-  carCardSelected: {
+  garageItemExpanded: {
     borderColor: colors.accent,
-    backgroundColor: colors.accent + '10',
   },
-  carCardImage: {
-    width: 100,
-    height: 60,
-    borderRadius: 8,
-    marginBottom: 8,
+  garageItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 12,
   },
-  carCardImagePlaceholder: {
-    width: 100,
-    height: 60,
-    borderRadius: 8,
+  garageItemImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+  },
+  garageItemImagePlaceholder: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
     backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
   },
-  carCardBrand: {
-    fontSize: 11,
+  garageItemInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  garageItemBrand: {
+    fontSize: 13,
     fontFamily: 'Orbitron_600SemiBold',
     color: colors.text,
-    textAlign: 'center',
   },
-  carCardBrandSelected: {
+  garageItemModel: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+  },
+  garageItemTrips: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_500Medium',
     color: colors.accent,
+    marginTop: 2,
   },
-  carCardModel: {
+  garageChevron: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  garageChevronExpanded: {
+    transform: [{ rotate: '180deg' }],
+    backgroundColor: colors.accent + '20',
+  },
+  garageStatsPanel: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    padding: 14,
+  },
+  garageLastDrive: {
     fontSize: 10,
     fontFamily: 'Orbitron_400Regular',
     color: colors.textLight,
-    textAlign: 'center',
-    marginTop: 2,
+    marginBottom: 12,
   },
-  carCardModelSelected: {
-    color: colors.text,
+  garageNoStats: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    gap: 6,
   },
-  carCardTrips: {
-    fontSize: 9,
-    fontFamily: 'Orbitron_500Medium',
-    color: colors.textLight,
-    marginTop: 4,
-  },
-  carCardTripsSelected: {
-    color: colors.accent,
-  },
-  statsContainer: {
-    marginHorizontal: 16,
-    backgroundColor: colors.cardLight,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  statsHeader: {
-    marginBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingBottom: 12,
-  },
-  statsTitle: {
-    fontSize: 14,
-    fontFamily: 'Orbitron_600SemiBold',
-    color: colors.text,
-  },
-  statsSubtitle: {
-    fontSize: 11,
+  garageNoStatsText: {
+    fontSize: 12,
     fontFamily: 'Orbitron_400Regular',
     color: colors.textLight,
-    marginTop: 3,
   },
   statsGrid: {
     flexDirection: 'row',
