@@ -306,8 +306,8 @@ export default function UserProfileScreen() {
                                 <Zap size={18} color={colors.accent} />
                               </View>
                               <View style={styles.statTextGroup}>
-                                <Text style={styles.statValue}>{Math.round(convertSpeed(car.topSpeed))} {getSpeedLabel()}</Text>
-                                <Text style={styles.statLabel}>Top Speed</Text>
+                                <Text style={styles.statValue}>{car.topCornerSpeed > 0 ? `${Math.round(convertSpeed(car.topCornerSpeed))} ${getSpeedLabel()}` : '—'}</Text>
+                                <Text style={styles.statLabel}>Corner Speed</Text>
                               </View>
                             </View>
                             <View style={styles.statItem}>
