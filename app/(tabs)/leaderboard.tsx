@@ -6,6 +6,7 @@ import * as Location from 'expo-location';
 import type { DriveMeetup } from '@/types/meetup';
 import * as Haptics from 'expo-haptics';
 import { trpc } from '@/lib/trpc';
+import { router } from 'expo-router';
 import MapView, { Polyline, Marker } from 'react-native-maps';
 import { useTrips } from '@/providers/TripProvider';
 import { useSettings } from '@/providers/SettingsProvider';
@@ -1104,6 +1105,18 @@ export default function LeaderboardScreen() {
                     </View>
                   );
                 })()}
+
+                <TouchableOpacity
+                  style={styles.viewProfileButton}
+                  onPress={() => {
+                    closeTripDetail();
+                    router.push('/user-profile');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Users size={16} color={colors.textInverted} />
+                  <Text style={styles.viewProfileButtonText}>View Profile</Text>
+                </TouchableOpacity>
               </ScrollView>
             )}
           </View>
@@ -2574,5 +2587,21 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Orbitron_600SemiBold',
     color: colors.danger,
+  },
+  viewProfileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.accent,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 16,
+    marginBottom: 24,
+  },
+  viewProfileButtonText: {
+    fontSize: 13,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.textInverted,
   },
 });

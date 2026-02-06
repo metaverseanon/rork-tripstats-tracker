@@ -174,6 +174,7 @@ function RootLayoutNav() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="profile" options={{ presentation: "card" }} />
+      <Stack.Screen name="user-profile" options={{ presentation: "card" }} />
     </Stack>
   );
 }
