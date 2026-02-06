@@ -1,8 +1,8 @@
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Linking, Image, Switch, Platform, ActivityIndicator, Alert } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Linking, Image, Switch, Platform, ActivityIndicator, Alert, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { router } from 'expo-router';
-import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle, Bell, Mail } from 'lucide-react-native';
+import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle, Bell, Mail, MessageSquare, X, Send } from 'lucide-react-native';
 import { useSettings, SpeedUnit, DistanceUnit } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
 import { useNotifications } from '@/providers/NotificationProvider';
@@ -18,6 +18,9 @@ export default function SettingsScreen() {
   const [isTogglingNotifications, setIsTogglingNotifications] = useState(false);
   const [isTogglingWeeklyRecap, setIsTogglingWeeklyRecap] = useState(false);
   const [weeklyRecapEnabled, setWeeklyRecapEnabled] = useState(true);
+  const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+
 
   const weeklyRecapQuery = trpc.user.getWeeklyRecapEnabled.useQuery(
     { userId: user?.id || '' },
@@ -57,6 +60,31 @@ export default function SettingsScreen() {
 
   const openHelpCenter = () => {
     Linking.openURL('https://redlineapp.io/help.html');
+  };
+
+  const sendFeedbackMutation = trpc.user.sendFeedback.useMutation({
+    onSuccess: () => {
+      Alert.alert('Thank you!', 'Your feedback has been sent successfully.');
+      setFeedbackText('');
+      setFeedbackModalVisible(false);
+    },
+    onError: (error: any) => {
+      console.error('[SETTINGS] Failed to send feedback:', error);
+      Alert.alert('Error', 'Failed to send feedback. Please try again.');
+    },
+  });
+
+  const handleSendFeedback = () => {
+    if (!feedbackText.trim()) {
+      Alert.alert('Empty Feedback', 'Please enter your feedback before sending.');
+      return;
+    }
+    sendFeedbackMutation.mutate({
+      userId: user?.id || 'anonymous',
+      email: user?.email || 'unknown',
+      displayName: user?.displayName || 'Anonymous',
+      feedback: feedbackText.trim(),
+    });
   };
 
   const handleNotificationToggle = async (value: boolean) => {
@@ -315,6 +343,68 @@ export default function SettingsScreen() {
     linkTextDisabled: {
       color: colors.textLight,
     },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'flex-end',
+    },
+    modalContent: {
+      backgroundColor: colors.cardLight,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: 24,
+      paddingBottom: 40,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: '700' as const,
+      color: colors.text,
+    },
+    modalSubtitle: {
+      fontSize: 14,
+      color: colors.textLight,
+      marginBottom: 16,
+    },
+    feedbackInput: {
+      backgroundColor: colors.background === '#000000' ? '#1C1C1E' : colors.background,
+      borderRadius: 12,
+      padding: 16,
+      fontSize: 15,
+      color: colors.text,
+      minHeight: 140,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    charCount: {
+      fontSize: 12,
+      color: colors.textLight,
+      textAlign: 'right' as const,
+      marginTop: 6,
+      marginBottom: 16,
+    },
+    sendButton: {
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      gap: 8,
+    },
+    sendButtonDisabled: {
+      opacity: 0.5,
+    },
+    sendButtonText: {
+      fontSize: 16,
+      fontWeight: '600' as const,
+      color: '#FFFFFF',
+    },
   });
 
   return (
@@ -557,14 +647,29 @@ export default function SettingsScreen() {
             <ChevronRight size={20} color={colors.textLight} />
           </TouchableOpacity>
 
-          <View style={styles.divider} />
+        </View>
 
+        <Text style={styles.sectionTitle}>About</Text>
+        
+        <View style={styles.settingsCard}>
           <TouchableOpacity style={styles.linkItem} onPress={openHelpCenter} activeOpacity={0.7}>
             <View style={styles.linkContent}>
               <View style={styles.settingIconContainer}>
                 <HelpCircle size={20} color={colors.accent} />
               </View>
               <Text style={styles.linkText}>Help Center</Text>
+            </View>
+            <ChevronRight size={20} color={colors.textLight} />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity style={styles.linkItem} onPress={() => setFeedbackModalVisible(true)} activeOpacity={0.7}>
+            <View style={styles.linkContent}>
+              <View style={styles.settingIconContainer}>
+                <MessageSquare size={20} color={colors.accent} />
+              </View>
+              <Text style={styles.linkText}>Leave Feedback</Text>
             </View>
             <ChevronRight size={20} color={colors.textLight} />
           </TouchableOpacity>
@@ -579,6 +684,50 @@ export default function SettingsScreen() {
           <Text style={styles.footerText}>RedLine v1.0.0</Text>
         </View>
       </ScrollView>
+      <Modal
+        visible={feedbackModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setFeedbackModalVisible(false)}
+      >
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Leave Feedback</Text>
+              <TouchableOpacity onPress={() => setFeedbackModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <X size={22} color={colors.textLight} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>We{"'"}d love to hear your thoughts, suggestions, or issues.</Text>
+            <TextInput
+              style={styles.feedbackInput}
+              placeholder="Type your feedback here..."
+              placeholderTextColor={colors.textLight}
+              value={feedbackText}
+              onChangeText={setFeedbackText}
+              multiline
+              textAlignVertical="top"
+              maxLength={1000}
+            />
+            <Text style={styles.charCount}>{feedbackText.length}/1000</Text>
+            <TouchableOpacity
+              style={[styles.sendButton, (!feedbackText.trim() || sendFeedbackMutation.isPending) && styles.sendButtonDisabled]}
+              onPress={handleSendFeedback}
+              disabled={!feedbackText.trim() || sendFeedbackMutation.isPending}
+              activeOpacity={0.7}
+            >
+              {sendFeedbackMutation.isPending ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Send size={18} color="#FFFFFF" />
+                  <Text style={styles.sendButtonText}>Send Feedback</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }

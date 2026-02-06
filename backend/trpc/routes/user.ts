@@ -865,4 +865,48 @@ export const userRouter = createTRPCRouter({
       const user = users.find(u => u.id === input.userId);
       return { enabled: user?.weeklyRecapEnabled ?? true };
     }),
+
+  sendFeedback: publicProcedure
+    .input(z.object({
+      userId: z.string(),
+      email: z.string(),
+      displayName: z.string(),
+      feedback: z.string().min(1).max(1000),
+    }))
+    .mutation(async ({ input }) => {
+      const apiKey = getResendApiKey();
+      if (!apiKey) {
+        throw new Error('Email service not configured');
+      }
+
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: 'RedLine Feedback <feedback@redlineapp.io>',
+          to: ['support@redlineapp.io'],
+          subject: `Feedback from ${input.displayName}`,
+          html: `
+            <h2>New Feedback from RedLine</h2>
+            <p><strong>User:</strong> ${input.displayName}</p>
+            <p><strong>Email:</strong> ${input.email}</p>
+            <p><strong>User ID:</strong> ${input.userId}</p>
+            <hr/>
+            <p>${input.feedback.replace(/\n/g, '<br/>')}</p>
+          `,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[FEEDBACK] Failed to send:', errorText);
+        throw new Error('Failed to send feedback email');
+      }
+
+      console.log('[FEEDBACK] Sent successfully from', input.email);
+      return { success: true };
+    }),
 });
