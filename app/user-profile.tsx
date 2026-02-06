@@ -303,11 +303,11 @@ export default function UserProfileScreen() {
                             </View>
                             <View style={styles.statItem}>
                               <View style={[styles.statIconBg, { backgroundColor: colors.accent + '20' }]}>
-                                <Zap size={18} color={colors.accent} />
+                                <Route size={18} color={colors.accent} />
                               </View>
                               <View style={styles.statTextGroup}>
-                                <Text style={styles.statValue}>{car.topCornerSpeed > 0 ? `${Math.round(convertSpeed(car.topCornerSpeed))} ${getSpeedLabel()}` : '—'}</Text>
-                                <Text style={styles.statLabel}>Corner Speed</Text>
+                                <Text style={styles.statValue}>{car.totalTrips}</Text>
+                                <Text style={styles.statLabel}>Trips</Text>
                               </View>
                             </View>
                             <View style={styles.statItem}>
