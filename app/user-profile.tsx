@@ -285,63 +285,79 @@ export default function UserProfileScreen() {
                           <View style={styles.statsGrid}>
                             <View style={styles.statItem}>
                               <View style={[styles.statIconBg, { backgroundColor: colors.warning + '20' }]}>
-                                <Zap size={16} color={colors.warning} />
+                                <Zap size={18} color={colors.warning} />
                               </View>
-                              <Text style={styles.statValue}>{Math.round(convertSpeed(car.topSpeed))} {getSpeedLabel()}</Text>
-                              <Text style={styles.statLabel}>Top Speed</Text>
+                              <View style={styles.statTextGroup}>
+                                <Text style={styles.statValue}>{Math.round(convertSpeed(car.topSpeed))} {getSpeedLabel()}</Text>
+                                <Text style={styles.statLabel}>Top Speed</Text>
+                              </View>
                             </View>
                             <View style={styles.statItem}>
                               <View style={[styles.statIconBg, { backgroundColor: colors.accent + '20' }]}>
-                                <Navigation size={16} color={colors.accent} />
+                                <Navigation size={18} color={colors.accent} />
                               </View>
-                              <Text style={styles.statValue}>{convertDistance(car.totalDistance).toFixed(1)} {getDistanceLabel()}</Text>
-                              <Text style={styles.statLabel}>Distance</Text>
+                              <View style={styles.statTextGroup}>
+                                <Text style={styles.statValue}>{convertDistance(car.totalDistance).toFixed(1)} {getDistanceLabel()}</Text>
+                                <Text style={styles.statLabel}>Distance</Text>
+                              </View>
                             </View>
                             <View style={styles.statItem}>
                               <View style={[styles.statIconBg, { backgroundColor: colors.success + '20' }]}>
-                                <Gauge size={16} color={colors.success} />
+                                <Gauge size={18} color={colors.success} />
                               </View>
-                              <Text style={styles.statValue}>{Math.round(convertSpeed(car.avgSpeed))} {getSpeedLabel()}</Text>
-                              <Text style={styles.statLabel}>Avg Speed</Text>
+                              <View style={styles.statTextGroup}>
+                                <Text style={styles.statValue}>{Math.round(convertSpeed(car.avgSpeed))} {getSpeedLabel()}</Text>
+                                <Text style={styles.statLabel}>Avg Speed</Text>
+                              </View>
                             </View>
                             <View style={styles.statItem}>
                               <View style={[styles.statIconBg, { backgroundColor: colors.primary + '20' }]}>
-                                <CornerDownRight size={16} color={colors.primary} />
+                                <CornerDownRight size={18} color={colors.primary} />
                               </View>
-                              <Text style={styles.statValue}>
-                                {car.topCornerSpeed > 0 ? `${Math.round(convertSpeed(car.topCornerSpeed))} ${getSpeedLabel()}` : '—'}
-                              </Text>
-                              <Text style={styles.statLabel}>Corner Speed</Text>
+                              <View style={styles.statTextGroup}>
+                                <Text style={styles.statValue}>
+                                  {car.topCornerSpeed > 0 ? `${Math.round(convertSpeed(car.topCornerSpeed))} ${getSpeedLabel()}` : '—'}
+                                </Text>
+                                <Text style={styles.statLabel}>Corner Speed</Text>
+                              </View>
                             </View>
                             <View style={styles.statItem}>
                               <View style={[styles.statIconBg, { backgroundColor: colors.danger + '20' }]}>
-                                <Activity size={16} color={colors.danger} />
+                                <Activity size={18} color={colors.danger} />
                               </View>
-                              <Text style={styles.statValue}>{car.maxGForce > 0 ? `${car.maxGForce.toFixed(2)} G` : '—'}</Text>
-                              <Text style={styles.statLabel}>Max G-Force</Text>
+                              <View style={styles.statTextGroup}>
+                                <Text style={styles.statValue}>{car.maxGForce > 0 ? `${car.maxGForce.toFixed(2)} G` : '—'}</Text>
+                                <Text style={styles.statLabel}>Max G-Force</Text>
+                              </View>
                             </View>
                             <View style={styles.statItem}>
                               <View style={[styles.statIconBg, { backgroundColor: colors.warning + '20' }]}>
-                                <Timer size={16} color={colors.warning} />
+                                <Timer size={18} color={colors.warning} />
                               </View>
-                              <Text style={styles.statValue}>{car.best0to100 ? `${car.best0to100.toFixed(2)}s` : '—'}</Text>
-                              <Text style={styles.statLabel}>0-100</Text>
+                              <View style={styles.statTextGroup}>
+                                <Text style={styles.statValue}>{car.best0to100 ? `${car.best0to100.toFixed(2)}s` : '—'}</Text>
+                                <Text style={styles.statLabel}>0-100</Text>
+                              </View>
                             </View>
                             {car.best0to200 && (
                               <View style={styles.statItem}>
                                 <View style={[styles.statIconBg, { backgroundColor: colors.accent + '20' }]}>
-                                  <Timer size={16} color={colors.accent} />
+                                  <Timer size={18} color={colors.accent} />
                                 </View>
-                                <Text style={styles.statValue}>{car.best0to200.toFixed(2)}s</Text>
-                                <Text style={styles.statLabel}>0-200</Text>
+                                <View style={styles.statTextGroup}>
+                                  <Text style={styles.statValue}>{car.best0to200.toFixed(2)}s</Text>
+                                  <Text style={styles.statLabel}>0-200</Text>
+                                </View>
                               </View>
                             )}
                             <View style={styles.statItem}>
                               <View style={[styles.statIconBg, { backgroundColor: colors.textLight + '20' }]}>
-                                <Trophy size={16} color={colors.textLight} />
+                                <Trophy size={18} color={colors.textLight} />
                               </View>
-                              <Text style={styles.statValue}>{formatDuration(car.totalDuration)}</Text>
-                              <Text style={styles.statLabel}>Drive Time</Text>
+                              <View style={styles.statTextGroup}>
+                                <Text style={styles.statValue}>{formatDuration(car.totalDuration)}</Text>
+                                <Text style={styles.statLabel}>Drive Time</Text>
+                              </View>
                             </View>
                           </View>
                         )}
@@ -567,20 +583,27 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 8,
   },
   statItem: {
-    width: '46%' as any,
-    alignItems: 'flex-start',
-    gap: 4,
+    width: '47%' as any,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
   statIconBg: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 2,
+  },
+  statTextGroup: {
+    flex: 1,
   },
   statValue: {
     fontSize: 13,
@@ -588,9 +611,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.text,
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontFamily: 'Orbitron_400Regular',
     color: colors.textLight,
+    marginTop: 2,
   },
   noStatsCard: {
     marginHorizontal: 16,
