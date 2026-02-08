@@ -7,8 +7,8 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { TripProvider } from "@/providers/TripProvider";
 import { SettingsProvider } from "@/providers/SettingsProvider";
-import { UserProvider } from "@/providers/UserProvider";
-import { NotificationProvider } from "@/providers/NotificationProvider";
+import { UserProvider, useUser } from "@/providers/UserProvider";
+import { NotificationProvider, useNotifications } from "@/providers/NotificationProvider";
 import { trpc, trpcClient } from "@/lib/trpc";
 import {
   useFonts,
@@ -168,6 +168,30 @@ if (Platform.OS === 'web' && typeof window !== 'undefined') {
 
 const queryClient = new QueryClient();
 
+function PushTokenSync() {
+  const { user } = useUser();
+  const { pushToken, notificationsEnabled, syncPushTokenToBackend } = useNotifications();
+  const syncedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (user?.id && pushToken && notificationsEnabled && !syncedRef.current) {
+      console.log('[PUSH_SYNC] User logged in with existing push token, syncing to backend...');
+      syncedRef.current = true;
+      syncPushTokenToBackend(user.id).then((success) => {
+        if (success) {
+          console.log('[PUSH_SYNC] Push token synced successfully on app start');
+        }
+      });
+    }
+    
+    if (!user?.id) {
+      syncedRef.current = false;
+    }
+  }, [user?.id, pushToken, notificationsEnabled, syncPushTokenToBackend]);
+
+  return null;
+}
+
 function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerBackTitle: "Back" }}>
@@ -230,6 +254,7 @@ export default function RootLayout() {
           <SettingsProvider>
             <UserProvider>
               <NotificationProvider>
+                <PushTokenSync />
                 <TripProvider>
                   <SafeAreaProvider>
                     <GestureHandlerRootView style={styles.container}>

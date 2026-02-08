@@ -16,6 +16,12 @@ import { CAR_BRANDS, getModelsForBrand } from '@/constants/cars';
 import { LeaderboardCategory, LeaderboardFilters, TripStats } from '@/types/trip';
 import { ThemeColors } from '@/constants/colors';
 
+interface LeaderboardTrip extends TripStats {
+  userId?: string;
+  userName?: string;
+  userProfilePicture?: string;
+}
+
 type FilterType = 'country' | 'city' | 'carBrand' | 'carModel';
 type TimePeriod = 'today' | 'week' | 'month' | 'year' | 'all';
 
@@ -356,7 +362,22 @@ export default function LeaderboardScreen() {
     return alternateNames.some(name => tripCountryLower === name || tripCountryLower.includes(name));
   }, []);
 
-  const filteredTrips = useMemo(() => {
+  const leaderboardTripsQuery = trpc.trips.getLeaderboardTrips.useQuery(
+    {
+      category: activeCategory,
+      country: filters.country,
+      city: filters.city,
+      carBrand: filters.carBrand,
+      carModel: filters.carModel,
+      timePeriod: timePeriod,
+      limit: 50,
+    },
+    {
+      refetchInterval: 30000,
+    }
+  );
+
+  const filteredLocalTrips = useMemo(() => {
     const timePeriodStart = getTimePeriodStart(timePeriod);
     
     return trips.filter((trip) => {
@@ -370,52 +391,70 @@ export default function LeaderboardScreen() {
         if (!trip.carModel?.startsWith(filters.carBrand)) return false;
       }
       return true;
-    });
-  }, [trips, filters, timePeriod, getTimePeriodStart, matchesCountryFilter]);
+    }).map(trip => ({
+      ...trip,
+      userId: user?.id,
+      userName: user?.displayName,
+      userProfilePicture: user?.profilePicture,
+    })) as LeaderboardTrip[];
+  }, [trips, filters, timePeriod, getTimePeriodStart, matchesCountryFilter, user]);
 
   const leaderboardData = useMemo(() => {
-    let sorted: TripStats[] = [];
+    const backendTrips: LeaderboardTrip[] = (leaderboardTripsQuery.data || []).map(t => ({
+      ...t,
+      locations: [],
+    }));
+    
+    const allTrips = [...backendTrips];
+    
+    filteredLocalTrips.forEach(localTrip => {
+      if (!allTrips.some(t => t.id === localTrip.id)) {
+        allTrips.push(localTrip);
+      }
+    });
+    
+    let sorted: LeaderboardTrip[] = [];
 
     switch (activeCategory) {
       case 'topSpeed':
-        sorted = [...filteredTrips]
+        sorted = [...allTrips]
           .filter((t) => t.topSpeed > 0)
           .sort((a, b) => b.topSpeed - a.topSpeed);
         break;
       case 'distance':
-        sorted = [...filteredTrips]
+        sorted = [...allTrips]
           .filter((t) => t.distance > 0)
           .sort((a, b) => b.distance - a.distance);
         break;
       case 'totalDistance':
-        sorted = [...filteredTrips]
+        sorted = [...allTrips]
           .filter((t) => t.distance > 0)
           .sort((a, b) => b.distance - a.distance);
         break;
       case 'acceleration':
-        sorted = [...filteredTrips]
+        sorted = [...allTrips]
           .filter((t) => (t.acceleration ?? 0) > 0)
           .sort((a, b) => (b.acceleration ?? 0) - (a.acceleration ?? 0));
         break;
       case 'gForce':
-        sorted = [...filteredTrips]
+        sorted = [...allTrips]
           .filter((t) => (t.maxGForce ?? 0) > 0)
           .sort((a, b) => (b.maxGForce ?? 0) - (a.maxGForce ?? 0));
         break;
       case 'zeroToHundred':
-        sorted = [...filteredTrips]
+        sorted = [...allTrips]
           .filter((t) => (t.time0to100 ?? 0) > 0)
           .sort((a, b) => (a.time0to100 ?? Infinity) - (b.time0to100 ?? Infinity));
         break;
       case 'zeroToTwoHundred':
-        sorted = [...filteredTrips]
+        sorted = [...allTrips]
           .filter((t) => (t.time0to200 ?? 0) > 0)
           .sort((a, b) => (a.time0to200 ?? Infinity) - (b.time0to200 ?? Infinity));
         break;
     }
 
-    return sorted.slice(0, 10);
-  }, [filteredTrips, activeCategory]);
+    return sorted.slice(0, 50);
+  }, [filteredLocalTrips, leaderboardTripsQuery.data, activeCategory]);
 
   const getMedalColor = (rank: number) => {
     switch (rank) {
@@ -807,22 +846,42 @@ export default function LeaderboardScreen() {
                         </View>
                       )}
                     </View>
-                    <View style={styles.avatarContainer}>
-                      {user?.profilePicture ? (
-                        <Image source={{ uri: user.profilePicture }} style={styles.avatar} />
+                    <TouchableOpacity 
+                      style={styles.avatarContainer}
+                      onPress={() => {
+                        if (trip.userId && trip.userId !== user?.id) {
+                          router.push(`/user-profile?userId=${trip.userId}`);
+                        }
+                      }}
+                      disabled={!trip.userId || trip.userId === user?.id}
+                    >
+                      {trip.userProfilePicture ? (
+                        <Image source={{ uri: trip.userProfilePicture }} style={styles.avatar} />
                       ) : (
                         <View style={styles.avatarPlaceholder}>
                           <Text style={styles.avatarInitial}>
-                            {(user?.displayName || 'D')[0].toUpperCase()}
+                            {(trip.userName || 'D')[0].toUpperCase()}
                           </Text>
                         </View>
                       )}
-                    </View>
+                    </TouchableOpacity>
                   </View>
 
                   <View style={styles.itemContent}>
                     <View style={styles.itemHeader}>
-                      <Text style={styles.userName}>{user?.displayName || 'Driver'}</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (trip.userId && trip.userId !== user?.id) {
+                            router.push(`/user-profile?userId=${trip.userId}`);
+                          }
+                        }}
+                        disabled={!trip.userId || trip.userId === user?.id}
+                      >
+                        <Text style={[styles.userName, trip.userId && trip.userId !== user?.id && styles.userNameClickable]}>
+                          {trip.userName || 'Driver'}
+                          {trip.userId === user?.id && ' (You)'}
+                        </Text>
+                      </TouchableOpacity>
                       <Text style={styles.itemDate}>{formatDate(trip.startTime)}</Text>
                     </View>
                     
@@ -1835,6 +1894,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Orbitron_600SemiBold',
     color: colors.text,
+  },
+  userNameClickable: {
+    color: colors.primary,
+    textDecorationLine: 'underline' as const,
   },
   itemDate: {
     fontSize: 11,

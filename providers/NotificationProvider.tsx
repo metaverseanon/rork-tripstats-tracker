@@ -148,6 +148,24 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
     };
   }, []);
 
+  const syncPushTokenToBackend = useCallback(async (userId: string, token?: string | null): Promise<boolean> => {
+    const tokenToSync = token || pushToken;
+    if (!tokenToSync) {
+      console.log('[PUSH] No token to sync');
+      return false;
+    }
+    
+    try {
+      console.log('[PUSH] Syncing existing token to backend for user:', userId);
+      await trpcClient.user.updatePushToken.mutate({ userId, pushToken: tokenToSync });
+      console.log('[PUSH] Token synced to backend successfully');
+      return true;
+    } catch (error) {
+      console.error('[PUSH] Failed to sync token to backend:', error);
+      return false;
+    }
+  }, [pushToken]);
+
   const registerForPushNotifications = useCallback(async (userId?: string): Promise<string | null> => {
     console.log('[PUSH] registerForPushNotifications called');
     
@@ -166,13 +184,7 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
       setNotificationsEnabled(true);
       
       if (userId) {
-        try {
-          console.log('[PUSH] Syncing token to backend for user:', userId);
-          await trpcClient.user.updatePushToken.mutate({ userId, pushToken: token });
-          console.log('[PUSH] Token synced to backend');
-        } catch (backendError) {
-          console.error('[PUSH] Failed to sync token to backend:', backendError);
-        }
+        await syncPushTokenToBackend(userId, token);
       }
       
       console.log('[PUSH] Registration complete');
@@ -181,7 +193,7 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
       console.error('[PUSH] Registration failed:', error);
       throw error;
     }
-  }, []);
+  }, [syncPushTokenToBackend]);
 
   const disableNotifications = useCallback(async (userId?: string) => {
     console.log('[PUSH] disableNotifications called');
@@ -256,5 +268,6 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
     disableNotifications,
     scheduleLocalNotification,
     cancelAllNotifications,
+    syncPushTokenToBackend,
   };
 });

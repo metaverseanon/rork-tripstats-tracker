@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Alert, AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TripStats, Location as LocationType, TripLocation } from '@/types/trip';
+import { trpcClient } from '@/lib/trpc';
 
 const TRIPS_KEY = 'trips';
 const CURRENT_TRIP_KEY = 'current_trip';
@@ -598,6 +599,52 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     }
   };
 
+  const syncTripToBackend = async (trip: TripStats, userId?: string, userName?: string, userProfilePicture?: string) => {
+    try {
+      const storedUser = await AsyncStorage.getItem('user_profile');
+      let userIdToUse = userId;
+      let userNameToUse = userName;
+      let userPictureToUse = userProfilePicture;
+      
+      if (storedUser) {
+        const userData = JSON.parse(storedUser);
+        userIdToUse = userIdToUse || userData.id;
+        userNameToUse = userNameToUse || userData.displayName;
+        userPictureToUse = userPictureToUse || userData.profilePicture;
+      }
+      
+      if (!userIdToUse) {
+        console.log('[TRIP_SYNC] No user ID available, skipping sync');
+        return;
+      }
+      
+      console.log('[TRIP_SYNC] Syncing trip to backend:', trip.id);
+      await trpcClient.trips.syncTrip.mutate({
+        id: trip.id,
+        userId: userIdToUse,
+        userName: userNameToUse,
+        userProfilePicture: userPictureToUse,
+        startTime: trip.startTime,
+        endTime: trip.endTime,
+        distance: trip.distance,
+        duration: trip.duration,
+        avgSpeed: trip.avgSpeed,
+        topSpeed: trip.topSpeed,
+        corners: trip.corners,
+        carModel: trip.carModel,
+        acceleration: trip.acceleration,
+        maxGForce: trip.maxGForce,
+        location: trip.location,
+        time0to100: trip.time0to100,
+        time0to200: trip.time0to200,
+        time0to300: trip.time0to300,
+      });
+      console.log('[TRIP_SYNC] Trip synced successfully:', trip.id);
+    } catch (error) {
+      console.error('[TRIP_SYNC] Failed to sync trip:', error);
+    }
+  };
+
   const detectCorner = (newHeading: number, currentTime: number): boolean => {
     if (previousHeading.current === null) {
       previousHeading.current = newHeading;
@@ -975,6 +1022,9 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       const updatedTrips = [finalTrip, ...trips];
       saveTrips(updatedTrips);
       setLastSavedTrip(finalTrip);
+      
+      // Sync trip to backend for leaderboard
+      syncTripToBackend(finalTrip);
       
       // Send trip completion notification
       const durationMins = Math.round(finalTrip.duration / 60);

@@ -6,7 +6,7 @@ import { appRouter } from "./trpc/app-router";
 import { createContext } from "./trpc/create-context";
 import { getDbConfig } from "./trpc/db";
 
-// Backend v1.0.6 - Force redeploy
+// Backend v1.0.7 - Force redeploy
 const app = new Hono();
 
 app.use("*", cors());

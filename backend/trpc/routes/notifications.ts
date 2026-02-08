@@ -159,7 +159,18 @@ async function getUsersWithPushTokens(): Promise<UserWithToken[]> {
 
     const data = await response.json();
     const users = data.items || data || [];
-    return users.filter((u: any) => u.pushToken);
+    
+    // Map snake_case from Supabase to camelCase and filter users with push tokens
+    return users
+      .filter((u: any) => u.push_token)
+      .map((u: any) => ({
+        id: u.id,
+        displayName: u.display_name,
+        pushToken: u.push_token,
+        country: u.country,
+        carBrand: u.car_brand,
+        carModel: u.car_model,
+      }));
   } catch (error) {
     console.error("[PUSH] Error fetching users:", error);
     return [];
