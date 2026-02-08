@@ -599,27 +599,30 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     }
   };
 
-  const syncTripToBackend = async (trip: TripStats, userId?: string, userName?: string, userProfilePicture?: string) => {
+  const syncTripToBackend = async (trip: TripStats): Promise<boolean> => {
     try {
+      console.log('[TRIP_SYNC] Starting sync for trip:', trip.id);
       const storedUser = await AsyncStorage.getItem('user_profile');
-      let userIdToUse = userId;
-      let userNameToUse = userName;
-      let userPictureToUse = userProfilePicture;
+      console.log('[TRIP_SYNC] Stored user data exists:', !!storedUser);
       
-      if (storedUser) {
-        const userData = JSON.parse(storedUser);
-        userIdToUse = userIdToUse || userData.id;
-        userNameToUse = userNameToUse || userData.displayName;
-        userPictureToUse = userPictureToUse || userData.profilePicture;
+      if (!storedUser) {
+        console.error('[TRIP_SYNC] No user profile in AsyncStorage, cannot sync');
+        return false;
       }
+      
+      const userData = JSON.parse(storedUser);
+      const userIdToUse = userData.id;
+      const userNameToUse = userData.displayName;
+      const userPictureToUse = userData.profilePicture;
+      
+      console.log('[TRIP_SYNC] User data:', { id: userIdToUse, name: userNameToUse, hasPicture: !!userPictureToUse });
       
       if (!userIdToUse) {
-        console.log('[TRIP_SYNC] No user ID available, skipping sync');
-        return;
+        console.error('[TRIP_SYNC] No user ID in stored profile, skipping sync');
+        return false;
       }
       
-      console.log('[TRIP_SYNC] Syncing trip to backend:', trip.id);
-      await trpcClient.trips.syncTrip.mutate({
+      const payload = {
         id: trip.id,
         userId: userIdToUse,
         userName: userNameToUse,
@@ -632,16 +635,22 @@ export const [TripProvider, useTrips] = createContextHook(() => {
         topSpeed: trip.topSpeed,
         corners: trip.corners,
         carModel: trip.carModel,
-        acceleration: trip.acceleration,
-        maxGForce: trip.maxGForce,
+        acceleration: trip.acceleration ?? 0,
+        maxGForce: trip.maxGForce ?? 0,
         location: trip.location,
         time0to100: trip.time0to100,
         time0to200: trip.time0to200,
         time0to300: trip.time0to300,
-      });
-      console.log('[TRIP_SYNC] Trip synced successfully:', trip.id);
+      };
+      
+      console.log('[TRIP_SYNC] Sending payload:', JSON.stringify(payload));
+      const result = await trpcClient.trips.syncTrip.mutate(payload);
+      console.log('[TRIP_SYNC] Trip synced successfully:', trip.id, 'result:', JSON.stringify(result));
+      return true;
     } catch (error) {
       console.error('[TRIP_SYNC] Failed to sync trip:', error);
+      console.error('[TRIP_SYNC] Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error as object)));
+      return false;
     }
   };
 
@@ -999,32 +1008,38 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     }
     pendingLocationsRef.current = [];
 
-    if (currentTrip) {
+    const tripToSave = currentTripRef.current || currentTrip;
+    console.log('[STOP_TRACKING] currentTrip:', !!currentTrip, 'currentTripRef:', !!currentTripRef.current);
+    
+    if (tripToSave) {
       let tripLocation: TripLocation = { country: 'Unknown', city: 'Unknown' };
       
-      if (currentTrip.locations.length > 0) {
-        const firstLocation = currentTrip.locations[0];
+      if (tripToSave.locations.length > 0) {
+        const firstLocation = tripToSave.locations[0];
         tripLocation = await reverseGeocode(firstLocation.latitude, firstLocation.longitude);
       }
 
       const finalTrip: TripStats = {
-        ...currentTrip,
+        ...tripToSave,
         endTime: Date.now(),
         acceleration: maxAcceleration.current,
         maxGForce: maxGForce.current,
         location: tripLocation,
-        carModel: carModel || currentTrip.carModel,
+        carModel: carModel || tripToSave.carModel,
         time0to100: time0to100.current ?? undefined,
         time0to200: time0to200.current ?? undefined,
         time0to300: time0to300.current ?? undefined,
       };
 
+      console.log('[STOP_TRACKING] Final trip data:', { id: finalTrip.id, distance: finalTrip.distance, topSpeed: finalTrip.topSpeed, duration: finalTrip.duration });
+
       const updatedTrips = [finalTrip, ...trips];
       saveTrips(updatedTrips);
       setLastSavedTrip(finalTrip);
       
-      // Sync trip to backend for leaderboard
-      syncTripToBackend(finalTrip);
+      // Sync trip to backend for leaderboard - AWAIT to ensure it completes
+      const syncSuccess = await syncTripToBackend(finalTrip);
+      console.log('[STOP_TRACKING] Trip sync result:', syncSuccess);
       
       // Send trip completion notification
       const durationMins = Math.round(finalTrip.duration / 60);
