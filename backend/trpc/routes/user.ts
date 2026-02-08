@@ -685,16 +685,33 @@ export const userRouter = createTRPCRouter({
       city: z.string().optional(),
     }))
     .query(async ({ input }) => {
-      console.log("Fetching nearby users for:", input.userId);
+      console.log("[NEARBY] Fetching nearby users for:", input.userId, "country:", input.country, "city:", input.city);
       const users = await getAllUsers();
+      console.log("[NEARBY] Total users in DB:", users.length);
       
+      const inputCityLower = input.city?.toLowerCase().trim();
+      const inputCountryLower = input.country?.toLowerCase().trim();
+
       const nearbyUsers = users.filter(u => {
         if (u.id === input.userId) return false;
-        if (input.city && u.city === input.city) return true;
-        if (input.country && u.country === input.country) return true;
+        
+        const userCityLower = u.city?.toLowerCase().trim();
+        const userCountryLower = u.country?.toLowerCase().trim();
+        
+        if (inputCityLower && userCityLower && userCityLower === inputCityLower) {
+          console.log("[NEARBY] City match:", u.displayName, u.city, "==", input.city);
+          return true;
+        }
+        if (inputCountryLower && userCountryLower && userCountryLower === inputCountryLower) {
+          console.log("[NEARBY] Country match:", u.displayName, u.country, "==", input.country);
+          return true;
+        }
+        
+        console.log("[NEARBY] No match for:", u.displayName, "city:", u.city, "country:", u.country);
         return false;
       });
 
+      console.log("[NEARBY] Found", nearbyUsers.length, "nearby users");
       return nearbyUsers.map(u => ({
         id: u.id,
         displayName: u.displayName,

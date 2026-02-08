@@ -179,7 +179,7 @@ export const tripsRouter = createTRPCRouter({
         carBrand: z.string().optional(),
         carModel: z.string().optional(),
         timePeriod: z.enum(["today", "week", "month", "year", "all"]).optional(),
-        limit: z.number().optional().default(50),
+        limit: z.number().optional().default(10),
       })
     )
     .query(async ({ input }) => {
@@ -292,7 +292,8 @@ export const tripsRouter = createTRPCRouter({
         const rows: SupabaseTripRow[] = await response.json();
         const trips = rows.map(supabaseRowToTrip);
         
-        console.log("[TRIPS] Fetched", trips.length, "trips");
+        const uniqueUsers = [...new Set(trips.map(t => t.userName || t.userId))];
+        console.log("[TRIPS] Fetched", trips.length, "trips from", uniqueUsers.length, "unique users:", uniqueUsers.join(', '));
         return trips;
       } catch (error) {
         console.error("[TRIPS] Error fetching trips:", error);

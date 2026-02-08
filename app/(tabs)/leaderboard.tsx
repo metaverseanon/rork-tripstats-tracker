@@ -370,7 +370,7 @@ export default function LeaderboardScreen() {
       carBrand: filters.carBrand,
       carModel: filters.carModel,
       timePeriod: timePeriod,
-      limit: 50,
+      limit: 10,
     },
     {
       refetchInterval: 30000,
@@ -453,7 +453,7 @@ export default function LeaderboardScreen() {
         break;
     }
 
-    return sorted.slice(0, 50);
+    return sorted.slice(0, 10);
   }, [filteredLocalTrips, leaderboardTripsQuery.data, activeCategory]);
 
   const getMedalColor = (rank: number) => {
