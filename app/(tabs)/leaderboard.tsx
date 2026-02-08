@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, ReactNode } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, TextInput, Image, Platform, Alert, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Trophy, Zap, Navigation, Gauge, ChevronDown, X, MapPin, Car, Filter, Activity, Route, Search, Clock, Calendar, CornerDownRight, ChevronRight, Timer, Users, Send, Bell, Check, XCircle, Share2, Navigation2, MessageCircle } from 'lucide-react-native';
@@ -11,6 +11,7 @@ import MapView, { Polyline, Marker } from 'react-native-maps';
 import { useTrips } from '@/providers/TripProvider';
 import { useSettings } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
+import { useNotifications } from '@/providers/NotificationProvider';
 import { COUNTRIES } from '@/constants/countries';
 import { CAR_BRANDS, getModelsForBrand } from '@/constants/cars';
 import { LeaderboardCategory, LeaderboardFilters, TripStats } from '@/types/trip';
@@ -29,6 +30,7 @@ export default function LeaderboardScreen() {
   const { trips } = useTrips();
   const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, getAccelerationLabel, colors } = useSettings();
   const { user } = useUser();
+  const { pendingAction, clearPendingAction } = useNotifications();
   const [activeCategory, setActiveCategory] = useState<LeaderboardCategory>('topSpeed');
   const [filters, setFilters] = useState<LeaderboardFilters>({});
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -48,6 +50,8 @@ export default function LeaderboardScreen() {
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
+  const meetupsRefetchRef = useRef<(() => void) | null>(null);
+
   const nearbyUsersQuery = trpc.user.getNearbyUsers.useQuery(
     {
       userId: user?.id || '',
@@ -63,6 +67,17 @@ export default function LeaderboardScreen() {
     { userId: user?.id || '' },
     { enabled: !!user?.id, refetchInterval: 30000 }
   );
+
+  meetupsRefetchRef.current = meetupsQuery.refetch;
+
+  useEffect(() => {
+    if (pendingAction?.type === 'open_meetups') {
+      console.log('[LEADERBOARD] Pending action detected, opening meetups modal');
+      setShowMeetupsModal(true);
+      meetupsRefetchRef.current?.();
+      clearPendingAction();
+    }
+  }, [pendingAction, clearPendingAction]);
 
   const sendPingMutation = trpc.notifications.sendDrivePing.useMutation({
     onSuccess: (data) => {

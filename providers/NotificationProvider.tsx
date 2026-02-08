@@ -2,9 +2,10 @@ import createContextHook from '@nkzw/create-context-hook';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { useCallback, useEffect, useState, useRef } from 'react';
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trpcClient } from '@/lib/trpc';
+import { router } from 'expo-router';
 
 const PUSH_TOKEN_KEY = 'push_notification_token';
 const NOTIFICATIONS_ENABLED_KEY = 'push_notifications_enabled';
@@ -80,11 +81,18 @@ async function setupAndroidChannels() {
   console.log('[PUSH] Android channels configured');
 }
 
+export type NotificationAction = {
+  type: 'open_meetups';
+  meetupId?: string;
+  fromUserName?: string;
+} | null;
+
 export const [NotificationProvider, useNotifications] = createContextHook(() => {
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [permissionStatus, setPermissionStatus] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<NotificationAction>(null);
   
   const notificationListener = useRef<Notifications.Subscription | null>(null);
   const responseListener = useRef<Notifications.Subscription | null>(null);
@@ -131,11 +139,86 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
     setupAndroidChannels();
 
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-      console.log('[PUSH] Notification received:', notification.request.content.title);
+      console.log('[PUSH] Notification received in foreground:', notification.request.content.title);
+      const data = notification.request.content.data as Record<string, unknown> | undefined;
+      
+      if (data?.type === 'drive_ping') {
+        const fromName = (data.fromUserName as string) || 'Someone';
+        Alert.alert(
+          '🚗 Drive Invite!',
+          `${fromName} wants to go for a drive with you!`,
+          [
+            { text: 'Later', style: 'cancel' },
+            {
+              text: 'View',
+              onPress: () => {
+                console.log('[PUSH] User tapped View on foreground drive ping');
+                setPendingAction({
+                  type: 'open_meetups',
+                  meetupId: data.meetupId as string,
+                  fromUserName: fromName,
+                });
+                router.push('/(tabs)/leaderboard');
+              },
+            },
+          ]
+        );
+      } else if (data?.type === 'ping_accepted') {
+        const fromName = (data.fromUserName as string) || 'Someone';
+        Alert.alert(
+          '✅ Drive Accepted!',
+          `${fromName} accepted your drive invite! Open meetups to share locations.`,
+          [
+            { text: 'Later', style: 'cancel' },
+            {
+              text: 'View',
+              onPress: () => {
+                setPendingAction({
+                  type: 'open_meetups',
+                  meetupId: data.meetupId as string,
+                });
+                router.push('/(tabs)/leaderboard');
+              },
+            },
+          ]
+        );
+      } else if (data?.type === 'location_shared') {
+        const fromName = (data.fromUserName as string) || 'Someone';
+        Alert.alert(
+          '📍 Location Shared!',
+          `${fromName} shared their location. Open meetups to navigate.`,
+          [
+            { text: 'Later', style: 'cancel' },
+            {
+              text: 'View',
+              onPress: () => {
+                setPendingAction({
+                  type: 'open_meetups',
+                  meetupId: data.meetupId as string,
+                });
+                router.push('/(tabs)/leaderboard');
+              },
+            },
+          ]
+        );
+      }
     });
 
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
       console.log('[PUSH] Notification tapped:', response.notification.request.content.title);
+      const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+      
+      if (data?.type === 'drive_ping' || data?.type === 'ping_accepted' || data?.type === 'ping_declined' || data?.type === 'location_shared' || data?.type === 'meetup_cancelled') {
+        console.log('[PUSH] Drive-related notification tapped, navigating to meetups');
+        setPendingAction({
+          type: 'open_meetups',
+          meetupId: data.meetupId as string,
+          fromUserName: data.fromUserName as string,
+        });
+        setTimeout(() => {
+          router.push('/(tabs)/leaderboard');
+        }, 300);
+      }
     });
 
     return () => {
@@ -259,11 +342,17 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
     }
   }, []);
 
+  const clearPendingAction = useCallback(() => {
+    setPendingAction(null);
+  }, []);
+
   return {
     pushToken,
     notificationsEnabled,
     isLoading,
     permissionStatus,
+    pendingAction,
+    clearPendingAction,
     registerForPushNotifications,
     disableNotifications,
     scheduleLocalNotification,
