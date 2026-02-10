@@ -37,6 +37,8 @@ export default function LeaderboardScreen() {
   const [activeFilterType, setActiveFilterType] = useState<FilterType | null>(null);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
+  const [carBrandSearch, setCarBrandSearch] = useState('');
+  const [carModelSearch, setCarModelSearch] = useState('');
   const [selectedTrip, setSelectedTrip] = useState<TripStats | null>(null);
   const [showTripDetail, setShowTripDetail] = useState(false);
   const [showNearbyDrivers, setShowNearbyDrivers] = useState(false);
@@ -635,9 +637,15 @@ export default function LeaderboardScreen() {
       case 'city':
         return cities.map(c => ({ value: c, label: c }));
       case 'carBrand':
-        return carBrands.map(b => ({ value: b, label: b }));
+        const filteredBrands = carBrandSearch
+          ? carBrands.filter(b => b.toLowerCase().includes(carBrandSearch.toLowerCase()))
+          : carBrands;
+        return filteredBrands.map(b => ({ value: b, label: b }));
       case 'carModel':
-        return carModels.map(m => ({ value: m, label: m }));
+        const filteredModels = carModelSearch
+          ? carModels.filter(m => m.toLowerCase().includes(carModelSearch.toLowerCase()))
+          : carModels;
+        return filteredModels.map(m => ({ value: m, label: m }));
       default:
         return [];
     }
@@ -961,20 +969,24 @@ export default function LeaderboardScreen() {
               </TouchableOpacity>
             </View>
 
-            {activeFilterType === 'country' && (
+            {(activeFilterType === 'country' || activeFilterType === 'carBrand' || activeFilterType === 'carModel') && (
               <View style={styles.searchContainer}>
                 <Search size={18} color={colors.textLight} />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Search country..."
+                  placeholder={activeFilterType === 'country' ? 'Search country...' : activeFilterType === 'carBrand' ? 'Search brand...' : 'Search model...'}
                   placeholderTextColor={colors.textLight}
-                  value={countrySearch}
-                  onChangeText={setCountrySearch}
+                  value={activeFilterType === 'country' ? countrySearch : activeFilterType === 'carBrand' ? carBrandSearch : carModelSearch}
+                  onChangeText={activeFilterType === 'country' ? setCountrySearch : activeFilterType === 'carBrand' ? setCarBrandSearch : setCarModelSearch}
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
-                {countrySearch.length > 0 && (
-                  <TouchableOpacity onPress={() => setCountrySearch('')} activeOpacity={0.7}>
+                {(activeFilterType === 'country' ? countrySearch : activeFilterType === 'carBrand' ? carBrandSearch : carModelSearch).length > 0 && (
+                  <TouchableOpacity onPress={() => {
+                    if (activeFilterType === 'country') setCountrySearch('');
+                    else if (activeFilterType === 'carBrand') setCarBrandSearch('');
+                    else setCarModelSearch('');
+                  }} activeOpacity={0.7}>
                     <X size={18} color={colors.textLight} />
                   </TouchableOpacity>
                 )}
