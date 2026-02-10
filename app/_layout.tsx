@@ -194,9 +194,9 @@ function PushTokenSync() {
 
 function RootLayoutNav() {
   return (
-    <Stack screenOptions={{ headerBackTitle: "Back" }}>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    <Stack screenOptions={{ headerBackTitle: "Back", contentStyle: { backgroundColor: '#000000' } }}>
+      <Stack.Screen name="index" options={{ headerShown: false, animation: 'none' }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'none' }} />
       <Stack.Screen name="profile" options={{ presentation: "card" }} />
       <Stack.Screen name="user-profile" options={{ presentation: "card" }} />
     </Stack>
@@ -206,6 +206,7 @@ function RootLayoutNav() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#000000',
   },
 });
 
