@@ -409,6 +409,15 @@ export default function ProfileScreen() {
     }
   };
 
+  const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out. Please check your connection and try again.`)), ms)
+      ),
+    ]);
+  };
+
   const handleSave = async () => {
     if (!email.trim()) {
       Alert.alert('Error', 'Please enter your email');
@@ -438,7 +447,11 @@ export default function ProfileScreen() {
     if (!isAuthenticated && authMode === 'signup') {
       setIsCheckingDisplayName(true);
       try {
-        const result = await trpcClient.user.checkDisplayName.query({ displayName: displayName.trim() });
+        const result = await withTimeout(
+          trpcClient.user.checkDisplayName.query({ displayName: displayName.trim() }),
+          15000,
+          'Display name check'
+        );
         if (!result.available) {
           setDisplayNameError('This display name is already taken');
           Alert.alert('Error', 'This display name is already taken. Please choose a different one.');
@@ -446,8 +459,14 @@ export default function ProfileScreen() {
           return;
         }
         setDisplayNameError('');
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to check display name:', error);
+        const isTimeout = error?.message?.includes('timed out');
+        if (isTimeout) {
+          setIsCheckingDisplayName(false);
+          Alert.alert('Connection Issue', 'Could not verify display name. Please check your connection and try again.');
+          return;
+        }
       } finally {
         setIsCheckingDisplayName(false);
       }
@@ -469,7 +488,11 @@ export default function ProfileScreen() {
         Alert.alert('Success', 'Profile updated successfully');
         router.back();
       } else if (authMode === 'signin') {
-        const result = await signIn(email, password);
+        const result = await withTimeout(
+          signIn(email, password),
+          20000,
+          'Sign in'
+        );
         if (result.success) {
           Alert.alert('Success', 'Signed in successfully');
           router.back();
@@ -486,17 +509,21 @@ export default function ProfileScreen() {
           picture: c.picture,
           isPrimary: false,
         }));
-        await signUp(
-          email, 
-          displayName,
-          password,
-          selectedCountry || undefined, 
-          selectedCity || undefined, 
-          selectedBrand || undefined, 
-          selectedModel || undefined,
-          profilePicture || undefined,
-          carPicture || undefined,
-          carsToAdd.length > 0 ? carsToAdd : undefined
+        await withTimeout(
+          signUp(
+            email, 
+            displayName,
+            password,
+            selectedCountry || undefined, 
+            selectedCity || undefined, 
+            selectedBrand || undefined, 
+            selectedModel || undefined,
+            profilePicture || undefined,
+            carPicture || undefined,
+            carsToAdd.length > 0 ? carsToAdd : undefined
+          ),
+          30000,
+          'Account creation'
         );
         Alert.alert('Success', 'Account created successfully');
         router.back();
@@ -505,7 +532,6 @@ export default function ProfileScreen() {
       console.error('Profile save error:', error);
       console.error('Error details:', JSON.stringify(error, null, 2));
       
-      // Extract the most useful error message
       let errorMessage = 'An unexpected error occurred. Please try again.';
       if (error?.message) {
         errorMessage = error.message;
