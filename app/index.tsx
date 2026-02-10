@@ -1,39 +1,33 @@
 import { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
+import { View, StyleSheet, Animated, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
-
     const timer = setTimeout(() => {
       Animated.timing(fadeAnim, {
         toValue: 0,
-        duration: 300,
+        duration: 400,
         useNativeDriver: true,
       }).start(() => {
         router.replace('/(tabs)/track');
       });
-    }, 5000);
+    }, 4000);
 
     return () => clearTimeout(timer);
   }, [fadeAnim, router]);
 
   return (
-    <View style={styles.container}>
-      <Animated.Image
-        source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/p9r5vd6lxx66zq9yngusf' }}
-        style={[styles.logo, { opacity: fadeAnim }]}
+    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+      <Image
+        source={require('@/assets/images/startup-animation.gif')}
+        style={styles.animation}
         resizeMode="contain"
       />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -44,8 +38,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logo: {
-    width: 200,
-    height: 200,
+  animation: {
+    width: 280,
+    height: 280,
   },
 });
