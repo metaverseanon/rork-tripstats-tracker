@@ -23,7 +23,7 @@ export default function WelcomeScreen() {
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       <Image
-        source={require('@/assets/images/startup-animation.gif')}
+        source={{ uri: 'https://r2-pub.rork.com/attachments/1c5o0h0k30qvgy75ubrhz' }}
         style={styles.animation}
         resizeMode="contain"
       />
