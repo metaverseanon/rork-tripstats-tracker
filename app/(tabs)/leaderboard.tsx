@@ -420,13 +420,21 @@ export default function LeaderboardScreen() {
       locations: [],
     }));
     
+    console.log('[LEADERBOARD_UI] Backend trips:', backendTrips.length, 'Local trips:', filteredLocalTrips.length);
+    
     const allTrips = [...backendTrips];
     
     filteredLocalTrips.forEach(localTrip => {
-      if (!allTrips.some(t => t.id === localTrip.id)) {
+      const existsInBackend = allTrips.some(t => t.id === localTrip.id);
+      if (!existsInBackend) {
+        console.log('[LEADERBOARD_UI] Adding local-only trip:', localTrip.id);
         allTrips.push(localTrip);
       }
     });
+
+    if (activeCategory === 'totalDistance') {
+      return allTrips.slice(0, 10);
+    }
     
     let sorted: LeaderboardTrip[] = [];
 
@@ -437,11 +445,6 @@ export default function LeaderboardScreen() {
           .sort((a, b) => b.topSpeed - a.topSpeed);
         break;
       case 'distance':
-        sorted = [...allTrips]
-          .filter((t) => t.distance > 0)
-          .sort((a, b) => b.distance - a.distance);
-        break;
-      case 'totalDistance':
         sorted = [...allTrips]
           .filter((t) => t.distance > 0)
           .sort((a, b) => b.distance - a.distance);

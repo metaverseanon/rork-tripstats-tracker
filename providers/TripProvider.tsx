@@ -13,6 +13,7 @@ const CURRENT_TRIP_KEY = 'current_trip';
 const TRACKING_STATE_KEY = 'tracking_state';
 const RECORDS_KEY = 'personal_records';
 const TOTAL_DISTANCE_KEY = 'total_distance';
+const SYNCED_TRIP_IDS_KEY = 'synced_trip_ids';
 
 interface PersonalRecords {
   topSpeed: number;
@@ -215,7 +216,9 @@ export const [TripProvider, useTrips] = createContextHook(() => {
   }, [refreshSpeedFromStorage, fetchFreshLocation]);
 
   useEffect(() => {
-    loadTrips();
+    loadTrips().then(() => {
+      syncUnsyncedTrips();
+    });
     restoreTrackingState();
     return () => {
       backgroundLocationCallback = null;
@@ -599,6 +602,29 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     }
   };
 
+  const markTripSynced = async (tripId: string): Promise<void> => {
+    try {
+      const stored = await AsyncStorage.getItem(SYNCED_TRIP_IDS_KEY);
+      const syncedIds: string[] = stored ? JSON.parse(stored) : [];
+      if (!syncedIds.includes(tripId)) {
+        syncedIds.push(tripId);
+        await AsyncStorage.setItem(SYNCED_TRIP_IDS_KEY, JSON.stringify(syncedIds));
+      }
+    } catch (e) {
+      console.error('[TRIP_SYNC] Failed to mark trip as synced:', e);
+    }
+  };
+
+  const getSyncedTripIds = async (): Promise<string[]> => {
+    try {
+      const stored = await AsyncStorage.getItem(SYNCED_TRIP_IDS_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+      console.error('[TRIP_SYNC] Failed to get synced trip IDs:', e);
+      return [];
+    }
+  };
+
   const syncTripToBackend = async (trip: TripStats): Promise<boolean> => {
     try {
       console.log('[TRIP_SYNC] Starting sync for trip:', trip.id);
@@ -646,11 +672,49 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       console.log('[TRIP_SYNC] Sending payload:', JSON.stringify(payload));
       const result = await trpcClient.trips.syncTrip.mutate(payload);
       console.log('[TRIP_SYNC] Trip synced successfully:', trip.id, 'result:', JSON.stringify(result));
-      return true;
+      
+      if (result.success) {
+        await markTripSynced(trip.id);
+      }
+      
+      return result.success ?? false;
     } catch (error) {
       console.error('[TRIP_SYNC] Failed to sync trip:', error);
       console.error('[TRIP_SYNC] Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error as object)));
       return false;
+    }
+  };
+
+  const syncUnsyncedTrips = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(TRIPS_KEY);
+      if (!stored) return;
+      
+      const allTrips: TripStats[] = JSON.parse(stored);
+      if (!Array.isArray(allTrips) || allTrips.length === 0) return;
+      
+      const syncedIds = await getSyncedTripIds();
+      const unsyncedTrips = allTrips.filter(t => !syncedIds.includes(t.id) && t.endTime);
+      
+      if (unsyncedTrips.length === 0) {
+        console.log('[TRIP_SYNC] All trips are synced');
+        return;
+      }
+      
+      console.log('[TRIP_SYNC] Found', unsyncedTrips.length, 'unsynced trips, syncing now...');
+      
+      let syncedCount = 0;
+      for (const trip of unsyncedTrips) {
+        const success = await syncTripToBackend(trip);
+        if (success) {
+          syncedCount++;
+        }
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+      
+      console.log('[TRIP_SYNC] Batch sync complete:', syncedCount, '/', unsyncedTrips.length, 'synced');
+    } catch (error) {
+      console.error('[TRIP_SYNC] Failed to sync unsynced trips:', error);
     }
   };
 

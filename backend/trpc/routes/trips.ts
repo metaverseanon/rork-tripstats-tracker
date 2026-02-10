@@ -101,6 +101,103 @@ function supabaseRowToTrip(row: SupabaseTripRow): SyncedTrip {
   };
 }
 
+async function getTotalDistanceLeaderboard(input: {
+  country?: string;
+  city?: string;
+  carBrand?: string;
+  carModel?: string;
+  timePeriod?: string;
+  limit: number;
+}): Promise<SyncedTrip[]> {
+  try {
+    let url = getSupabaseRestUrl("trips");
+    const params: string[] = ["select=*", "distance=gt.0"];
+
+    if (input.country) {
+      params.push(`country=eq.${encodeURIComponent(input.country)}`);
+    }
+    if (input.city) {
+      params.push(`city=eq.${encodeURIComponent(input.city)}`);
+    }
+    if (input.carBrand && input.carModel) {
+      const fullModel = `${input.carBrand} ${input.carModel}`;
+      params.push(`car_model=eq.${encodeURIComponent(fullModel)}`);
+    } else if (input.carBrand) {
+      params.push(`car_model=like.${encodeURIComponent(input.carBrand + "*")}`);
+    }
+
+    if (input.timePeriod && input.timePeriod !== "all") {
+      const now = new Date();
+      let startTime = 0;
+      switch (input.timePeriod) {
+        case "today":
+          startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+          break;
+        case "week": {
+          const dayOfWeek = now.getDay();
+          startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek).getTime();
+          break;
+        }
+        case "month":
+          startTime = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+          break;
+        case "year":
+          startTime = new Date(now.getFullYear(), 0, 1).getTime();
+          break;
+      }
+      if (startTime > 0) {
+        params.push(`start_time=gte.${startTime}`);
+      }
+    }
+
+    params.push("order=start_time.desc");
+    params.push("limit=1000");
+    url += "?" + params.join("&");
+
+    console.log("[LEADERBOARD] totalDistance fetch from:", url);
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: getSupabaseHeaders(),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("[LEADERBOARD] totalDistance fetch failed:", error);
+      return [];
+    }
+
+    const rows: SupabaseTripRow[] = await response.json();
+    const trips = rows.map(supabaseRowToTrip);
+
+    const userTotals = new Map<string, { totalDistance: number; trip: SyncedTrip }>(); 
+    for (const trip of trips) {
+      const existing = userTotals.get(trip.userId);
+      if (existing) {
+        existing.totalDistance += trip.distance;
+        if (trip.startTime > existing.trip.startTime) {
+          existing.trip = { ...trip, distance: existing.totalDistance };
+        } else {
+          existing.trip = { ...existing.trip, distance: existing.totalDistance };
+        }
+      } else {
+        userTotals.set(trip.userId, { totalDistance: trip.distance, trip: { ...trip } });
+      }
+    }
+
+    const aggregated = Array.from(userTotals.values())
+      .map(v => ({ ...v.trip, distance: v.totalDistance }))
+      .sort((a, b) => b.distance - a.distance)
+      .slice(0, input.limit);
+
+    console.log("[LEADERBOARD] totalDistance aggregated:", aggregated.length, "users");
+    return aggregated;
+  } catch (error) {
+    console.error("[LEADERBOARD] totalDistance error:", error);
+    return [];
+  }
+}
+
 export const tripsRouter = createTRPCRouter({
   syncTrip: publicProcedure
     .input(TripStatsSchema)
@@ -183,16 +280,29 @@ export const tripsRouter = createTRPCRouter({
       })
     )
     .query(async ({ input }) => {
-      console.log("[TRIPS] Fetching leaderboard trips for category:", input.category);
+      console.log("[LEADERBOARD] Fetching leaderboard for category:", input.category, "filters:", JSON.stringify({
+        country: input.country,
+        city: input.city,
+        carBrand: input.carBrand,
+        carModel: input.carModel,
+        timePeriod: input.timePeriod,
+        limit: input.limit,
+      }));
 
       if (!isDbConfigured()) {
-        console.log("[TRIPS] Database not configured");
+        console.log("[LEADERBOARD] Database not configured");
         return [];
       }
 
       try {
+        if (input.category === "totalDistance") {
+          return await getTotalDistanceLeaderboard(input);
+        }
+
         let url = getSupabaseRestUrl("trips");
         const params: string[] = [];
+        
+        params.push("select=*");
 
         if (input.country) {
           params.push(`country=eq.${encodeURIComponent(input.country)}`);
@@ -204,7 +314,7 @@ export const tripsRouter = createTRPCRouter({
           const fullModel = `${input.carBrand} ${input.carModel}`;
           params.push(`car_model=eq.${encodeURIComponent(fullModel)}`);
         } else if (input.carBrand) {
-          params.push(`car_model=like.${encodeURIComponent(input.carBrand)}*`);
+          params.push(`car_model=like.${encodeURIComponent(input.carBrand + "*")}`);
         }
 
         if (input.timePeriod && input.timePeriod !== "all") {
@@ -215,10 +325,11 @@ export const tripsRouter = createTRPCRouter({
             case "today":
               startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
               break;
-            case "week":
+            case "week": {
               const dayOfWeek = now.getDay();
               startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek).getTime();
               break;
+            }
             case "month":
               startTime = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
               break;
@@ -244,7 +355,6 @@ export const tripsRouter = createTRPCRouter({
             filter = "top_speed=gt.0";
             break;
           case "distance":
-          case "totalDistance":
             orderBy = "distance";
             filter = "distance=gt.0";
             break;
@@ -272,11 +382,9 @@ export const tripsRouter = createTRPCRouter({
         params.push(`order=${orderBy}.${ascending ? "asc" : "desc"}`);
         params.push(`limit=${input.limit}`);
 
-        if (params.length > 0) {
-          url += "?" + params.join("&");
-        }
+        url += "?" + params.join("&");
 
-        console.log("[TRIPS] Fetching from:", url);
+        console.log("[LEADERBOARD] Fetching from:", url);
 
         const response = await fetch(url, {
           method: "GET",
@@ -285,18 +393,24 @@ export const tripsRouter = createTRPCRouter({
 
         if (!response.ok) {
           const error = await response.text();
-          console.error("[TRIPS] Failed to fetch trips:", error);
+          console.error("[LEADERBOARD] Failed to fetch trips:", response.status, error);
           return [];
         }
 
         const rows: SupabaseTripRow[] = await response.json();
+        console.log("[LEADERBOARD] Raw rows returned:", rows.length);
+        
         const trips = rows.map(supabaseRowToTrip);
         
-        const uniqueUsers = [...new Set(trips.map(t => t.userName || t.userId))];
-        console.log("[TRIPS] Fetched", trips.length, "trips from", uniqueUsers.length, "unique users:", uniqueUsers.join(', '));
+        const uniqueUsers = [...new Set(trips.map(t => t.userId))];
+        console.log("[LEADERBOARD] Fetched", trips.length, "trips from", uniqueUsers.length, "unique users:", uniqueUsers.map(uid => {
+          const t = trips.find(tr => tr.userId === uid);
+          return `${t?.userName || 'unknown'}(${uid})`;
+        }).join(', '));
+        
         return trips;
       } catch (error) {
-        console.error("[TRIPS] Error fetching trips:", error);
+        console.error("[LEADERBOARD] Error fetching trips:", error);
         return [];
       }
     }),
