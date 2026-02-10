@@ -77,6 +77,10 @@ export default function ProfileScreen() {
   const [resetStep, setResetStep] = useState<'email' | 'code' | 'newPassword'>('email');
   const [isResetting, setIsResetting] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [brandSearch, setBrandSearch] = useState('');
+  const [modelSearch, setModelSearch] = useState('');
+  const [newBrandSearch, setNewBrandSearch] = useState('');
+  const [newModelSearch, setNewModelSearch] = useState('');
 
   const [request, response, promptAsync] = Google.useAuthRequest({
     webClientId: '229508757301-qu9290kh0vb6ijl7jpmftbkmbpotnn6m.apps.googleusercontent.com',
@@ -133,6 +137,24 @@ export default function ProfileScreen() {
     return selectedBrand ? getModelsForBrand(selectedBrand) : [];
   }, [selectedBrand]);
 
+  const filteredBrands = useMemo(() => {
+    if (!brandSearch.trim()) return CAR_BRANDS;
+    const s = brandSearch.toLowerCase();
+    return CAR_BRANDS.filter(b => b.name.toLowerCase().includes(s));
+  }, [brandSearch]);
+
+  const filteredModels = useMemo(() => {
+    if (!modelSearch.trim()) return availableModels;
+    const s = modelSearch.toLowerCase();
+    return availableModels.filter(m => m.toLowerCase().includes(s));
+  }, [modelSearch, availableModels]);
+
+  const filteredNewBrands = useMemo(() => {
+    if (!newBrandSearch.trim()) return CAR_BRANDS;
+    const s = newBrandSearch.toLowerCase();
+    return CAR_BRANDS.filter(b => b.name.toLowerCase().includes(s));
+  }, [newBrandSearch]);
+
   const availableCities = useMemo(() => {
     return selectedCountry ? getCitiesForCountry(selectedCountry) : [];
   }, [selectedCountry]);
@@ -150,6 +172,12 @@ export default function ProfileScreen() {
   const newCarModels = useMemo(() => {
     return newCarBrand ? getModelsForBrand(newCarBrand) : [];
   }, [newCarBrand]);
+
+  const filteredNewModels = useMemo(() => {
+    if (!newModelSearch.trim()) return newCarModels;
+    const s = newModelSearch.toLowerCase();
+    return newCarModels.filter(m => m.toLowerCase().includes(s));
+  }, [newModelSearch, newCarModels]);
 
   const existingCars = useMemo(() => {
     return user?.cars?.filter(c => !c.isPrimary) || [];
@@ -261,22 +289,28 @@ export default function ProfileScreen() {
     setSelectedBrand(brand);
     setSelectedModel('');
     setShowBrandPicker(false);
+    setBrandSearch('');
+    setModelSearch('');
   };
 
   const handleModelSelect = (model: string) => {
     setSelectedModel(model);
     setShowModelPicker(false);
+    setModelSearch('');
   };
 
   const handleNewBrandSelect = (brand: string) => {
     setNewCarBrand(brand);
     setNewCarModel('');
     setShowNewBrandPicker(false);
+    setNewBrandSearch('');
+    setNewModelSearch('');
   };
 
   const handleNewModelSelect = (model: string) => {
     setNewCarModel(model);
     setShowNewModelPicker(false);
+    setNewModelSearch('');
   };
 
   const handleAddCar = () => {
@@ -636,6 +670,10 @@ export default function ProfileScreen() {
     setShowModelPicker(false);
     setShowNewBrandPicker(false);
     setShowNewModelPicker(false);
+    setBrandSearch('');
+    setModelSearch('');
+    setNewBrandSearch('');
+    setNewModelSearch('');
   };
 
   return (
@@ -981,29 +1019,46 @@ export default function ProfileScreen() {
               
               {showBrandPicker && (
                 <View style={styles.pickerOptions}>
-                  <ScrollView style={styles.pickerScroll} nestedScrollEnabled>
-                    {CAR_BRANDS.map((brand) => (
-                      <TouchableOpacity
-                        key={brand.name}
-                        style={[
-                          styles.pickerOption,
-                          selectedBrand === brand.name && styles.pickerOptionSelected,
-                        ]}
-                        onPress={() => handleBrandSelect(brand.name)}
-                      >
-                        <Text
+                  <View style={styles.searchContainer}>
+                    <Search color={colors.textLight} size={16} />
+                    <TextInput
+                      style={styles.searchInput}
+                      placeholder="Search brand..."
+                      placeholderTextColor={colors.textLight}
+                      value={brandSearch}
+                      onChangeText={setBrandSearch}
+                      autoFocus
+                    />
+                  </View>
+                  <ScrollView style={styles.pickerScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                    {filteredBrands.length === 0 ? (
+                      <View style={styles.noResults}>
+                        <Text style={styles.noResultsText}>No brands found</Text>
+                      </View>
+                    ) : (
+                      filteredBrands.map((brand) => (
+                        <TouchableOpacity
+                          key={brand.name}
                           style={[
-                            styles.pickerOptionText,
-                            selectedBrand === brand.name && styles.pickerOptionTextSelected,
+                            styles.pickerOption,
+                            selectedBrand === brand.name && styles.pickerOptionSelected,
                           ]}
+                          onPress={() => handleBrandSelect(brand.name)}
                         >
-                          {brand.name}
-                        </Text>
-                        {selectedBrand === brand.name && (
-                          <Check color={colors.accent} size={18} />
-                        )}
-                      </TouchableOpacity>
-                    ))}
+                          <Text
+                            style={[
+                              styles.pickerOptionText,
+                              selectedBrand === brand.name && styles.pickerOptionTextSelected,
+                            ]}
+                          >
+                            {brand.name}
+                          </Text>
+                          {selectedBrand === brand.name && (
+                            <Check color={colors.accent} size={18} />
+                          )}
+                        </TouchableOpacity>
+                      ))
+                    )}
                   </ScrollView>
                 </View>
               )}
@@ -1029,29 +1084,46 @@ export default function ProfileScreen() {
 
               {showModelPicker && availableModels.length > 0 && (
                 <View style={styles.pickerOptions}>
-                  <ScrollView style={styles.pickerScroll} nestedScrollEnabled>
-                    {availableModels.map((model, index) => (
-                      <TouchableOpacity
-                        key={`${model}-${index}`}
-                        style={[
-                          styles.pickerOption,
-                          selectedModel === model && styles.pickerOptionSelected,
-                        ]}
-                        onPress={() => handleModelSelect(model)}
-                      >
-                        <Text
+                  <View style={styles.searchContainer}>
+                    <Search color={colors.textLight} size={16} />
+                    <TextInput
+                      style={styles.searchInput}
+                      placeholder="Search model..."
+                      placeholderTextColor={colors.textLight}
+                      value={modelSearch}
+                      onChangeText={setModelSearch}
+                      autoFocus
+                    />
+                  </View>
+                  <ScrollView style={styles.pickerScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                    {filteredModels.length === 0 ? (
+                      <View style={styles.noResults}>
+                        <Text style={styles.noResultsText}>No models found</Text>
+                      </View>
+                    ) : (
+                      filteredModels.map((model, index) => (
+                        <TouchableOpacity
+                          key={`${model}-${index}`}
                           style={[
-                            styles.pickerOptionText,
-                            selectedModel === model && styles.pickerOptionTextSelected,
+                            styles.pickerOption,
+                            selectedModel === model && styles.pickerOptionSelected,
                           ]}
+                          onPress={() => handleModelSelect(model)}
                         >
-                          {model}
-                        </Text>
-                        {selectedModel === model && (
-                          <Check color={colors.accent} size={18} />
-                        )}
-                      </TouchableOpacity>
-                    ))}
+                          <Text
+                            style={[
+                              styles.pickerOptionText,
+                              selectedModel === model && styles.pickerOptionTextSelected,
+                            ]}
+                          >
+                            {model}
+                          </Text>
+                          {selectedModel === model && (
+                            <Check color={colors.accent} size={18} />
+                          )}
+                        </TouchableOpacity>
+                      ))
+                    )}
                   </ScrollView>
                 </View>
               )}
@@ -1130,29 +1202,46 @@ export default function ProfileScreen() {
                   
                   {showNewBrandPicker && (
                     <View style={styles.pickerOptions}>
-                      <ScrollView style={styles.pickerScroll} nestedScrollEnabled>
-                        {CAR_BRANDS.map((brand) => (
-                          <TouchableOpacity
-                            key={brand.name}
-                            style={[
-                              styles.pickerOption,
-                              newCarBrand === brand.name && styles.pickerOptionSelected,
-                            ]}
-                            onPress={() => handleNewBrandSelect(brand.name)}
-                          >
-                            <Text
+                      <View style={styles.searchContainer}>
+                        <Search color={colors.textLight} size={16} />
+                        <TextInput
+                          style={styles.searchInput}
+                          placeholder="Search brand..."
+                          placeholderTextColor={colors.textLight}
+                          value={newBrandSearch}
+                          onChangeText={setNewBrandSearch}
+                          autoFocus
+                        />
+                      </View>
+                      <ScrollView style={styles.pickerScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                        {filteredNewBrands.length === 0 ? (
+                          <View style={styles.noResults}>
+                            <Text style={styles.noResultsText}>No brands found</Text>
+                          </View>
+                        ) : (
+                          filteredNewBrands.map((brand) => (
+                            <TouchableOpacity
+                              key={brand.name}
                               style={[
-                                styles.pickerOptionText,
-                                newCarBrand === brand.name && styles.pickerOptionTextSelected,
+                                styles.pickerOption,
+                                newCarBrand === brand.name && styles.pickerOptionSelected,
                               ]}
+                              onPress={() => handleNewBrandSelect(brand.name)}
                             >
-                              {brand.name}
-                            </Text>
-                            {newCarBrand === brand.name && (
-                              <Check color={colors.accent} size={18} />
-                            )}
-                          </TouchableOpacity>
-                        ))}
+                              <Text
+                                style={[
+                                  styles.pickerOptionText,
+                                  newCarBrand === brand.name && styles.pickerOptionTextSelected,
+                                ]}
+                              >
+                                {brand.name}
+                              </Text>
+                              {newCarBrand === brand.name && (
+                                <Check color={colors.accent} size={18} />
+                              )}
+                            </TouchableOpacity>
+                          ))
+                        )}
                       </ScrollView>
                     </View>
                   )}
@@ -1178,29 +1267,46 @@ export default function ProfileScreen() {
 
                   {showNewModelPicker && newCarModels.length > 0 && (
                     <View style={styles.pickerOptions}>
-                      <ScrollView style={styles.pickerScroll} nestedScrollEnabled>
-                        {newCarModels.map((model, index) => (
-                          <TouchableOpacity
-                            key={`${model}-${index}`}
-                            style={[
-                              styles.pickerOption,
-                              newCarModel === model && styles.pickerOptionSelected,
-                            ]}
-                            onPress={() => handleNewModelSelect(model)}
-                          >
-                            <Text
+                      <View style={styles.searchContainer}>
+                        <Search color={colors.textLight} size={16} />
+                        <TextInput
+                          style={styles.searchInput}
+                          placeholder="Search model..."
+                          placeholderTextColor={colors.textLight}
+                          value={newModelSearch}
+                          onChangeText={setNewModelSearch}
+                          autoFocus
+                        />
+                      </View>
+                      <ScrollView style={styles.pickerScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                        {filteredNewModels.length === 0 ? (
+                          <View style={styles.noResults}>
+                            <Text style={styles.noResultsText}>No models found</Text>
+                          </View>
+                        ) : (
+                          filteredNewModels.map((model, index) => (
+                            <TouchableOpacity
+                              key={`${model}-${index}`}
                               style={[
-                                styles.pickerOptionText,
-                                newCarModel === model && styles.pickerOptionTextSelected,
+                                styles.pickerOption,
+                                newCarModel === model && styles.pickerOptionSelected,
                               ]}
+                              onPress={() => handleNewModelSelect(model)}
                             >
-                              {model}
-                            </Text>
-                            {newCarModel === model && (
-                              <Check color={colors.accent} size={18} />
-                            )}
-                          </TouchableOpacity>
-                        ))}
+                              <Text
+                                style={[
+                                  styles.pickerOptionText,
+                                  newCarModel === model && styles.pickerOptionTextSelected,
+                                ]}
+                              >
+                                {model}
+                              </Text>
+                              {newCarModel === model && (
+                                <Check color={colors.accent} size={18} />
+                              )}
+                            </TouchableOpacity>
+                          ))
+                        )}
                       </ScrollView>
                     </View>
                   )}
