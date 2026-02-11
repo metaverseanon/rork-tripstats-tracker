@@ -153,12 +153,14 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
               text: 'View',
               onPress: () => {
                 console.log('[PUSH] User tapped View on foreground drive ping');
-                setPendingAction({
-                  type: 'open_meetups',
-                  meetupId: data.meetupId as string,
-                  fromUserName: fromName,
-                });
-                router.push('/(tabs)/leaderboard');
+                router.navigate('/(tabs)/leaderboard');
+                setTimeout(() => {
+                  setPendingAction({
+                    type: 'open_meetups',
+                    meetupId: data.meetupId as string,
+                    fromUserName: fromName,
+                  });
+                }, 500);
               },
             },
           ]
@@ -173,11 +175,13 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
             {
               text: 'View',
               onPress: () => {
-                setPendingAction({
-                  type: 'open_meetups',
-                  meetupId: data.meetupId as string,
-                });
-                router.push('/(tabs)/leaderboard');
+                router.navigate('/(tabs)/leaderboard');
+                setTimeout(() => {
+                  setPendingAction({
+                    type: 'open_meetups',
+                    meetupId: data.meetupId as string,
+                  });
+                }, 500);
               },
             },
           ]
@@ -192,11 +196,13 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
             {
               text: 'View',
               onPress: () => {
-                setPendingAction({
-                  type: 'open_meetups',
-                  meetupId: data.meetupId as string,
-                });
-                router.push('/(tabs)/leaderboard');
+                router.navigate('/(tabs)/leaderboard');
+                setTimeout(() => {
+                  setPendingAction({
+                    type: 'open_meetups',
+                    meetupId: data.meetupId as string,
+                  });
+                }, 500);
               },
             },
           ]
@@ -210,13 +216,15 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
       
       if (data?.type === 'drive_ping' || data?.type === 'ping_accepted' || data?.type === 'ping_declined' || data?.type === 'location_shared' || data?.type === 'meetup_cancelled') {
         console.log('[PUSH] Drive-related notification tapped, navigating to meetups');
-        setPendingAction({
-          type: 'open_meetups',
-          meetupId: data.meetupId as string,
-          fromUserName: data.fromUserName as string,
-        });
         setTimeout(() => {
-          router.push('/(tabs)/leaderboard');
+          router.navigate('/(tabs)/leaderboard');
+          setTimeout(() => {
+            setPendingAction({
+              type: 'open_meetups',
+              meetupId: data.meetupId as string,
+              fromUserName: data.fromUserName as string,
+            });
+          }, 500);
         }, 300);
       }
     });
