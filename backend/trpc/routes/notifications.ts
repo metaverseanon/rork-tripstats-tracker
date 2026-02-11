@@ -41,6 +41,7 @@ interface ExpoPushMessage {
   sound?: string;
   data?: Record<string, unknown>;
   channelId?: string;
+  priority?: 'default' | 'normal' | 'high';
 }
 
 interface ExpoPushTicket {
@@ -68,6 +69,7 @@ async function sendExpoPushNotification(message: ExpoPushMessage): Promise<boole
         sound: message.sound || "default",
         data: message.data || {},
         channelId: message.channelId || "default",
+        priority: message.priority || "high",
       }),
     });
 
@@ -120,6 +122,7 @@ async function sendBatchNotifications(messages: ExpoPushMessage[]): Promise<{ se
           sound: msg.sound || "default",
           data: msg.data || {},
           channelId: msg.channelId || "default",
+          priority: msg.priority || "high",
         }))),
       });
 
@@ -446,6 +449,8 @@ export const notificationsRouter = createTRPCRouter({
         to: targetUser.pushToken,
         title: "🚗 Drive Invite!",
         body: `${input.fromUserName}${carInfo} wants to go for a drive with you!`,
+        sound: "default",
+        priority: "high",
         data: { 
           type: "drive_ping", 
           meetupId,
@@ -491,6 +496,8 @@ export const notificationsRouter = createTRPCRouter({
           to: pinger.pushToken,
           title,
           body,
+          sound: "default",
+          priority: "high",
           data: {
             type: input.response === 'accepted' ? 'ping_accepted' : 'ping_declined',
             meetupId: input.meetupId,
@@ -543,6 +550,8 @@ export const notificationsRouter = createTRPCRouter({
           to: otherUser.pushToken,
           title: "📍 Location Shared!",
           body: `${input.userName} shared their location for the meetup.`,
+          sound: "default",
+          priority: "high",
           data: {
             type: 'location_shared',
             meetupId: input.meetupId,
@@ -610,6 +619,8 @@ export const notificationsRouter = createTRPCRouter({
           to: otherUser.pushToken,
           title: "❌ Meetup Cancelled",
           body: `${input.userName} cancelled the drive meetup.`,
+          sound: "default",
+          priority: "high",
           data: { type: 'meetup_cancelled', meetupId: input.meetupId },
         });
       }
