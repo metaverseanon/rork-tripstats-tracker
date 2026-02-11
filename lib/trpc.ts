@@ -18,13 +18,39 @@ const getBaseUrl = () => {
   return url;
 };
 
-const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 1000;
+const MAX_RETRIES = 4;
+const RETRY_DELAY_MS = 1500;
+const REQUEST_TIMEOUT_MS = 30000;
+
+const fetchWithTimeout = async (url: RequestInfo | URL, options: RequestInit | undefined, timeoutMs: number): Promise<Response> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
+const isRetryableError = (error: unknown): boolean => {
+  if (error instanceof TypeError) {
+    const msg = String(error.message).toLowerCase();
+    return msg.includes('failed to fetch') || msg.includes('network request failed') || msg.includes('load failed');
+  }
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return true;
+  }
+  return false;
+};
 
 const fetchWithRetry = async (url: RequestInfo | URL, options: RequestInit | undefined, requestId: string, attempt = 1): Promise<Response> => {
   try {
     const startTime = Date.now();
-    const response = await fetch(url, options);
+    const response = await fetchWithTimeout(url, options, REQUEST_TIMEOUT_MS);
     const duration = Date.now() - startTime;
     console.log(`[TRPC:${requestId}] Response status: ${response.status} (${duration}ms, attempt ${attempt})`);
 
@@ -33,6 +59,12 @@ const fetchWithRetry = async (url: RequestInfo | URL, options: RequestInit | und
     if (!contentType.includes('application/json')) {
       const text = await response.text();
       console.error(`[TRPC:${requestId}] Non-JSON response:`, text.substring(0, 500));
+      if (attempt < MAX_RETRIES) {
+        const delay = RETRY_DELAY_MS * attempt;
+        console.warn(`[TRPC:${requestId}] Non-JSON on attempt ${attempt}, retrying in ${delay}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return fetchWithRetry(url, options, requestId, attempt + 1);
+      }
       throw new Error(`Server returned non-JSON response (${response.status}): ${text.substring(0, 100)}`);
     }
 
@@ -40,15 +72,21 @@ const fetchWithRetry = async (url: RequestInfo | URL, options: RequestInit | und
       const clonedResponse = response.clone();
       const text = await clonedResponse.text();
       console.error(`[TRPC:${requestId}] ERROR ${response.status}:`, text.substring(0, 300));
+      if (response.status >= 500 && attempt < MAX_RETRIES) {
+        const delay = RETRY_DELAY_MS * attempt;
+        console.warn(`[TRPC:${requestId}] Server error on attempt ${attempt}, retrying in ${delay}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return fetchWithRetry(url, options, requestId, attempt + 1);
+      }
       throw new Error(`Server error: ${response.status}`);
     }
 
     return response;
   } catch (error) {
-    const isNetworkError = error instanceof TypeError && String(error.message).includes('Failed to fetch');
-    if (isNetworkError && attempt < MAX_RETRIES) {
+    if (isRetryableError(error) && attempt < MAX_RETRIES) {
       const delay = RETRY_DELAY_MS * attempt;
-      console.warn(`[TRPC:${requestId}] Network error on attempt ${attempt}, retrying in ${delay}ms...`);
+      const errorName = error instanceof DOMException ? 'Timeout' : 'Network error';
+      console.warn(`[TRPC:${requestId}] ${errorName} on attempt ${attempt}, retrying in ${delay}ms...`);
       await new Promise((resolve) => setTimeout(resolve, delay));
       return fetchWithRetry(url, options, requestId, attempt + 1);
     }
