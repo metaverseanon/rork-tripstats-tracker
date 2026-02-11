@@ -59,23 +59,22 @@ app.get("/health", (c) => {
   });
 });
 
-// Cron endpoint for weekly recap (Sunday 9pm)
-// Use with cron-job.org or similar: GET https://your-app.rork.app/api/cron/weekly-recap
+// Cron endpoint for weekly recap (runs every hour, sends to users where it's Sunday 10 PM local time)
+// Use with cron-job.org: crontab "0 * * * *" (every hour)
 app.get("/cron/weekly-recap", async (c) => {
   const authHeader = c.req.header("Authorization");
   const cronSecret = process.env.CRON_SECRET;
   
-  // Optional: protect with secret
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     console.log("[CRON] Unauthorized request to weekly-recap");
     return c.json({ error: "Unauthorized" }, 401);
   }
   
-  console.log("[CRON] Weekly recap triggered at", new Date().toISOString());
+  console.log("[CRON] Timezone-aware weekly recap triggered at", new Date().toISOString());
   
   try {
     const caller = appRouter.createCaller({ req: c.req.raw, db: getDbConfig() });
-    const result = await caller.weeklyEmail.sendWeeklyRecapWithPush({});
+    const result = await caller.weeklyEmail.sendWeeklyRecapByTimezone({ targetHour: 22, forceSend: false });
     
     console.log("[CRON] Weekly recap completed:", result);
     return c.json({ 
