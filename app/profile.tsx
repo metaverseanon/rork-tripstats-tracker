@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useSettings } from '@/providers/SettingsProvider';
 import { ThemeColors } from '@/constants/colors';
 import { useUser } from '@/providers/UserProvider';
+import { useTrips } from '@/providers/TripProvider';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { CAR_BRANDS, getModelsForBrand } from '@/constants/cars';
@@ -37,6 +38,7 @@ interface AdditionalCar {
 
 export default function ProfileScreen() {
   const { user, isAuthenticated, signUp, signIn, signOut, updateProfile, updateCar, updateLocation, addCar, removeCar, setPrimaryCar, signInWithGoogle } = useUser();
+  const { syncUnsyncedTrips } = useTrips();
   const [authMode, setAuthMode] = useState<'signup' | 'signin'>('signin');
   const { colors } = useSettings();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -108,6 +110,8 @@ export default function ProfileScreen() {
                 googleUser.name || googleUser.email.split('@')[0],
                 googleUser.picture
               );
+              console.log('[PROFILE] Google sign-in successful, triggering trip sync...');
+              syncUnsyncedTrips();
               Alert.alert('Success', 'Signed in with Google successfully');
               router.back();
             } else {
@@ -494,6 +498,8 @@ export default function ProfileScreen() {
           'Sign in'
         );
         if (result.success) {
+          console.log('[PROFILE] Sign-in successful, triggering trip sync...');
+          syncUnsyncedTrips();
           Alert.alert('Success', 'Signed in successfully');
           router.back();
         } else if (result.error === 'incorrect_password') {
@@ -525,6 +531,8 @@ export default function ProfileScreen() {
           30000,
           'Account creation'
         );
+        console.log('[PROFILE] Sign-up successful, triggering trip sync...');
+        syncUnsyncedTrips();
         Alert.alert('Success', 'Account created successfully');
         router.back();
       }

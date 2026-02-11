@@ -220,9 +220,16 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       syncUnsyncedTrips();
     });
     restoreTrackingState();
+    
+    const syncRetryInterval = setInterval(() => {
+      console.log('[TRIP_SYNC] Periodic sync check running...');
+      syncUnsyncedTrips();
+    }, 60000);
+    
     return () => {
       backgroundLocationCallback = null;
       processLocationRef = null;
+      clearInterval(syncRetryInterval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -632,14 +639,21 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       console.log('[TRIP_SYNC] Stored user data exists:', !!storedUser);
       
       if (!storedUser) {
-        console.error('[TRIP_SYNC] No user profile in AsyncStorage, cannot sync');
+        console.warn('[TRIP_SYNC] No user profile in AsyncStorage, cannot sync. User may not have created account yet.');
         return false;
       }
       
-      const userData = JSON.parse(storedUser);
-      const userIdToUse = userData.id;
-      const userNameToUse = userData.displayName;
-      const userPictureToUse = userData.profilePicture;
+      let userData: Record<string, unknown>;
+      try {
+        userData = JSON.parse(storedUser);
+      } catch (parseErr) {
+        console.error('[TRIP_SYNC] Failed to parse user profile JSON:', parseErr);
+        return false;
+      }
+      
+      const userIdToUse = userData.id as string | undefined;
+      const userNameToUse = userData.displayName as string | undefined;
+      const userPictureToUse = userData.profilePicture as string | undefined;
       
       console.log('[TRIP_SYNC] User data:', { id: userIdToUse, name: userNameToUse, hasPicture: !!userPictureToUse });
       
@@ -669,24 +683,50 @@ export const [TripProvider, useTrips] = createContextHook(() => {
         time0to300: trip.time0to300,
       };
       
-      console.log('[TRIP_SYNC] Sending payload:', JSON.stringify(payload));
+      console.log('[TRIP_SYNC] Sending payload for trip:', trip.id, 'userId:', userIdToUse, 'distance:', trip.distance, 'topSpeed:', trip.topSpeed);
       const result = await trpcClient.trips.syncTrip.mutate(payload);
-      console.log('[TRIP_SYNC] Trip synced successfully:', trip.id, 'result:', JSON.stringify(result));
+      console.log('[TRIP_SYNC] Backend response for trip:', trip.id, 'result:', JSON.stringify(result));
       
       if (result.success) {
         await markTripSynced(trip.id);
+        console.log('[TRIP_SYNC] Trip marked as synced:', trip.id);
+      } else {
+        console.error('[TRIP_SYNC] Backend returned success=false for trip:', trip.id, 'message:', (result as { message?: string }).message);
       }
       
       return result.success ?? false;
     } catch (error) {
-      console.error('[TRIP_SYNC] Failed to sync trip:', error);
-      console.error('[TRIP_SYNC] Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error as object)));
+      console.error('[TRIP_SYNC] Failed to sync trip:', trip.id);
+      console.error('[TRIP_SYNC] Error:', error);
+      if (error instanceof Error) {
+        console.error('[TRIP_SYNC] Error message:', error.message);
+        console.error('[TRIP_SYNC] Error stack:', error.stack);
+      }
       return false;
     }
   };
 
   const syncUnsyncedTrips = async () => {
     try {
+      const storedUser = await AsyncStorage.getItem('user_profile');
+      if (!storedUser) {
+        console.log('[TRIP_SYNC] No user profile yet, skipping batch sync');
+        return;
+      }
+      
+      let userData: Record<string, unknown>;
+      try {
+        userData = JSON.parse(storedUser);
+      } catch {
+        console.error('[TRIP_SYNC] Failed to parse user profile, skipping batch sync');
+        return;
+      }
+      
+      if (!userData.id) {
+        console.log('[TRIP_SYNC] No user ID in profile, skipping batch sync');
+        return;
+      }
+      
       const stored = await AsyncStorage.getItem(TRIPS_KEY);
       if (!stored) return;
       
@@ -701,18 +741,25 @@ export const [TripProvider, useTrips] = createContextHook(() => {
         return;
       }
       
-      console.log('[TRIP_SYNC] Found', unsyncedTrips.length, 'unsynced trips, syncing now...');
+      console.log('[TRIP_SYNC] Found', unsyncedTrips.length, 'unsynced trips for user:', userData.id, '- syncing now...');
       
       let syncedCount = 0;
+      let failedCount = 0;
       for (const trip of unsyncedTrips) {
         const success = await syncTripToBackend(trip);
         if (success) {
           syncedCount++;
+        } else {
+          failedCount++;
         }
         await new Promise(resolve => setTimeout(resolve, 300));
       }
       
-      console.log('[TRIP_SYNC] Batch sync complete:', syncedCount, '/', unsyncedTrips.length, 'synced');
+      console.log('[TRIP_SYNC] Batch sync complete:', syncedCount, 'synced,', failedCount, 'failed, out of', unsyncedTrips.length, 'total');
+      
+      if (failedCount > 0) {
+        console.warn('[TRIP_SYNC] Some trips failed to sync. They will be retried on next sync cycle.');
+      }
     } catch (error) {
       console.error('[TRIP_SYNC] Failed to sync unsynced trips:', error);
     }
@@ -1211,5 +1258,6 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     getUniqueCities,
     getUniqueCarModels,
     clearLastSavedTrip,
+    syncUnsyncedTrips,
   };
 });

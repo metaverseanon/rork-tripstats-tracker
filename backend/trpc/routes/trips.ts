@@ -202,27 +202,37 @@ export const tripsRouter = createTRPCRouter({
   syncTrip: publicProcedure
     .input(TripStatsSchema)
     .mutation(async ({ input }) => {
-      console.log("[TRIPS] Syncing trip:", input.id, "for user:", input.userId);
+      console.log("[TRIPS] Syncing trip:", input.id, "for user:", input.userId, "userName:", input.userName);
+      console.log("[TRIPS] Trip data: distance=", input.distance, "topSpeed=", input.topSpeed, "duration=", input.duration);
 
       if (!isDbConfigured()) {
-        console.log("[TRIPS] Database not configured");
+        console.error("[TRIPS] Database not configured - SUPABASE_URL, SUPABASE_ANON_KEY, or SUPABASE_SERVICE_ROLE_KEY missing");
         return { success: false, message: "Database not configured" };
       }
 
       try {
         const row = tripToSupabaseRow(input);
+        console.log("[TRIPS] Supabase row to upsert:", JSON.stringify(row));
         
-        const response = await fetch(
-          `${getSupabaseRestUrl("trips")}?id=eq.${input.id}`,
-          {
-            method: "GET",
-            headers: getSupabaseHeaders(),
-          }
-        );
+        const checkUrl = `${getSupabaseRestUrl("trips")}?id=eq.${input.id}`;
+        console.log("[TRIPS] Checking existing trip at:", checkUrl);
+        
+        const response = await fetch(checkUrl, {
+          method: "GET",
+          headers: getSupabaseHeaders(),
+        });
+
+        if (!response.ok) {
+          const checkError = await response.text();
+          console.error("[TRIPS] Failed to check existing trip - Status:", response.status, "Error:", checkError);
+          return { success: false, message: `Failed to check existing trip: ${response.status}` };
+        }
 
         const existing = await response.json();
+        console.log("[TRIPS] Existing trip check result:", Array.isArray(existing) ? existing.length : 'not-array', "entries");
         
         if (Array.isArray(existing) && existing.length > 0) {
+          console.log("[TRIPS] Updating existing trip:", input.id);
           const updateResponse = await fetch(
             `${getSupabaseRestUrl("trips")}?id=eq.${input.id}`,
             {
@@ -234,11 +244,16 @@ export const tripsRouter = createTRPCRouter({
 
           if (!updateResponse.ok) {
             const error = await updateResponse.text();
-            console.error("[TRIPS] Failed to update trip:", error);
-            return { success: false, message: "Failed to update trip" };
+            console.error("[TRIPS] Failed to update trip - Status:", updateResponse.status, "Error:", error);
+            return { success: false, message: `Failed to update trip: ${updateResponse.status} - ${error}` };
           }
+          console.log("[TRIPS] Trip updated successfully:", input.id);
         } else {
-          const insertResponse = await fetch(getSupabaseRestUrl("trips"), {
+          console.log("[TRIPS] Inserting new trip:", input.id, "for user:", input.userId);
+          const insertUrl = getSupabaseRestUrl("trips");
+          console.log("[TRIPS] Insert URL:", insertUrl);
+          
+          const insertResponse = await fetch(insertUrl, {
             method: "POST",
             headers: getSupabaseHeaders(),
             body: JSON.stringify(row),
@@ -246,16 +261,20 @@ export const tripsRouter = createTRPCRouter({
 
           if (!insertResponse.ok) {
             const error = await insertResponse.text();
-            console.error("[TRIPS] Failed to insert trip:", error);
-            return { success: false, message: "Failed to insert trip" };
+            console.error("[TRIPS] Failed to insert trip - Status:", insertResponse.status, "Error:", error);
+            console.error("[TRIPS] Insert payload was:", JSON.stringify(row));
+            return { success: false, message: `Failed to insert trip: ${insertResponse.status} - ${error}` };
           }
+          
+          const insertResult = await insertResponse.json();
+          console.log("[TRIPS] Trip inserted successfully:", input.id, "DB response:", JSON.stringify(insertResult).substring(0, 200));
         }
 
-        console.log("[TRIPS] Trip synced successfully:", input.id);
         return { success: true };
       } catch (error) {
-        console.error("[TRIPS] Error syncing trip:", error);
-        return { success: false, message: "Error syncing trip" };
+        console.error("[TRIPS] Error syncing trip:", input.id, "for user:", input.userId);
+        console.error("[TRIPS] Error details:", error instanceof Error ? error.message : String(error));
+        return { success: false, message: `Error syncing trip: ${error instanceof Error ? error.message : String(error)}` };
       }
     }),
 
