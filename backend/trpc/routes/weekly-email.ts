@@ -334,24 +334,63 @@ function formatDuration(seconds: number): string {
 function getWeekRange(): { start: Date; end: Date; label: string } {
   const now = new Date();
   const dayOfWeek = now.getDay();
-  const daysToLastMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  
-  const lastMonday = new Date(now);
-  lastMonday.setDate(now.getDate() - daysToLastMonday - 7);
-  lastMonday.setHours(0, 0, 0, 0);
-  
-  const lastSunday = new Date(lastMonday);
-  lastSunday.setDate(lastMonday.getDate() + 6);
-  lastSunday.setHours(23, 59, 59, 999);
-  
+
+  let mondayOffset: number;
+  if (dayOfWeek === 0) {
+    mondayOffset = 6;
+  } else {
+    mondayOffset = dayOfWeek - 1 + 7;
+  }
+
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - mondayOffset);
+  weekStart.setHours(0, 0, 0, 0);
+
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
+
+  console.log(`[WEEKLY] Week range: ${weekStart.toISOString()} to ${weekEnd.toISOString()} (today is day ${dayOfWeek})`);
+
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
-  
+
   return {
-    start: lastMonday,
-    end: lastSunday,
-    label: `${formatDate(lastMonday)} - ${formatDate(lastSunday)}, ${lastSunday.getFullYear()}`
+    start: weekStart,
+    end: weekEnd,
+    label: `${formatDate(weekStart)} - ${formatDate(weekEnd)}, ${weekEnd.getFullYear()}`
+  };
+}
+
+function mapSupabaseUser(row: Record<string, unknown>): Omit<UserTripData, 'trips'> {
+  return {
+    id: row.id as string,
+    email: row.email as string,
+    displayName: (row.display_name as string) || 'Driver',
+    country: row.country as string | undefined,
+    city: row.city as string | undefined,
+    pushToken: row.push_token as string | undefined,
+    timezone: row.timezone as string | undefined,
+    weeklyRecapEnabled: row.weekly_recap_enabled as boolean | undefined,
+  };
+}
+
+function mapSupabaseTrip(row: Record<string, unknown>): UserTripData['trips'][number] {
+  return {
+    id: row.id as string,
+    startTime: row.start_time as number,
+    distance: (row.distance as number) || 0,
+    duration: (row.duration as number) || 0,
+    topSpeed: (row.top_speed as number) || 0,
+    avgSpeed: (row.avg_speed as number) || 0,
+    maxGForce: row.max_g_force as number | undefined,
+    time0to100: row.time_0_to_100 as number | undefined,
+    corners: (row.corners as number) || 0,
+    location: (row.country || row.city) ? {
+      country: row.country as string | undefined,
+      city: row.city as string | undefined,
+    } : undefined,
   };
 }
 
@@ -368,28 +407,42 @@ async function getAllUsersWithTrips(): Promise<UserTripData[]> {
     });
 
     if (!usersResponse.ok) {
-      console.error("Failed to fetch users");
+      console.error("Failed to fetch users:", usersResponse.status);
       return [];
     }
 
-    const usersData = await usersResponse.json();
-    const users = usersData.items || usersData || [];
+    const usersRaw = await usersResponse.json();
+    const usersArray = Array.isArray(usersRaw) ? usersRaw : (usersRaw.items || []);
 
     const tripsResponse = await fetch(getSupabaseRestUrl("trips"), {
       method: "GET",
       headers: getSupabaseHeaders(),
     });
 
-    let allTrips: any[] = [];
+    let allTripsRaw: Record<string, unknown>[] = [];
     if (tripsResponse.ok) {
       const tripsData = await tripsResponse.json();
-      allTrips = tripsData.items || tripsData || [];
+      allTripsRaw = Array.isArray(tripsData) ? tripsData : (tripsData.items || []);
     }
 
-    return users.map((user: any) => ({
-      ...user,
-      trips: allTrips.filter((trip: any) => trip.userId === user.id),
-    }));
+    const tripsByUserId = new Map<string, UserTripData['trips']>();
+    for (const raw of allTripsRaw) {
+      const userId = raw.user_id as string;
+      if (!userId) continue;
+      const mapped = mapSupabaseTrip(raw);
+      const existing = tripsByUserId.get(userId) || [];
+      existing.push(mapped);
+      tripsByUserId.set(userId, existing);
+    }
+
+    console.log(`[WEEKLY] Fetched ${usersArray.length} users and ${allTripsRaw.length} trips across ${tripsByUserId.size} users`);
+
+    return usersArray.map((row: Record<string, unknown>) => {
+      const user = mapSupabaseUser(row);
+      const userTrips = tripsByUserId.get(user.id) || [];
+      console.log(`[WEEKLY] User ${user.displayName} (${user.id}): ${userTrips.length} trips`);
+      return { ...user, trips: userTrips };
+    });
   } catch (error) {
     console.error("Error fetching users with trips:", error);
     return [];
