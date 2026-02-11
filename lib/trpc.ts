@@ -18,6 +18,45 @@ const getBaseUrl = () => {
   return url;
 };
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1000;
+
+const fetchWithRetry = async (url: RequestInfo | URL, options: RequestInit | undefined, requestId: string, attempt = 1): Promise<Response> => {
+  try {
+    const startTime = Date.now();
+    const response = await fetch(url, options);
+    const duration = Date.now() - startTime;
+    console.log(`[TRPC:${requestId}] Response status: ${response.status} (${duration}ms, attempt ${attempt})`);
+
+    const contentType = response.headers.get('content-type') || '';
+
+    if (!contentType.includes('application/json')) {
+      const text = await response.text();
+      console.error(`[TRPC:${requestId}] Non-JSON response:`, text.substring(0, 500));
+      throw new Error(`Server returned non-JSON response (${response.status}): ${text.substring(0, 100)}`);
+    }
+
+    if (!response.ok) {
+      const clonedResponse = response.clone();
+      const text = await clonedResponse.text();
+      console.error(`[TRPC:${requestId}] ERROR ${response.status}:`, text.substring(0, 300));
+      throw new Error(`Server error: ${response.status}`);
+    }
+
+    return response;
+  } catch (error) {
+    const isNetworkError = error instanceof TypeError && String(error.message).includes('Failed to fetch');
+    if (isNetworkError && attempt < MAX_RETRIES) {
+      const delay = RETRY_DELAY_MS * attempt;
+      console.warn(`[TRPC:${requestId}] Network error on attempt ${attempt}, retrying in ${delay}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return fetchWithRetry(url, options, requestId, attempt + 1);
+    }
+    console.error(`[TRPC:${requestId}] FETCH FAILED after ${attempt} attempt(s):`, error);
+    throw error;
+  }
+};
+
 export const trpcClient = trpc.createClient({
   links: [
     httpLink({
@@ -25,55 +64,8 @@ export const trpcClient = trpc.createClient({
       transformer: superjson,
       fetch: async (url, options) => {
         const requestId = Math.random().toString(36).substring(7);
-        console.log(`[TRPC:${requestId}] ========== REQUEST START ==========`);
-        console.log(`[TRPC:${requestId}] URL:`, url);
-        console.log(`[TRPC:${requestId}] Method:`, options?.method || 'GET');
-        console.log(`[TRPC:${requestId}] Body:`, options?.body ? String(options.body).substring(0, 200) : 'none');
-        try {
-          const startTime = Date.now();
-          const response = await fetch(url, options);
-          const duration = Date.now() - startTime;
-          console.log(`[TRPC:${requestId}] Response status:`, response.status);
-          console.log(`[TRPC:${requestId}] Response URL:`, response.url);
-          console.log(`[TRPC:${requestId}] Duration: ${duration}ms`);
-          
-          const contentType = response.headers.get('content-type') || '';
-          console.log(`[TRPC:${requestId}] Content-Type:`, contentType);
-          
-          if (!contentType.includes('application/json')) {
-            const text = await response.text();
-            console.error(`[TRPC:${requestId}] Non-JSON response:`, text.substring(0, 500));
-            console.log(`[TRPC:${requestId}] ========== REQUEST END (NON-JSON) ==========`);
-            throw new Error(`Server returned non-JSON response (${response.status}): ${text.substring(0, 100)}`);
-          }
-          
-          if (!response.ok) {
-            const clonedResponse = response.clone();
-            const text = await clonedResponse.text();
-            console.error(`[TRPC:${requestId}] ERROR - Status: ${response.status}`);
-            console.error(`[TRPC:${requestId}] ERROR - Body:`, text);
-            
-            try {
-              const errorJson = JSON.parse(text);
-              console.error(`[TRPC:${requestId}] ERROR - Parsed:`, JSON.stringify(errorJson));
-              if (errorJson.path) {
-                console.error(`[TRPC:${requestId}] ERROR - Path not found:`, errorJson.path);
-              }
-            } catch (parseErr) {
-              console.error(`[TRPC:${requestId}] ERROR - Could not parse as JSON`);
-            }
-            
-            console.log(`[TRPC:${requestId}] ========== REQUEST END (ERROR) ==========`);
-            throw new Error(`Server error: ${response.status}`);
-          }
-          
-          console.log(`[TRPC:${requestId}] ========== REQUEST END (SUCCESS) ==========`);
-          return response;
-        } catch (error) {
-          console.error(`[TRPC:${requestId}] FETCH EXCEPTION:`, error);
-          console.log(`[TRPC:${requestId}] ========== REQUEST END (EXCEPTION) ==========`);
-          throw error;
-        }
+        console.log(`[TRPC:${requestId}] ${options?.method || 'GET'} ${String(url).substring(0, 120)}`);
+        return fetchWithRetry(url, options, requestId);
       },
     }),
   ],
