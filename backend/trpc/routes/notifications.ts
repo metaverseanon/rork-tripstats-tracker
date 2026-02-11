@@ -436,7 +436,7 @@ export const notificationsRouter = createTRPCRouter({
         toUserCar: input.toUserCar,
         status: 'pending',
         createdAt: now,
-        expiresAt: now + 24 * 60 * 60 * 1000,
+        expiresAt: now + 60 * 60 * 1000,
       };
 
       await storeMeetup(meetup);
@@ -569,7 +569,7 @@ export const notificationsRouter = createTRPCRouter({
 
       const expiredIds: string[] = [];
       const activeMeetups = userMeetups.filter(m => {
-        const expiry = m.expiresAt || (m.createdAt + 24 * 60 * 60 * 1000);
+        const expiry = m.expiresAt || (m.createdAt + 60 * 60 * 1000);
         if (now > expiry) {
           expiredIds.push(m.id);
           return false;

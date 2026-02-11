@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef, ReactNode } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, TextInput, Image, Platform, Alert, ActivityIndicator, Linking } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, TextInput, Image, Platform, Alert, ActivityIndicator, Linking, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Trophy, Zap, Navigation, Gauge, ChevronDown, X, MapPin, Car, Filter, Activity, Route, Search, Clock, Calendar, CornerDownRight, ChevronRight, Timer, Users, Send, Bell, Check, XCircle, Share2, Navigation2, MessageCircle } from 'lucide-react-native';
+import { Trophy, Zap, Navigation, Gauge, ChevronDown, X, MapPin, Car, Filter, Activity, Route, Search, Clock, Calendar, CornerDownRight, ChevronRight, Timer, Users, Send, Bell, Check, XCircle, Share2, Navigation2, MessageCircle, AlertCircle } from 'lucide-react-native';
 import * as Location from 'expo-location';
 import type { DriveMeetup } from '@/types/meetup';
 import * as Haptics from 'expo-haptics';
@@ -25,6 +25,75 @@ interface LeaderboardTrip extends TripStats {
 
 type FilterType = 'country' | 'city' | 'carBrand' | 'carModel';
 type TimePeriod = 'today' | 'week' | 'month' | 'year' | 'all';
+
+const MEETUP_DURATION_MS = 60 * 60 * 1000;
+
+function MeetupCountdownBar({ createdAt, expiresAt, colors }: { createdAt: number; expiresAt: number; colors: ThemeColors }) {
+  const [now, setNow] = useState(Date.now());
+  const barWidth = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const totalDuration = expiresAt - createdAt;
+  const remaining = Math.max(0, expiresAt - now);
+  const progress = totalDuration > 0 ? remaining / totalDuration : 0;
+
+  useEffect(() => {
+    Animated.timing(barWidth, {
+      toValue: progress,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [progress]);
+
+  const minutes = Math.floor(remaining / 60000);
+  const seconds = Math.floor((remaining % 60000) / 1000);
+  const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+  const isUrgent = remaining < 10 * 60 * 1000;
+  const barColor = isUrgent ? colors.danger : colors.primary;
+
+  if (remaining <= 0) {
+    return (
+      <View style={{ marginTop: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+          <AlertCircle size={10} color={colors.danger} />
+          <Text style={{ fontSize: 10, fontFamily: 'Orbitron_500Medium', color: colors.danger }}>Expired</Text>
+        </View>
+        <View style={{ height: 4, borderRadius: 2, backgroundColor: `${colors.danger}30` }} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ marginTop: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Timer size={10} color={isUrgent ? colors.danger : colors.textLight} />
+          <Text style={{ fontSize: 10, fontFamily: 'Orbitron_500Medium', color: isUrgent ? colors.danger : colors.textLight }}>
+            {timeString} left
+          </Text>
+        </View>
+      </View>
+      <View style={{ height: 4, borderRadius: 2, backgroundColor: `${barColor}20`, overflow: 'hidden' as const }}>
+        <Animated.View
+          style={{
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: barColor,
+            width: barWidth.interpolate({
+              inputRange: [0, 1],
+              outputRange: ['0%', '100%'],
+            }),
+          }}
+        />
+      </View>
+    </View>
+  );
+}
 
 export default function LeaderboardScreen() {
   const { trips } = useTrips();
@@ -1407,6 +1476,7 @@ export default function LeaderboardScreen() {
                           </Text>
                         </View>
                       </View>
+                      <MeetupCountdownBar createdAt={meetup.createdAt} expiresAt={meetup.expiresAt} colors={colors} />
                       <View style={styles.meetupActions}>
                         <TouchableOpacity
                           style={styles.acceptButton}
@@ -1512,6 +1582,7 @@ export default function LeaderboardScreen() {
                           )}
                           <ChevronRight size={18} color={colors.textLight} />
                         </View>
+                        <MeetupCountdownBar createdAt={meetup.createdAt} expiresAt={meetup.expiresAt} colors={colors} />
                       </TouchableOpacity>
                     );
                   })}
@@ -1540,6 +1611,7 @@ export default function LeaderboardScreen() {
                           <Text style={styles.pendingStatusText}>Waiting for response...</Text>
                         </View>
                       </View>
+                      <MeetupCountdownBar createdAt={meetup.createdAt} expiresAt={meetup.expiresAt} colors={colors} />
                     </View>
                   ))}
                 </View>
@@ -1604,6 +1676,9 @@ export default function LeaderboardScreen() {
                         <Text style={styles.meetupDetailCarText}>{otherUserCar}</Text>
                       </View>
                     )}
+                    <View style={{ paddingHorizontal: 16, width: '100%', marginTop: 8 }}>
+                      <MeetupCountdownBar createdAt={selectedMeetup.createdAt} expiresAt={selectedMeetup.expiresAt} colors={colors} />
+                    </View>
                   </View>
 
                   <View style={styles.meetupDetailSection}>
