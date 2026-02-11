@@ -49,19 +49,74 @@ export default function LeaderboardScreen() {
   const [selectedMeetup, setSelectedMeetup] = useState<DriveMeetup | null>(null);
   const [showMeetupDetail, setShowMeetupDetail] = useState(false);
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('all');
+  const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const meetupsRefetchRef = useRef<(() => void) | null>(null);
 
+  const updateLocationMutation = trpc.user.updateUserLocation.useMutation();
+
+  useEffect(() => {
+    const fetchLocation = async () => {
+      try {
+        if (Platform.OS === 'web') {
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              (position) => {
+                const coords = {
+                  latitude: position.coords.latitude,
+                  longitude: position.coords.longitude,
+                };
+                console.log('[NEARBY] Got web location:', coords);
+                setUserCoords(coords);
+                if (user?.id) {
+                  updateLocationMutation.mutate({ userId: user.id, ...coords });
+                }
+              },
+              (err) => console.log('[NEARBY] Web geolocation error:', err.message),
+              { enableHighAccuracy: false, timeout: 10000 }
+            );
+          }
+        } else {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== 'granted') {
+            console.log('[NEARBY] Location permission denied');
+            return;
+          }
+          const location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          const coords = {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          };
+          console.log('[NEARBY] Got native location:', coords);
+          setUserCoords(coords);
+          if (user?.id) {
+            updateLocationMutation.mutate({ userId: user.id, ...coords });
+          }
+        }
+      } catch (error) {
+        console.log('[NEARBY] Failed to get location:', error);
+      }
+    };
+
+    if (user?.id) {
+      fetchLocation();
+    }
+  }, [user?.id]);
+
   const nearbyUsersQuery = trpc.user.getNearbyUsers.useQuery(
     {
       userId: user?.id || '',
+      latitude: userCoords?.latitude,
+      longitude: userCoords?.longitude,
       country: user?.country,
       city: user?.city,
     },
     {
-      enabled: !!user?.id && !!(user?.country || user?.city),
+      enabled: !!user?.id && userCoords != null,
     }
   );
 
@@ -1231,7 +1286,7 @@ export default function LeaderboardScreen() {
             </View>
             
             <Text style={styles.nearbyDriversSubtitle}>
-              Drivers in {user?.city || user?.country || 'your area'}
+              Drivers within 100 km of you
             </Text>
 
             <ScrollView style={styles.nearbyDriversList} showsVerticalScrollIndicator={false}>
@@ -1256,14 +1311,12 @@ export default function LeaderboardScreen() {
                     </View>
                     <View style={styles.nearbyDriverInfo}>
                       <Text style={styles.nearbyDriverName}>{driver.displayName}</Text>
-                      {driver.city && (
-                        <View style={styles.nearbyDriverLocationRow}>
-                          <MapPin size={10} color={colors.textLight} />
-                          <Text style={styles.nearbyDriverLocation}>
-                            {driver.city}{driver.country ? `, ${driver.country}` : ''}
-                          </Text>
-                        </View>
-                      )}
+                      <View style={styles.nearbyDriverLocationRow}>
+                        <MapPin size={10} color={colors.textLight} />
+                        <Text style={styles.nearbyDriverLocation}>
+                          {driver.distanceKm != null ? `${driver.distanceKm} km away` : driver.city ? `${driver.city}${driver.country ? `, ${driver.country}` : ''}` : ''}
+                        </Text>
+                      </View>
                       {driver.carBrand && (
                         <View style={styles.nearbyDriverCarRow}>
                           <Car size={10} color={colors.primary} />

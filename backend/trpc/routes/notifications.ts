@@ -425,6 +425,7 @@ export const notificationsRouter = createTRPCRouter({
       }
 
       const meetupId = `meetup_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const now = Date.now();
       const meetup: DriveMeetup = {
         id: meetupId,
         fromUserId: input.fromUserId,
@@ -434,7 +435,8 @@ export const notificationsRouter = createTRPCRouter({
         toUserName: input.toUserName,
         toUserCar: input.toUserCar,
         status: 'pending',
-        createdAt: Date.now(),
+        createdAt: now,
+        expiresAt: now + 24 * 60 * 60 * 1000,
       };
 
       await storeMeetup(meetup);
@@ -558,14 +560,28 @@ export const notificationsRouter = createTRPCRouter({
     .input(z.object({ userId: z.string() }))
     .query(async ({ input }) => {
       const meetups = await getAllMeetups();
+      const now = Date.now();
       
       const userMeetups = meetups.filter(m => 
         (m.fromUserId === input.userId || m.toUserId === input.userId) &&
         (m.status === 'pending' || m.status === 'accepted')
       );
 
-      const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-      return userMeetups.filter(m => m.createdAt > oneDayAgo);
+      const expiredIds: string[] = [];
+      const activeMeetups = userMeetups.filter(m => {
+        const expiry = m.expiresAt || (m.createdAt + 24 * 60 * 60 * 1000);
+        if (now > expiry) {
+          expiredIds.push(m.id);
+          return false;
+        }
+        return true;
+      });
+
+      for (const id of expiredIds) {
+        updateMeetup(id, { status: 'expired' as any }).catch(() => {});
+      }
+
+      return activeMeetups;
     }),
 
   cancelMeetup: publicProcedure

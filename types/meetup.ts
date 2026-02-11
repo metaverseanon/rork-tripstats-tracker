@@ -1,4 +1,4 @@
-export type MeetupStatus = 'pending' | 'accepted' | 'declined' | 'cancelled' | 'completed';
+export type MeetupStatus = 'pending' | 'accepted' | 'declined' | 'cancelled' | 'completed' | 'expired';
 
 export interface DriveMeetup {
   id: string;
@@ -10,6 +10,7 @@ export interface DriveMeetup {
   toUserCar?: string;
   status: MeetupStatus;
   createdAt: number;
+  expiresAt: number;
   respondedAt?: number;
   fromUserLocation?: {
     latitude: number;

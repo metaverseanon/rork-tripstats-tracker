@@ -21,6 +21,21 @@ interface StoredUser {
   pushToken?: string | null;
   timezone?: string;
   weeklyRecapEnabled?: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
+  locationUpdatedAt?: number | null;
+}
+
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 }
 
 function hashPassword(password: string): string {
@@ -336,6 +351,9 @@ async function updateUserInDb(userId: string, updates: Partial<StoredUser>): Pro
     if (updates.pushToken !== undefined) dbUpdates.push_token = updates.pushToken;
     if (updates.timezone !== undefined) dbUpdates.timezone = updates.timezone;
     if (updates.weeklyRecapEnabled !== undefined) dbUpdates.weekly_recap_enabled = updates.weeklyRecapEnabled;
+    if (updates.latitude !== undefined) dbUpdates.latitude = updates.latitude;
+    if (updates.longitude !== undefined) dbUpdates.longitude = updates.longitude;
+    if (updates.locationUpdatedAt !== undefined) dbUpdates.location_updated_at = updates.locationUpdatedAt;
 
     const url = `${getSupabaseRestUrl("users")}?id=eq.${encodeURIComponent(userId)}`;
     const response = await fetch(url, {
@@ -395,6 +413,9 @@ async function getAllUsers(): Promise<StoredUser[]> {
       pushToken: row.push_token as string | null | undefined,
       timezone: row.timezone as string | undefined,
       weeklyRecapEnabled: row.weekly_recap_enabled as boolean | undefined,
+      latitude: row.latitude as number | null | undefined,
+      longitude: row.longitude as number | null | undefined,
+      locationUpdatedAt: row.location_updated_at as number | null | undefined,
     }));
   } catch (error) {
     console.error("Error fetching users:", error);
@@ -678,41 +699,62 @@ export const userRouter = createTRPCRouter({
     }));
   }),
 
+  updateUserLocation: publicProcedure
+    .input(z.object({
+      userId: z.string(),
+      latitude: z.number(),
+      longitude: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      console.log("[LOCATION] Updating location for user:", input.userId, "lat:", input.latitude, "lng:", input.longitude);
+      const updated = await updateUserInDb(input.userId, {
+        latitude: input.latitude,
+        longitude: input.longitude,
+        locationUpdatedAt: Date.now(),
+      });
+      return { success: updated };
+    }),
+
   getNearbyUsers: publicProcedure
     .input(z.object({
       userId: z.string(),
+      latitude: z.number().optional(),
+      longitude: z.number().optional(),
       country: z.string().optional(),
       city: z.string().optional(),
     }))
     .query(async ({ input }) => {
-      console.log("[NEARBY] Fetching nearby users for:", input.userId, "country:", input.country, "city:", input.city);
+      console.log("[NEARBY] Fetching nearby users for:", input.userId, "lat:", input.latitude, "lng:", input.longitude);
       const users = await getAllUsers();
       console.log("[NEARBY] Total users in DB:", users.length);
-      
-      const inputCityLower = input.city?.toLowerCase().trim();
-      const inputCountryLower = input.country?.toLowerCase().trim();
 
-      const nearbyUsers = users.filter(u => {
-        if (u.id === input.userId) return false;
-        
-        const userCityLower = u.city?.toLowerCase().trim();
-        const userCountryLower = u.country?.toLowerCase().trim();
-        
-        if (inputCityLower && userCityLower && userCityLower === inputCityLower) {
-          console.log("[NEARBY] City match:", u.displayName, u.city, "==", input.city);
-          return true;
-        }
-        if (inputCountryLower && userCountryLower && userCountryLower === inputCountryLower) {
-          console.log("[NEARBY] Country match:", u.displayName, u.country, "==", input.country);
-          return true;
-        }
-        
-        console.log("[NEARBY] No match for:", u.displayName, "city:", u.city, "country:", u.country);
-        return false;
-      });
+      const MAX_DISTANCE_KM = 100;
+      const hasCoords = input.latitude != null && input.longitude != null;
 
-      console.log("[NEARBY] Found", nearbyUsers.length, "nearby users");
-      return nearbyUsers.map(u => ({
+      const nearbyUsers = users
+        .filter(u => u.id !== input.userId)
+        .map(u => {
+          let distanceKm: number | null = null;
+
+          if (hasCoords && u.latitude != null && u.longitude != null) {
+            distanceKm = haversineDistance(
+              input.latitude!,
+              input.longitude!,
+              u.latitude,
+              u.longitude
+            );
+          }
+
+          return { user: u, distanceKm };
+        })
+        .filter(({ distanceKm }) => {
+          if (distanceKm === null) return false;
+          return distanceKm <= MAX_DISTANCE_KM;
+        })
+        .sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
+
+      console.log("[NEARBY] Found", nearbyUsers.length, "nearby users within", MAX_DISTANCE_KM, "km");
+      return nearbyUsers.map(({ user: u, distanceKm }) => ({
         id: u.id,
         displayName: u.displayName,
         country: u.country,
@@ -720,6 +762,7 @@ export const userRouter = createTRPCRouter({
         carBrand: u.carBrand,
         carModel: u.carModel,
         hasPushToken: !!u.pushToken,
+        distanceKm: distanceKm != null ? Math.round(distanceKm) : null,
       }));
     }),
 
