@@ -6,7 +6,7 @@ import { appRouter } from "./trpc/app-router";
 import { createContext } from "./trpc/create-context";
 import { getDbConfig } from "./trpc/db";
 
-// Backend v1.0.7 - Force redeploy
+// Backend v1.0.8 - Force redeploy
 const app = new Hono();
 
 app.use("*", cors());
@@ -20,7 +20,7 @@ app.use(
   })
 );
 
-app.get("/", (c) => c.json({ status: "ok", message: "API is running", version: "1.0.6" }));
+app.get("/", (c) => c.json({ status: "ok", message: "API is running", version: "1.0.8" }));
 
 // Debug endpoint to check database config
 app.get("/health", (c) => {
@@ -54,7 +54,7 @@ app.get("/health", (c) => {
       hasNamespace: !!dbNamespace,
       hasToken: !!dbToken,
     },
-    version: "1.0.6",
+    version: "1.0.8",
     timestamp: new Date().toISOString(),
   });
 });
