@@ -230,6 +230,7 @@ export default function LeaderboardScreen() {
   });
 
   const autoShareLocationRef = useRef<string | null>(null);
+  const autoSharedMeetupIds = useRef<Set<string>>(new Set());
 
   const respondToPingMutation = trpc.notifications.respondToPing.useMutation({
     onSuccess: (data) => {
@@ -393,6 +394,7 @@ export default function LeaderboardScreen() {
         const isAccepter = acceptedMeetup.toUserId === user.id;
         const myLoc = isAccepter ? acceptedMeetup.toUserLocation : acceptedMeetup.fromUserLocation;
         if (!myLoc) {
+          autoSharedMeetupIds.current.add(meetupIdToAutoShare);
           handleShareLocation(acceptedMeetup, true);
         }
       }
@@ -400,6 +402,28 @@ export default function LeaderboardScreen() {
 
     setTimeout(refetchAndShare, 500);
   }, [respondToPingMutation.isSuccess]);
+
+  useEffect(() => {
+    if (!user || !meetupsQuery.data) return;
+
+    const acceptedMeetups = meetupsQuery.data.filter((m: DriveMeetup) => m.status === 'accepted');
+    
+    for (const meetup of acceptedMeetups) {
+      if (autoSharedMeetupIds.current.has(meetup.id)) continue;
+      
+      const isFromUser = meetup.fromUserId === user.id;
+      const isToUser = meetup.toUserId === user.id;
+      if (!isFromUser && !isToUser) continue;
+
+      const myLoc = isToUser ? meetup.toUserLocation : meetup.fromUserLocation;
+      if (!myLoc) {
+        console.log('[MEETUP] Auto-sharing location for accepted meetup:', meetup.id, isFromUser ? '(sender)' : '(accepter)');
+        autoSharedMeetupIds.current.add(meetup.id);
+        handleShareLocation(meetup, true);
+        break;
+      }
+    }
+  }, [meetupsQuery.data, user, handleShareLocation]);
 
   const handleNavigateToLocation = useCallback((latitude: number, longitude: number) => {
     const url = Platform.select({
@@ -1659,7 +1683,7 @@ export default function LeaderboardScreen() {
                             </View>
                           </View>
                           <View style={styles.meetupQuickActions}>
-                            {isAccepter && !myLocation && (
+                            {!myLocation && (
                               <TouchableOpacity
                                 style={styles.shareLocationButton}
                                 onPress={() => handleShareLocation(meetup)}
@@ -1788,7 +1812,7 @@ export default function LeaderboardScreen() {
                     </View>
                   </View>
 
-                  {hasAnyLocation && (
+                  {hasAnyLocation && Platform.OS !== 'web' && (
                     <View style={styles.meetupDetailSection}>
                       <Text style={styles.meetupDetailSectionTitle}>Live Map</Text>
                       <View style={styles.meetupMapContainer}>
@@ -1832,6 +1856,26 @@ export default function LeaderboardScreen() {
                             </View>
                           )}
                         </View>
+                      </View>
+                    </View>
+                  )}
+
+                  {hasAnyLocation && Platform.OS === 'web' && (
+                    <View style={styles.meetupDetailSection}>
+                      <Text style={styles.meetupDetailSectionTitle}>Location Info</Text>
+                      <View style={[styles.locationStatusCard, { gap: 8 }]}>
+                        {myLocation && (
+                          <View style={styles.locationSharedBadge}>
+                            <MapPin size={12} color={colors.success} />
+                            <Text style={styles.locationSharedText}>Your location shared</Text>
+                          </View>
+                        )}
+                        {theirLocation && (
+                          <View style={styles.locationSharedBadge}>
+                            <MapPin size={12} color={colors.success} />
+                            <Text style={styles.locationSharedText}>{otherUserName}&apos;s location shared</Text>
+                          </View>
+                        )}
                       </View>
                     </View>
                   )}
