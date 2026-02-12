@@ -56,7 +56,7 @@ interface SupabaseTripRow {
   time_0_to_100?: number;
   time_0_to_200?: number;
   time_0_to_300?: number;
-  route_points?: string;
+  route_points?: { latitude: number; longitude: number }[] | string;
   created_at?: string;
   updated_at?: string;
 }
@@ -84,7 +84,7 @@ function tripToSupabaseRow(trip: SyncedTrip): SupabaseTripRow {
     time_0_to_300: trip.time0to300,
   };
   if (trip.routePoints && trip.routePoints.length > 0) {
-    row.route_points = JSON.stringify(trip.routePoints);
+    row.route_points = trip.routePoints;
   }
   return row;
 }
