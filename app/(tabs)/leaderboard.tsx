@@ -123,6 +123,7 @@ export default function LeaderboardScreen() {
   const [sharingLocationMeetupId, setSharingLocationMeetupId] = useState<string | null>(null);
   const [selectedMeetup, setSelectedMeetup] = useState<DriveMeetup | null>(null);
   const [showMeetupDetail, setShowMeetupDetail] = useState(false);
+  const selectedMeetupId = useRef<string | null>(null);
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('all');
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
@@ -274,6 +275,7 @@ export default function LeaderboardScreen() {
       meetupsQuery.refetch();
       setShowMeetupDetail(false);
       setSelectedMeetup(null);
+      selectedMeetupId.current = null;
     },
   });
 
@@ -380,6 +382,9 @@ export default function LeaderboardScreen() {
     }
   }, [user, shareLocationMutation, getLocationWithTimeout]);
 
+  const handleShareLocationRef = useRef(handleShareLocation);
+  useEffect(() => { handleShareLocationRef.current = handleShareLocation; }, [handleShareLocation]);
+
   useEffect(() => {
     const meetupIdToAutoShare = autoShareLocationRef.current;
     if (!meetupIdToAutoShare || !user) return;
@@ -395,7 +400,7 @@ export default function LeaderboardScreen() {
         const myLoc = isAccepter ? acceptedMeetup.toUserLocation : acceptedMeetup.fromUserLocation;
         if (!myLoc) {
           autoSharedMeetupIds.current.add(meetupIdToAutoShare);
-          handleShareLocation(acceptedMeetup, true);
+          handleShareLocationRef.current(acceptedMeetup, true);
         }
       }
     };
@@ -419,11 +424,11 @@ export default function LeaderboardScreen() {
       if (!myLoc) {
         console.log('[MEETUP] Auto-sharing location for accepted meetup:', meetup.id, isFromUser ? '(sender)' : '(accepter)');
         autoSharedMeetupIds.current.add(meetup.id);
-        handleShareLocation(meetup, true);
+        handleShareLocationRef.current(meetup, true);
         break;
       }
     }
-  }, [meetupsQuery.data, user, handleShareLocation]);
+  }, [meetupsQuery.data, user]);
 
   const handleNavigateToLocation = useCallback((latitude: number, longitude: number) => {
     const url = Platform.select({
@@ -474,6 +479,15 @@ export default function LeaderboardScreen() {
   const pendingOutgoingPings = useMemo(() => {
     return meetups.filter(m => m.status === 'pending' && m.fromUserId === user?.id);
   }, [meetups, user?.id]);
+
+  useEffect(() => {
+    if (selectedMeetupId.current && meetupsQuery.data) {
+      const fresh = meetupsQuery.data.find((m: DriveMeetup) => m.id === selectedMeetupId.current);
+      if (fresh) {
+        setSelectedMeetup(fresh);
+      }
+    }
+  }, [meetupsQuery.data]);
 
   const CATEGORIES = useMemo(() => [
     { key: 'topSpeed' as LeaderboardCategory, label: 'Top Speed', icon: <Zap size={16} color={colors.warning} /> },
@@ -635,10 +649,37 @@ export default function LeaderboardScreen() {
     const backendTrips: LeaderboardTrip[] = (leaderboardTripsQuery.data || []).map(t => {
       const raw = t as Record<string, unknown>;
       let routePoints: RoutePoint[] | undefined;
+
       if (Array.isArray(raw.routePoints) && raw.routePoints.length > 0) {
         routePoints = raw.routePoints as RoutePoint[];
+      } else if (typeof raw.routePoints === 'string') {
+        try {
+          const parsed = JSON.parse(raw.routePoints as string);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            routePoints = parsed as RoutePoint[];
+          }
+        } catch (e) {
+          console.error('[LEADERBOARD_UI] Failed to parse routePoints string for trip:', t.id, e);
+        }
       }
-      console.log('[LEADERBOARD_UI] Backend trip:', t.id, 'routePoints:', routePoints?.length ?? 0);
+
+      if (!routePoints) {
+        const rawSnake = raw.route_points;
+        if (Array.isArray(rawSnake) && rawSnake.length > 0) {
+          routePoints = (rawSnake as RoutePoint[]);
+        } else if (typeof rawSnake === 'string') {
+          try {
+            const parsed = JSON.parse(rawSnake as string);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              routePoints = parsed as RoutePoint[];
+            }
+          } catch (e) {
+            console.error('[LEADERBOARD_UI] Failed to parse route_points string for trip:', t.id, e);
+          }
+        }
+      }
+
+      console.log('[LEADERBOARD_UI] Backend trip:', t.id, 'routePoints:', routePoints?.length ?? 0, 'rawKeys:', Object.keys(raw).filter(k => k.includes('route')).join(','));
       return {
         ...t,
         locations: [],
@@ -653,12 +694,13 @@ export default function LeaderboardScreen() {
     filteredLocalTrips.forEach(localTrip => {
       const backendIdx = allTrips.findIndex(t => t.id === localTrip.id);
       if (backendIdx !== -1) {
+        const updates: Partial<LeaderboardTrip> = {};
         if (localTrip.locations && localTrip.locations.length > 1) {
-          allTrips[backendIdx] = {
-            ...allTrips[backendIdx],
-            locations: localTrip.locations,
-          };
+          updates.locations = localTrip.locations;
           console.log('[LEADERBOARD_UI] Merged local locations for trip:', localTrip.id, 'count:', localTrip.locations.length);
+        }
+        if (Object.keys(updates).length > 0) {
+          allTrips[backendIdx] = { ...allTrips[backendIdx], ...updates };
         }
       } else {
         console.log('[LEADERBOARD_UI] Adding local-only trip:', localTrip.id);
@@ -1651,6 +1693,7 @@ export default function LeaderboardScreen() {
                         style={styles.activeMeetupItem}
                         onPress={() => {
                           setSelectedMeetup(meetup);
+                          selectedMeetupId.current = meetup.id;
                           setShowMeetupDetail(true);
                         }}
                         activeOpacity={0.7}
@@ -1766,6 +1809,7 @@ export default function LeaderboardScreen() {
         onRequestClose={() => {
           setShowMeetupDetail(false);
           setSelectedMeetup(null);
+          selectedMeetupId.current = null;
         }}
       >
         <View style={styles.tripDetailOverlay}>
@@ -1776,6 +1820,7 @@ export default function LeaderboardScreen() {
                 onPress={() => {
                   setShowMeetupDetail(false);
                   setSelectedMeetup(null);
+                  selectedMeetupId.current = null;
                 }}
                 activeOpacity={0.7}
                 style={styles.closeButton}
