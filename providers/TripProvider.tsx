@@ -662,6 +662,24 @@ export const [TripProvider, useTrips] = createContextHook(() => {
         return false;
       }
       
+      const simplifyRoute = (locations: LocationType[], maxPoints: number = 60): { latitude: number; longitude: number }[] => {
+        if (locations.length <= maxPoints) {
+          return locations.map(l => ({ latitude: l.latitude, longitude: l.longitude }));
+        }
+        const step = (locations.length - 1) / (maxPoints - 1);
+        const result: { latitude: number; longitude: number }[] = [];
+        for (let i = 0; i < maxPoints; i++) {
+          const idx = Math.round(i * step);
+          const loc = locations[idx];
+          result.push({ latitude: loc.latitude, longitude: loc.longitude });
+        }
+        return result;
+      };
+
+      const routePoints = trip.locations && trip.locations.length > 1
+        ? simplifyRoute(trip.locations)
+        : undefined;
+
       const payload = {
         id: trip.id,
         userId: userIdToUse,
@@ -681,6 +699,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
         time0to100: trip.time0to100,
         time0to200: trip.time0to200,
         time0to300: trip.time0to300,
+        routePoints,
       };
       
       console.log('[TRIP_SYNC] Sending payload for trip:', trip.id, 'userId:', userIdToUse, 'distance:', trip.distance, 'topSpeed:', trip.topSpeed);

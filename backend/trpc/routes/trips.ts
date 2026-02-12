@@ -7,6 +7,11 @@ const TripLocationSchema = z.object({
   city: z.string().optional(),
 });
 
+const RoutePointSchema = z.object({
+  latitude: z.number(),
+  longitude: z.number(),
+});
+
 const TripStatsSchema = z.object({
   id: z.string(),
   userId: z.string(),
@@ -26,6 +31,7 @@ const TripStatsSchema = z.object({
   time0to100: z.number().optional(),
   time0to200: z.number().optional(),
   time0to300: z.number().optional(),
+  routePoints: z.array(RoutePointSchema).optional(),
 });
 
 type SyncedTrip = z.infer<typeof TripStatsSchema>;
@@ -50,12 +56,13 @@ interface SupabaseTripRow {
   time_0_to_100?: number;
   time_0_to_200?: number;
   time_0_to_300?: number;
+  route_points?: string;
   created_at?: string;
   updated_at?: string;
 }
 
 function tripToSupabaseRow(trip: SyncedTrip): SupabaseTripRow {
-  return {
+  const row: SupabaseTripRow = {
     id: trip.id,
     user_id: trip.userId,
     user_name: trip.userName,
@@ -76,9 +83,21 @@ function tripToSupabaseRow(trip: SyncedTrip): SupabaseTripRow {
     time_0_to_200: trip.time0to200,
     time_0_to_300: trip.time0to300,
   };
+  if (trip.routePoints && trip.routePoints.length > 0) {
+    row.route_points = JSON.stringify(trip.routePoints);
+  }
+  return row;
 }
 
 function supabaseRowToTrip(row: SupabaseTripRow): SyncedTrip {
+  let routePoints: { latitude: number; longitude: number }[] | undefined;
+  if (row.route_points) {
+    try {
+      routePoints = JSON.parse(row.route_points);
+    } catch (e) {
+      console.error('[TRIPS] Failed to parse route_points for trip:', row.id, e);
+    }
+  }
   return {
     id: row.id,
     userId: row.user_id,
@@ -98,6 +117,7 @@ function supabaseRowToTrip(row: SupabaseTripRow): SyncedTrip {
     time0to100: row.time_0_to_100,
     time0to200: row.time_0_to_200,
     time0to300: row.time_0_to_300,
+    routePoints,
   };
 }
 

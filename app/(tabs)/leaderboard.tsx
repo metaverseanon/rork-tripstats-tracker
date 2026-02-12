@@ -17,10 +17,16 @@ import { CAR_BRANDS, getModelsForBrand } from '@/constants/cars';
 import { LeaderboardCategory, LeaderboardFilters, TripStats } from '@/types/trip';
 import { ThemeColors } from '@/constants/colors';
 
+interface RoutePoint {
+  latitude: number;
+  longitude: number;
+}
+
 interface LeaderboardTrip extends TripStats {
   userId?: string;
   userName?: string;
   userProfilePicture?: string;
+  routePoints?: RoutePoint[];
 }
 
 type FilterType = 'country' | 'city' | 'carBrand' | 'carModel';
@@ -541,18 +547,29 @@ export default function LeaderboardScreen() {
   }, [trips, filters, timePeriod, getTimePeriodStart, matchesCountryFilter, user]);
 
   const leaderboardData = useMemo(() => {
-    const backendTrips: LeaderboardTrip[] = (leaderboardTripsQuery.data || []).map(t => ({
-      ...t,
-      locations: [],
-    }));
+    const backendTrips: LeaderboardTrip[] = (leaderboardTripsQuery.data || []).map(t => {
+      const routePoints = (t as Record<string, unknown>).routePoints as RoutePoint[] | undefined;
+      return {
+        ...t,
+        locations: [],
+        routePoints,
+      };
+    });
     
     console.log('[LEADERBOARD_UI] Backend trips:', backendTrips.length, 'Local trips:', filteredLocalTrips.length);
     
     const allTrips = [...backendTrips];
     
     filteredLocalTrips.forEach(localTrip => {
-      const existsInBackend = allTrips.some(t => t.id === localTrip.id);
-      if (!existsInBackend) {
+      const backendIdx = allTrips.findIndex(t => t.id === localTrip.id);
+      if (backendIdx !== -1) {
+        if (localTrip.locations && localTrip.locations.length > 1) {
+          allTrips[backendIdx] = {
+            ...allTrips[backendIdx],
+            locations: localTrip.locations,
+          };
+        }
+      } else {
         console.log('[LEADERBOARD_UI] Adding local-only trip:', localTrip.id);
         allTrips.push(localTrip);
       }
@@ -1172,35 +1189,44 @@ export default function LeaderboardScreen() {
               </TouchableOpacity>
             </View>
 
-            {selectedTrip && (
+            {selectedTrip && (() => {
+              const mapCoords: RoutePoint[] = 
+                (selectedTrip.locations && selectedTrip.locations.length > 1)
+                  ? selectedTrip.locations.map(l => ({ latitude: l.latitude, longitude: l.longitude }))
+                  : (selectedTrip.routePoints && selectedTrip.routePoints.length > 1)
+                    ? selectedTrip.routePoints
+                    : [];
+              const hasMap = mapCoords.length > 1;
+
+              return (
               <ScrollView style={styles.tripDetailScroll} showsVerticalScrollIndicator={false}>
-                {selectedTrip.locations && selectedTrip.locations.length > 1 && Platform.OS !== 'web' ? (
+                {hasMap && Platform.OS !== 'web' ? (
                   <View style={styles.mapContainer}>
                     <MapView
                       style={styles.map}
-                      initialRegion={getMapRegion(selectedTrip.locations)}
+                      initialRegion={getMapRegion(mapCoords)}
                       scrollEnabled={false}
                       zoomEnabled={false}
                       rotateEnabled={false}
                       pitchEnabled={false}
                     >
                       <Polyline
-                        coordinates={selectedTrip.locations.map(l => ({ latitude: l.latitude, longitude: l.longitude }))}
-                        strokeColor={colors.primary}
+                        coordinates={mapCoords}
+                        strokeColor="#CC0000"
                         strokeWidth={4}
                       />
                       <Marker
                         coordinate={{
-                          latitude: selectedTrip.locations[0].latitude,
-                          longitude: selectedTrip.locations[0].longitude,
+                          latitude: mapCoords[0].latitude,
+                          longitude: mapCoords[0].longitude,
                         }}
                         title="Start"
                         pinColor="green"
                       />
                       <Marker
                         coordinate={{
-                          latitude: selectedTrip.locations[selectedTrip.locations.length - 1].latitude,
-                          longitude: selectedTrip.locations[selectedTrip.locations.length - 1].longitude,
+                          latitude: mapCoords[mapCoords.length - 1].latitude,
+                          longitude: mapCoords[mapCoords.length - 1].longitude,
                         }}
                         title="End"
                         pinColor="red"
@@ -1337,7 +1363,8 @@ export default function LeaderboardScreen() {
                   <Text style={styles.viewProfileButtonText}>View Profile</Text>
                 </TouchableOpacity>
               </ScrollView>
-            )}
+              );
+            })()}
           </View>
         </View>
       </Modal>
