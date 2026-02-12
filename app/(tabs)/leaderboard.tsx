@@ -229,13 +229,15 @@ export default function LeaderboardScreen() {
     },
   });
 
+  const autoShareLocationRef = useRef<string | null>(null);
+
   const respondToPingMutation = trpc.notifications.respondToPing.useMutation({
     onSuccess: (data) => {
       if (data.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         meetupsQuery.refetch();
         if (data.status === 'accepted') {
-          Alert.alert('Meetup Confirmed!', 'You can now share your location with the driver.');
+          autoShareLocationRef.current = respondingMeetupId;
         }
       }
       setRespondingMeetupId(null);
@@ -251,8 +253,8 @@ export default function LeaderboardScreen() {
     onSuccess: (data) => {
       if (data.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert('Location Shared!', 'The other driver can now see your location.');
         meetupsQuery.refetch();
+        console.log('[MEETUP] Location shared successfully');
       } else {
         Alert.alert('Error', data.message || 'Failed to share location.');
       }
@@ -308,37 +310,96 @@ export default function LeaderboardScreen() {
     });
   }, [user, respondToPingMutation]);
 
-  const handleShareLocation = useCallback(async (meetup: DriveMeetup) => {
+  const getLocationWithTimeout = useCallback(async (timeoutMs: number = 8000): Promise<{ latitude: number; longitude: number } | null> => {
+    try {
+      if (Platform.OS === 'web') {
+        return new Promise((resolve) => {
+          if (!navigator.geolocation) { resolve(null); return; }
+          const timer = setTimeout(() => resolve(null), timeoutMs);
+          navigator.geolocation.getCurrentPosition(
+            (pos) => { clearTimeout(timer); resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }); },
+            () => { clearTimeout(timer); resolve(null); },
+            { enableHighAccuracy: false, timeout: timeoutMs }
+          );
+        });
+      }
+
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return null;
+
+      const locationPromise = Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs));
+      const result = await Promise.race([locationPromise, timeoutPromise]);
+      if (result && 'coords' in result) {
+        return { latitude: result.coords.latitude, longitude: result.coords.longitude };
+      }
+
+      console.log('[MEETUP] High accuracy timed out, trying last known...');
+      const lastKnown = await Location.getLastKnownPositionAsync();
+      if (lastKnown) {
+        return { latitude: lastKnown.coords.latitude, longitude: lastKnown.coords.longitude };
+      }
+      return userCoords;
+    } catch (error) {
+      console.error('[MEETUP] Location error:', error);
+      return userCoords;
+    }
+  }, [userCoords]);
+
+  const handleShareLocation = useCallback(async (meetup: DriveMeetup, silent: boolean = false) => {
     if (!user) return;
     
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!silent) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSharingLocationMeetupId(meetup.id);
     
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Location permission is required to share your location.');
+      console.log('[MEETUP] Getting location for sharing...');
+      const coords = await getLocationWithTimeout(8000);
+
+      if (!coords) {
+        if (!silent) Alert.alert('Location Error', 'Could not get your location. Please try again.');
         setSharingLocationMeetupId(null);
         return;
       }
 
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-
+      console.log('[MEETUP] Sharing location:', coords);
       shareLocationMutation.mutate({
         meetupId: meetup.id,
         userId: user.id,
         userName: user.displayName,
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
       });
     } catch (error) {
-      console.error('Failed to get location:', error);
-      Alert.alert('Error', 'Failed to get your location. Please try again.');
+      console.error('[MEETUP] Failed to share location:', error);
+      if (!silent) Alert.alert('Error', 'Failed to get your location. Please try again.');
       setSharingLocationMeetupId(null);
     }
-  }, [user, shareLocationMutation]);
+  }, [user, shareLocationMutation, getLocationWithTimeout]);
+
+  useEffect(() => {
+    const meetupIdToAutoShare = autoShareLocationRef.current;
+    if (!meetupIdToAutoShare || !user) return;
+    autoShareLocationRef.current = null;
+
+    const refetchAndShare = async () => {
+      console.log('[MEETUP] Auto-sharing location after accepting meetup:', meetupIdToAutoShare);
+      const result = await meetupsQuery.refetch();
+      const freshMeetups = result.data || [];
+      const acceptedMeetup = freshMeetups.find((m: DriveMeetup) => m.id === meetupIdToAutoShare && m.status === 'accepted');
+      if (acceptedMeetup) {
+        const isAccepter = acceptedMeetup.toUserId === user.id;
+        const myLoc = isAccepter ? acceptedMeetup.toUserLocation : acceptedMeetup.fromUserLocation;
+        if (!myLoc) {
+          handleShareLocation(acceptedMeetup, true);
+        }
+      }
+    };
+
+    setTimeout(refetchAndShare, 500);
+  }, [respondToPingMutation.isSuccess]);
 
   const handleNavigateToLocation = useCallback((latitude: number, longitude: number) => {
     const url = Platform.select({
@@ -1693,6 +1754,7 @@ export default function LeaderboardScreen() {
               const otherUserCar = isAccepter ? selectedMeetup.fromUserCar : selectedMeetup.toUserCar;
               const myLocation = isAccepter ? selectedMeetup.toUserLocation : selectedMeetup.fromUserLocation;
               const theirLocation = isAccepter ? selectedMeetup.fromUserLocation : selectedMeetup.toUserLocation;
+              const hasAnyLocation = myLocation || theirLocation;
 
               return (
                 <ScrollView style={styles.tripDetailScroll} showsVerticalScrollIndicator={false}>
@@ -1714,6 +1776,54 @@ export default function LeaderboardScreen() {
                     </View>
                   </View>
 
+                  {hasAnyLocation && (
+                    <View style={styles.meetupDetailSection}>
+                      <Text style={styles.meetupDetailSectionTitle}>Live Map</Text>
+                      <View style={styles.meetupMapContainer}>
+                        <MapView
+                          style={styles.meetupMap}
+                          initialRegion={{
+                            latitude: theirLocation?.latitude ?? myLocation?.latitude ?? 0,
+                            longitude: theirLocation?.longitude ?? myLocation?.longitude ?? 0,
+                            latitudeDelta: 0.05,
+                            longitudeDelta: 0.05,
+                          }}
+                          scrollEnabled={true}
+                          zoomEnabled={true}
+                        >
+                          {myLocation && (
+                            <Marker
+                              coordinate={{ latitude: myLocation.latitude, longitude: myLocation.longitude }}
+                              title="You"
+                              pinColor={colors.primary}
+                            />
+                          )}
+                          {theirLocation && (
+                            <Marker
+                              coordinate={{ latitude: theirLocation.latitude, longitude: theirLocation.longitude }}
+                              title={otherUserName}
+                              pinColor={colors.success}
+                            />
+                          )}
+                        </MapView>
+                        <View style={styles.meetupMapLegend}>
+                          {myLocation && (
+                            <View style={styles.meetupMapLegendItem}>
+                              <View style={[styles.meetupMapLegendDot, { backgroundColor: colors.primary }]} />
+                              <Text style={styles.meetupMapLegendText}>You</Text>
+                            </View>
+                          )}
+                          {theirLocation && (
+                            <View style={styles.meetupMapLegendItem}>
+                              <View style={[styles.meetupMapLegendDot, { backgroundColor: colors.success }]} />
+                              <Text style={styles.meetupMapLegendText}>{otherUserName}</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                  )}
+
                   <View style={styles.meetupDetailSection}>
                     <Text style={styles.meetupDetailSectionTitle}>Location Status</Text>
                     
@@ -1724,6 +1834,11 @@ export default function LeaderboardScreen() {
                           <View style={styles.locationSharedBadge}>
                             <Check size={12} color={colors.success} />
                             <Text style={styles.locationSharedText}>Shared</Text>
+                          </View>
+                        ) : sharingLocationMeetupId === selectedMeetup.id ? (
+                          <View style={styles.locationSharedBadge}>
+                            <ActivityIndicator size="small" color={colors.accent} />
+                            <Text style={[styles.locationSharedText, { color: colors.accent }]}>Sharing...</Text>
                           </View>
                         ) : (
                           <TouchableOpacity
@@ -2653,8 +2768,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: colors.danger,
   },
   activeMeetupItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: colors.background,
     borderRadius: 12,
     padding: 12,
@@ -2841,6 +2954,39 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Orbitron_600SemiBold',
     color: colors.danger,
+  },
+  meetupMapContainer: {
+    borderRadius: 16,
+    overflow: 'hidden' as const,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  meetupMap: {
+    width: '100%',
+    height: 200,
+  },
+  meetupMapLegend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    padding: 10,
+    backgroundColor: colors.cardLight,
+  },
+  meetupMapLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  meetupMapLegendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  meetupMapLegendText: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_500Medium',
+    color: colors.text,
   },
   viewProfileButton: {
     flexDirection: 'row',
