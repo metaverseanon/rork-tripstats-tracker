@@ -1621,60 +1621,62 @@ export default function LeaderboardScreen() {
                         }}
                         activeOpacity={0.7}
                       >
-                        <View style={styles.meetupItemHeader}>
-                          <View style={[styles.nearbyDriverAvatar, styles.activeAvatar]}>
-                            <Text style={styles.nearbyDriverInitial}>
-                              {otherUserName[0].toUpperCase()}
-                            </Text>
-                          </View>
-                          <View style={styles.meetupItemInfo}>
-                            <Text style={styles.meetupItemName}>{otherUserName}</Text>
-                            {otherUserCar && (
-                              <View style={styles.nearbyDriverCarRow}>
-                                <Car size={10} color={colors.primary} />
-                                <Text style={styles.nearbyDriverCar}>{otherUserCar}</Text>
-                              </View>
-                            )}
-                            <View style={styles.locationStatusRow}>
-                              {theirLocation ? (
-                                <View style={styles.locationSharedBadge}>
-                                  <MapPin size={10} color={colors.success} />
-                                  <Text style={styles.locationSharedText}>Location shared</Text>
+                        <View style={styles.activeMeetupRow}>
+                          <View style={styles.meetupItemHeader}>
+                            <View style={[styles.nearbyDriverAvatar, styles.activeAvatar]}>
+                              <Text style={styles.nearbyDriverInitial}>
+                                {otherUserName[0].toUpperCase()}
+                              </Text>
+                            </View>
+                            <View style={styles.meetupItemInfo}>
+                              <Text style={styles.meetupItemName}>{otherUserName}</Text>
+                              {otherUserCar && (
+                                <View style={styles.nearbyDriverCarRow}>
+                                  <Car size={10} color={colors.primary} />
+                                  <Text style={styles.nearbyDriverCar}>{otherUserCar}</Text>
                                 </View>
-                              ) : (
-                                <Text style={styles.waitingLocationText}>Waiting for location...</Text>
                               )}
+                              <View style={styles.locationStatusRow}>
+                                {theirLocation ? (
+                                  <View style={styles.locationSharedBadge}>
+                                    <MapPin size={10} color={colors.success} />
+                                    <Text style={styles.locationSharedText}>Location shared</Text>
+                                  </View>
+                                ) : (
+                                  <Text style={styles.waitingLocationText}>Waiting for location...</Text>
+                                )}
+                              </View>
                             </View>
                           </View>
-                        </View>
-                        <View style={styles.meetupQuickActions}>
-                          {isAccepter && !myLocation && (
-                            <TouchableOpacity
-                              style={styles.shareLocationButton}
-                              onPress={() => handleShareLocation(meetup)}
-                              disabled={sharingLocationMeetupId === meetup.id}
-                              activeOpacity={0.7}
-                            >
-                              {sharingLocationMeetupId === meetup.id ? (
-                                <ActivityIndicator size="small" color={colors.textInverted} />
-                              ) : (
-                                <>
-                                  <Share2 size={14} color={colors.textInverted} />
-                                  <Text style={styles.shareLocationButtonText}>Share</Text>
-                                </>
-                              )}
-                            </TouchableOpacity>
-                          )}
-                          {theirLocation && (
-                            <TouchableOpacity
-                              style={styles.navigateButton}
-                              onPress={() => handleNavigateToLocation(theirLocation.latitude, theirLocation.longitude)}
-                              activeOpacity={0.7}
-                            >
-                              <Navigation2 size={14} color={colors.textInverted} />
-                            </TouchableOpacity>
-                          )}
-                          <ChevronRight size={18} color={colors.textLight} />
+                          <View style={styles.meetupQuickActions}>
+                            {isAccepter && !myLocation && (
+                              <TouchableOpacity
+                                style={styles.shareLocationButton}
+                                onPress={() => handleShareLocation(meetup)}
+                                disabled={sharingLocationMeetupId === meetup.id}
+                                activeOpacity={0.7}
+                              >
+                                {sharingLocationMeetupId === meetup.id ? (
+                                  <ActivityIndicator size="small" color={colors.textInverted} />
+                                ) : (
+                                  <>
+                                    <Share2 size={14} color={colors.textInverted} />
+                                    <Text style={styles.shareLocationButtonText}>Share</Text>
+                                  </>
+                                )}
+                              </TouchableOpacity>
+                            )}
+                            {theirLocation && (
+                              <TouchableOpacity
+                                style={styles.navigateButton}
+                                onPress={() => handleNavigateToLocation(theirLocation.latitude, theirLocation.longitude)}
+                                activeOpacity={0.7}
+                              >
+                                <Navigation2 size={14} color={colors.textInverted} />
+                              </TouchableOpacity>
+                            )}
+                            <ChevronRight size={18} color={colors.textLight} />
+                          </View>
                         </View>
                         <MeetupCountdownBar createdAt={meetup.createdAt} expiresAt={meetup.expiresAt} colors={colors} />
                       </TouchableOpacity>
@@ -2716,9 +2718,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: 8,
   },
   meetupItemHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
     gap: 12,
+    flex: 1,
   },
   meetupItemInfo: {
     flex: 1,
@@ -2774,6 +2777,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
     borderColor: colors.success,
+    overflow: 'hidden' as const,
+  },
+  activeMeetupRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
   },
   activeAvatar: {
     backgroundColor: colors.success,
