@@ -108,7 +108,7 @@ export default function LeaderboardScreen() {
   const [countrySearch, setCountrySearch] = useState('');
   const [carBrandSearch, setCarBrandSearch] = useState('');
   const [carModelSearch, setCarModelSearch] = useState('');
-  const [selectedTrip, setSelectedTrip] = useState<TripStats | null>(null);
+  const [selectedTrip, setSelectedTrip] = useState<LeaderboardTrip | null>(null);
   const [showTripDetail, setShowTripDetail] = useState(false);
   const [showNearbyDrivers, setShowNearbyDrivers] = useState(false);
   const [pingingUserId, setPingingUserId] = useState<string | null>(null);
@@ -639,7 +639,7 @@ export default function LeaderboardScreen() {
     }
   };
 
-  const openTripDetail = useCallback((trip: TripStats) => {
+  const openTripDetail = useCallback((trip: LeaderboardTrip) => {
     setSelectedTrip(trip);
     setShowTripDetail(true);
   }, []);
@@ -814,14 +814,14 @@ export default function LeaderboardScreen() {
     return null;
   }, [user?.cars, user?.carBrand, user?.carModel]);
 
-  const getCarInfo = useCallback((trip: TripStats) => {
+  const getCarInfo = useCallback((trip: LeaderboardTrip) => {
     if (trip.carModel) {
       const parts = trip.carModel.split(' ');
       const brand = parts[0];
       const model = parts.slice(1).join(' ');
       return { brand, model, full: trip.carModel };
     }
-    if (userPrimaryCar) {
+    if (trip.userId === user?.id && userPrimaryCar) {
       return { 
         brand: userPrimaryCar.brand, 
         model: userPrimaryCar.model, 
@@ -829,7 +829,7 @@ export default function LeaderboardScreen() {
       };
     }
     return null;
-  }, [userPrimaryCar]);
+  }, [userPrimaryCar, user?.id]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -1298,7 +1298,8 @@ export default function LeaderboardScreen() {
                 {(() => {
                   const tripCarInfo = getCarInfo(selectedTrip);
                   if (!tripCarInfo) return null;
-                  const carPicture = userPrimaryCar && 'picture' in userPrimaryCar ? userPrimaryCar.picture : undefined;
+                  const isOwnTrip = selectedTrip.userId === user?.id;
+                  const carPicture = isOwnTrip && userPrimaryCar && 'picture' in userPrimaryCar ? userPrimaryCar.picture : undefined;
                   return (
                     <View style={styles.tripDetailCarCard}>
                       {carPicture ? (
@@ -1322,8 +1323,13 @@ export default function LeaderboardScreen() {
                 <TouchableOpacity
                   style={styles.viewProfileButton}
                   onPress={() => {
+                    const tripUserId = selectedTrip?.userId;
                     closeTripDetail();
-                    router.push('/user-profile');
+                    if (tripUserId && tripUserId !== user?.id) {
+                      router.push(`/user-profile?userId=${tripUserId}`);
+                    } else {
+                      router.push('/profile');
+                    }
                   }}
                   activeOpacity={0.7}
                 >
