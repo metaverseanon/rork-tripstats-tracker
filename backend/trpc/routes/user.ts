@@ -967,6 +967,29 @@ export const userRouter = createTRPCRouter({
       return { success: true, enabled: input.enabled };
     }),
 
+  getPublicProfile: publicProcedure
+    .input(z.object({
+      userId: z.string(),
+    }))
+    .query(async ({ input }) => {
+      console.log("[USER] Fetching public profile for:", input.userId);
+      const users = await getAllUsers();
+      const foundUser = users.find(u => u.id === input.userId);
+      if (!foundUser) {
+        console.log("[USER] User not found:", input.userId);
+        return null;
+      }
+      return {
+        id: foundUser.id,
+        displayName: foundUser.displayName,
+        country: foundUser.country,
+        city: foundUser.city,
+        carBrand: foundUser.carBrand,
+        carModel: foundUser.carModel,
+        createdAt: foundUser.createdAt,
+      };
+    }),
+
   getWeeklyRecapEnabled: publicProcedure
     .input(z.object({
       userId: z.string(),

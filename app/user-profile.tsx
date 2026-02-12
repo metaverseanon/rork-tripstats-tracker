@@ -9,12 +9,14 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  ActivityIndicator,
 } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { MapPin, Car, Zap, Navigation, Gauge, Activity, CornerDownRight, Timer, Route, Trophy, Calendar, ChevronDown } from 'lucide-react-native';
 import { useSettings } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
 import { useTrips } from '@/providers/TripProvider';
+import { trpc } from '@/lib/trpc';
 import { ThemeColors } from '@/constants/colors';
 import { TripStats } from '@/types/trip';
 
@@ -39,10 +41,22 @@ interface CarStats {
   lastDriveDate: number;
 }
 
+interface ProfileData {
+  displayName: string;
+  profilePicture?: string;
+  country?: string;
+  city?: string;
+  carBrand?: string;
+  carModel?: string;
+  carPicture?: string;
+  cars?: Array<{ id: string; brand: string; model: string; picture?: string; isPrimary?: boolean }>;
+  createdAt: number;
+}
+
 export default function UserProfileScreen() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const { user } = useUser();
-  const { trips } = useTrips();
+  const { trips: ownTrips } = useTrips();
   const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, colors } = useSettings();
   const [expandedCarKey, setExpandedCarKey] = useState<string | null>(null);
 
@@ -50,7 +64,17 @@ export default function UserProfileScreen() {
 
   const isOwnProfile = !userId || userId === user?.id;
 
-  const profileUser = useMemo(() => {
+  const remoteProfileQuery = trpc.user.getPublicProfile.useQuery(
+    { userId: userId || '' },
+    { enabled: !isOwnProfile && !!userId }
+  );
+
+  const remoteTripsQuery = trpc.trips.getUserTrips.useQuery(
+    { userId: userId || '' },
+    { enabled: !isOwnProfile && !!userId }
+  );
+
+  const profileUser = useMemo((): ProfileData | null => {
     if (isOwnProfile && user) {
       return {
         displayName: user.displayName,
@@ -64,8 +88,34 @@ export default function UserProfileScreen() {
         createdAt: user.createdAt,
       };
     }
+
+    if (!isOwnProfile && remoteProfileQuery.data) {
+      const p = remoteProfileQuery.data;
+      return {
+        displayName: p.displayName,
+        country: p.country,
+        city: p.city,
+        carBrand: p.carBrand,
+        carModel: p.carModel,
+        createdAt: p.createdAt,
+      };
+    }
+
     return null;
-  }, [isOwnProfile, user]);
+  }, [isOwnProfile, user, remoteProfileQuery.data]);
+
+  const profileTrips = useMemo(() => {
+    if (isOwnProfile) return ownTrips;
+    if (remoteTripsQuery.data) {
+      return remoteTripsQuery.data.map(t => ({
+        ...t,
+        locations: [] as Array<{ latitude: number; longitude: number; speed: number | null; timestamp: number }>,
+      }));
+    }
+    return [] as TripStats[];
+  }, [isOwnProfile, ownTrips, remoteTripsQuery.data]);
+
+  const isLoadingRemote = !isOwnProfile && (remoteProfileQuery.isLoading || remoteTripsQuery.isLoading);
 
   const carStats = useMemo((): CarStats[] => {
     if (!profileUser) return [];
@@ -82,7 +132,7 @@ export default function UserProfileScreen() {
       carMap.set(key, { brand: profileUser.carBrand, model: profileUser.carModel || '', picture: profileUser.carPicture, trips: [] });
     }
 
-    for (const trip of trips) {
+    for (const trip of profileTrips) {
       if (trip.carModel) {
         const existing = carMap.get(trip.carModel);
         if (existing) {
@@ -142,16 +192,16 @@ export default function UserProfileScreen() {
 
     result.sort((a, b) => b.totalTrips - a.totalTrips);
     return result;
-  }, [profileUser, trips]);
+  }, [profileUser, profileTrips]);
 
   const toggleCar = useCallback((carKey: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedCarKey(prev => prev === carKey ? null : carKey);
   }, []);
 
-  const totalTrips = trips.length;
-  const totalDistance = trips.reduce((sum, t) => sum + t.distance, 0);
-  const overallTopSpeed = Math.max(0, ...trips.map(t => t.topSpeed));
+  const totalTrips = profileTrips.length;
+  const totalDistance = profileTrips.reduce((sum, t) => sum + t.distance, 0);
+  const overallTopSpeed = Math.max(0, ...profileTrips.map(t => t.topSpeed));
 
   const formatDuration = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
@@ -163,6 +213,18 @@ export default function UserProfileScreen() {
   const memberSince = profileUser?.createdAt
     ? new Date(profileUser.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
     : '';
+
+  if (isLoadingRemote) {
+    return (
+      <>
+        <Stack.Screen options={{ title: 'Profile', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
+        <View style={[styles.container, styles.centered]}>
+          <ActivityIndicator size="large" color={colors.accent} />
+          <Text style={[styles.emptyText, { marginTop: 12 }]}>Loading profile...</Text>
+        </View>
+      </>
+    );
+  }
 
   if (!profileUser) {
     return (
@@ -379,11 +441,23 @@ export default function UserProfileScreen() {
           </>
         )}
 
-        {carStats.length === 0 && (
+        {carStats.length === 0 && !isOwnProfile && profileUser.carBrand && (
+          <View style={styles.noStatsCard}>
+            <Car size={40} color={colors.accent} />
+            <Text style={styles.noStatsCarName}>
+              {profileUser.carBrand}{profileUser.carModel ? ` ${profileUser.carModel}` : ''}
+            </Text>
+            <Text style={styles.noStatsSubtext}>No trip data available</Text>
+          </View>
+        )}
+
+        {carStats.length === 0 && (isOwnProfile || !profileUser.carBrand) && (
           <View style={styles.noStatsCard}>
             <Car size={40} color={colors.textLight} />
             <Text style={styles.noStatsText}>No cars in garage</Text>
-            <Text style={styles.noStatsSubtext}>Add a car in your profile to see stats</Text>
+            <Text style={styles.noStatsSubtext}>
+              {isOwnProfile ? 'Add a car in your profile to see stats' : 'This user has no cars listed'}
+            </Text>
           </View>
         )}
       </ScrollView>
@@ -638,6 +712,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Orbitron_500Medium',
     color: colors.textLight,
+    textAlign: 'center',
+  },
+  noStatsCarName: {
+    fontSize: 16,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.text,
     textAlign: 'center',
   },
   noStatsSubtext: {
