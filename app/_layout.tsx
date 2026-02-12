@@ -22,7 +22,7 @@ import {
 } from "@expo-google-fonts/orbitron";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 interface ErrorBoundaryProps {
   children: ReactNode;
