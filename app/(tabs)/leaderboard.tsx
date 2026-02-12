@@ -609,7 +609,12 @@ export default function LeaderboardScreen() {
 
   const leaderboardData = useMemo(() => {
     const backendTrips: LeaderboardTrip[] = (leaderboardTripsQuery.data || []).map(t => {
-      const routePoints = (t as Record<string, unknown>).routePoints as RoutePoint[] | undefined;
+      const raw = t as Record<string, unknown>;
+      let routePoints: RoutePoint[] | undefined;
+      if (Array.isArray(raw.routePoints) && raw.routePoints.length > 0) {
+        routePoints = raw.routePoints as RoutePoint[];
+      }
+      console.log('[LEADERBOARD_UI] Backend trip:', t.id, 'routePoints:', routePoints?.length ?? 0);
       return {
         ...t,
         locations: [],
@@ -629,6 +634,7 @@ export default function LeaderboardScreen() {
             ...allTrips[backendIdx],
             locations: localTrip.locations,
           };
+          console.log('[LEADERBOARD_UI] Merged local locations for trip:', localTrip.id, 'count:', localTrip.locations.length);
         }
       } else {
         console.log('[LEADERBOARD_UI] Adding local-only trip:', localTrip.id);
@@ -1251,12 +1257,16 @@ export default function LeaderboardScreen() {
             </View>
 
             {selectedTrip && (() => {
-              const mapCoords: RoutePoint[] = 
-                (selectedTrip.locations && selectedTrip.locations.length > 1)
-                  ? selectedTrip.locations.map(l => ({ latitude: l.latitude, longitude: l.longitude }))
-                  : (selectedTrip.routePoints && selectedTrip.routePoints.length > 1)
-                    ? selectedTrip.routePoints
-                    : [];
+              let mapCoords: RoutePoint[] = [];
+              if (selectedTrip.locations && selectedTrip.locations.length > 1) {
+                mapCoords = selectedTrip.locations.map(l => ({ latitude: l.latitude, longitude: l.longitude }));
+                console.log('[TRIP_DETAIL] Using locations for map, count:', mapCoords.length);
+              } else if (selectedTrip.routePoints && selectedTrip.routePoints.length > 1) {
+                mapCoords = selectedTrip.routePoints;
+                console.log('[TRIP_DETAIL] Using routePoints for map, count:', mapCoords.length);
+              } else {
+                console.log('[TRIP_DETAIL] No map data available. locations:', selectedTrip.locations?.length ?? 0, 'routePoints:', selectedTrip.routePoints?.length ?? 0, 'tripId:', selectedTrip.id);
+              }
               const hasMap = mapCoords.length > 1;
 
               return (

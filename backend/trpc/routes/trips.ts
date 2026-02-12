@@ -93,9 +93,16 @@ function supabaseRowToTrip(row: SupabaseTripRow): SyncedTrip {
   let routePoints: { latitude: number; longitude: number }[] | undefined;
   if (row.route_points) {
     try {
-      routePoints = JSON.parse(row.route_points);
+      if (typeof row.route_points === 'string') {
+        routePoints = JSON.parse(row.route_points);
+      } else if (Array.isArray(row.route_points)) {
+        routePoints = row.route_points as unknown as { latitude: number; longitude: number }[];
+      }
+      if (routePoints) {
+        console.log('[TRIPS] Parsed route_points for trip:', row.id, 'points:', routePoints.length);
+      }
     } catch (e) {
-      console.error('[TRIPS] Failed to parse route_points for trip:', row.id, e);
+      console.error('[TRIPS] Failed to parse route_points for trip:', row.id, 'type:', typeof row.route_points, e);
     }
   }
   return {
