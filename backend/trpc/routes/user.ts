@@ -423,6 +423,73 @@ async function getAllUsers(): Promise<StoredUser[]> {
   }
 }
 
+async function getUserByEmail(email: string): Promise<StoredUser | null> {
+  if (!isDbConfigured()) {
+    console.log("[DB] Database not configured");
+    return null;
+  }
+
+  try {
+    const url = `${getSupabaseRestUrl("users")}?email=ilike.${encodeURIComponent(email.toLowerCase())}&limit=1`;
+    const response = await fetch(url, {
+      method: "GET",
+      headers: getSupabaseHeaders(),
+    });
+
+    if (!response.ok) {
+      console.error("Failed to fetch user by email");
+      return null;
+    }
+
+    const data = await response.json();
+    if (!data || data.length === 0) return null;
+
+    const row = data[0] as Record<string, unknown>;
+    return {
+      id: row.id as string,
+      email: row.email as string,
+      displayName: row.display_name as string,
+      passwordHash: row.password_hash as string | undefined,
+      country: row.country as string | undefined,
+      city: row.city as string | undefined,
+      carBrand: row.car_brand as string | undefined,
+      carModel: row.car_model as string | undefined,
+      createdAt: row.created_at ? new Date(row.created_at as string).getTime() : Date.now(),
+      welcomeEmailSent: row.welcome_email_sent as boolean,
+      pushToken: row.push_token as string | null | undefined,
+      timezone: row.timezone as string | undefined,
+      weeklyRecapEnabled: row.weekly_recap_enabled as boolean | undefined,
+      latitude: row.latitude as number | null | undefined,
+      longitude: row.longitude as number | null | undefined,
+      locationUpdatedAt: row.location_updated_at as number | null | undefined,
+    };
+  } catch (error) {
+    console.error("Error fetching user by email:", error);
+    return null;
+  }
+}
+
+async function checkDisplayNameExists(displayName: string): Promise<boolean> {
+  if (!isDbConfigured()) {
+    return false;
+  }
+
+  try {
+    const url = `${getSupabaseRestUrl("users")}?display_name=ilike.${encodeURIComponent(displayName)}&limit=1`;
+    const response = await fetch(url, {
+      method: "GET",
+      headers: getSupabaseHeaders(),
+    });
+
+    if (!response.ok) return false;
+    const data = await response.json();
+    return data && data.length > 0;
+  } catch (error) {
+    console.error("Error checking display name:", error);
+    return false;
+  }
+}
+
 function generateResetCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -524,10 +591,7 @@ export const userRouter = createTRPCRouter({
     }))
     .query(async ({ input }) => {
       console.log("Checking display name availability:", input.displayName);
-      const users = await getAllUsers();
-      const isTaken = users.some(
-        (user) => user.displayName.toLowerCase() === input.displayName.toLowerCase()
-      );
+      const isTaken = await checkDisplayNameExists(input.displayName);
       return {
         available: !isTaken,
         displayName: input.displayName,
@@ -549,11 +613,7 @@ export const userRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       console.log("Registering new user:", input.email);
 
-      const existingUsers = await getAllUsers();
-      
-      const existingEmail = existingUsers.find(
-        u => u.email.toLowerCase() === input.email.toLowerCase()
-      );
+      const existingEmail = await getUserByEmail(input.email);
       if (existingEmail) {
         return {
           success: false,
@@ -561,10 +621,8 @@ export const userRouter = createTRPCRouter({
         };
       }
 
-      const existingUsername = existingUsers.find(
-        u => u.displayName.toLowerCase() === input.displayName.toLowerCase()
-      );
-      if (existingUsername) {
+      const usernameTaken = await checkDisplayNameExists(input.displayName);
+      if (usernameTaken) {
         return {
           success: false,
           error: 'This username is already taken. Please choose a different one.',
@@ -616,10 +674,7 @@ export const userRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       console.log("Login attempt for:", input.email);
 
-      const users = await getAllUsers();
-      const user = users.find(
-        u => u.email.toLowerCase() === input.email.toLowerCase()
-      );
+      const user = await getUserByEmail(input.email);
 
       if (!user) {
         return {
@@ -773,8 +828,7 @@ export const userRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       console.log("Requesting password reset for:", input.email);
       
-      const users = await getAllUsers();
-      const user = users.find(u => u.email.toLowerCase() === input.email.toLowerCase());
+      const user = await getUserByEmail(input.email);
       
       if (!user) {
         console.log("No user found for email:", input.email);
@@ -856,10 +910,7 @@ export const userRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       console.log("Resetting password for:", input.email);
 
-      const users = await getAllUsers();
-      const user = users.find(
-        u => u.email.toLowerCase() === input.email.toLowerCase()
-      );
+      const user = await getUserByEmail(input.email);
 
       if (!user) {
         return {

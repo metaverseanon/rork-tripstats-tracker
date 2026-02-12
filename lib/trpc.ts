@@ -33,7 +33,7 @@ export const trpcClient = trpc.createClient({
           });
           return response;
         } catch (error) {
-          if (error instanceof DOMException && error.name === 'AbortError') {
+          if (error instanceof Error && error.name === 'AbortError') {
             console.warn('[TRPC] Request timed out:', String(url).substring(0, 100));
           } else {
             console.warn('[TRPC] Fetch error:', error instanceof Error ? error.message : 'Unknown error');
