@@ -10,6 +10,7 @@ import { SettingsProvider } from "@/providers/SettingsProvider";
 import { UserProvider, useUser } from "@/providers/UserProvider";
 import { NotificationProvider, useNotifications } from "@/providers/NotificationProvider";
 import { trpc, trpcClient } from "@/lib/trpc";
+import * as Location from 'expo-location';
 import {
   useFonts,
   Orbitron_400Regular,
@@ -205,6 +206,76 @@ function PushTokenSync() {
   return null;
 }
 
+function LocationSync() {
+  const { user } = useUser();
+  const syncedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!user?.id) {
+      syncedRef.current = false;
+      return;
+    }
+    if (syncedRef.current) return;
+    syncedRef.current = true;
+
+    const updateLocation = async () => {
+      try {
+        if (Platform.OS === 'web') {
+          if ('geolocation' in navigator) {
+            navigator.geolocation.getCurrentPosition(
+              async (position) => {
+                const { latitude, longitude } = position.coords;
+                console.log('[LOCATION_SYNC] Web location:', latitude, longitude);
+                try {
+                  await trpcClient.user.updateUserLocation.mutate({
+                    userId: user.id,
+                    latitude,
+                    longitude,
+                  });
+                  console.log('[LOCATION_SYNC] Location synced to backend');
+                } catch (e) {
+                  console.warn('[LOCATION_SYNC] Failed to sync location:', e);
+                }
+              },
+              (err) => {
+                console.warn('[LOCATION_SYNC] Web geolocation error:', err.message);
+              },
+              { timeout: 10000, maximumAge: 60000 }
+            );
+          }
+          return;
+        }
+
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('[LOCATION_SYNC] Location permission not granted, skipping');
+          return;
+        }
+
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+
+        const { latitude, longitude } = location.coords;
+        console.log('[LOCATION_SYNC] Got location:', latitude, longitude);
+
+        await trpcClient.user.updateUserLocation.mutate({
+          userId: user.id,
+          latitude,
+          longitude,
+        });
+        console.log('[LOCATION_SYNC] Location synced to backend');
+      } catch (error) {
+        console.warn('[LOCATION_SYNC] Failed to update location:', error);
+      }
+    };
+
+    updateLocation();
+  }, [user?.id]);
+
+  return null;
+}
+
 function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerBackTitle: "Back", contentStyle: { backgroundColor: '#000000' } }}>
@@ -269,6 +340,7 @@ export default function RootLayout() {
             <UserProvider>
               <NotificationProvider>
                 <PushTokenSync />
+                <LocationSync />
                 <TripProvider>
                   <SafeAreaProvider>
                     <GestureHandlerRootView style={styles.container}>
