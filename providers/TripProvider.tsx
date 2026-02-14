@@ -46,11 +46,25 @@ const CORNER_RESET_TIMEOUT = 3000;
 const SPEED_NOISE_THRESHOLD = 5;
 const BACKGROUND_LOCATION_TASK = 'background-location-task';
 const SPEED_STALE_TIMEOUT = 3000;
+const MAX_LOCATIONS_MEMORY = 5000;
+const MAX_LOCATIONS_SAVE = 2000;
 const CURRENT_SPEED_KEY = 'current_speed';
 const LAST_LOCATION_TIME_KEY = 'last_location_time';
 
 let backgroundLocationCallback: ((location: ExpoLocation.LocationObject) => void) | null = null;
 let processLocationRef: ((location: ExpoLocation.LocationObject) => void) | null = null;
+
+const downsampleLocations = (locations: LocationType[], maxPoints: number): LocationType[] => {
+  if (locations.length <= maxPoints) return locations;
+  const result: LocationType[] = [locations[0]];
+  const step = (locations.length - 1) / (maxPoints - 1);
+  for (let i = 1; i < maxPoints - 1; i++) {
+    const idx = Math.round(i * step);
+    result.push(locations[idx]);
+  }
+  result.push(locations[locations.length - 1]);
+  return result;
+};
 
 const saveBackgroundSpeed = async (speed: number, timestamp: number) => {
   try {
@@ -246,7 +260,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
             const cleanedTrips = parsedTrips.map(trip => ({
               ...trip,
               locations: Array.isArray(trip.locations) 
-                ? trip.locations.slice(-500) // Keep only last 500 locations per trip
+                ? downsampleLocations(trip.locations, MAX_LOCATIONS_SAVE)
                 : [],
             }));
             setTrips(cleanedTrips);
@@ -438,8 +452,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     currentSpeedRef.current = speed;
     
     pendingLocationsRef.current.push(newLocation);
-    if (pendingLocationsRef.current.length > 1000) {
-      pendingLocationsRef.current = pendingLocationsRef.current.slice(-500);
+    if (pendingLocationsRef.current.length > 2000) {
+      pendingLocationsRef.current = downsampleLocations(pendingLocationsRef.current, 1000);
     }
     
     saveBackgroundSpeed(speed, now).catch(console.error);
@@ -477,7 +491,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
 
     const updated: TripStats = {
       ...tripData,
-      locations: allLocations.slice(-500),
+      locations: allLocations.length > MAX_LOCATIONS_MEMORY ? downsampleLocations(allLocations, MAX_LOCATIONS_MEMORY) : allLocations,
       distance,
       duration,
       topSpeed,
@@ -547,7 +561,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     const topSpeed = Math.max(tripData.topSpeed, speed);
     const avgSpeed = distance > 0 ? (distance / duration) * 3600 : 0;
 
-    const updatedLocations = [...locations, newLocation].slice(-500);
+    const allLocs = [...locations, newLocation];
+    const updatedLocations = allLocs.length > MAX_LOCATIONS_MEMORY ? downsampleLocations(allLocs, MAX_LOCATIONS_MEMORY) : allLocs;
     
     const updated: TripStats = {
       ...tripData,
@@ -587,7 +602,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       const tripsToSave = newTrips.map(trip => ({
         ...trip,
         locations: Array.isArray(trip.locations) 
-          ? trip.locations.slice(-500) // Keep only last 500 locations
+          ? downsampleLocations(trip.locations, MAX_LOCATIONS_SAVE)
           : [],
       }));
       await AsyncStorage.setItem(TRIPS_KEY, JSON.stringify(tripsToSave));
