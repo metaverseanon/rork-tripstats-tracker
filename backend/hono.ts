@@ -6,7 +6,7 @@ import { appRouter } from "./trpc/app-router";
 import { createContext } from "./trpc/create-context";
 import { getDbConfig } from "./trpc/db";
 
-// Backend v1.0.13 - Force redeploy cron fix
+// Backend v1.0.14 - Multiple cron route paths
 const app = new Hono();
 
 app.use("*", cors());
@@ -20,7 +20,7 @@ app.use(
   })
 );
 
-app.get("/", (c) => c.json({ status: "ok", message: "API is running", version: "1.0.13" }));
+app.get("/", (c) => c.json({ status: "ok", message: "API is running", version: "1.0.14" }));
 
 // Debug endpoint to check database config
 app.get("/health", (c) => {
@@ -59,9 +59,8 @@ app.get("/health", (c) => {
   });
 });
 
-// Cron endpoint for weekly recap (runs every hour, sends to users where it's Sunday 10 PM local time)
-// Use with cron-job.org: crontab "0 * * * *" (every hour)
-app.get("/cron/weekly-recap", async (c) => {
+// Cron endpoint for weekly recap notifications
+const weeklyRecapHandler = async (c: any) => {
   const authHeader = c.req.header("Authorization");
   const cronSecret = process.env.CRON_SECRET;
   
@@ -88,6 +87,18 @@ app.get("/cron/weekly-recap", async (c) => {
       error: error instanceof Error ? error.message : "Unknown error",
     }, 500);
   }
+};
+
+app.get("/cron/weekly-recap", weeklyRecapHandler);
+app.post("/cron/weekly-recap", weeklyRecapHandler);
+app.get("/cron/weekly-recap-notifications", weeklyRecapHandler);
+app.post("/cron/weekly-recap-notifications", weeklyRecapHandler);
+app.get("/cron/weekly_recap_notifications", weeklyRecapHandler);
+app.post("/cron/weekly_recap_notifications", weeklyRecapHandler);
+
+app.all("/cron/*", (c) => {
+  console.log("[CRON] Unmatched cron route:", c.req.method, c.req.url, c.req.path);
+  return c.json({ error: "Unknown cron route", method: c.req.method, path: c.req.path, url: c.req.url }, 404);
 });
 
 export default app;
