@@ -1157,19 +1157,12 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     console.log('[STOP_TRACKING] currentTrip:', !!currentTrip, 'currentTripRef:', !!currentTripRef.current);
     
     if (tripToSave) {
-      let tripLocation: TripLocation = { country: 'Unknown', city: 'Unknown' };
-      
-      if (tripToSave.locations.length > 0) {
-        const firstLocation = tripToSave.locations[0];
-        tripLocation = await reverseGeocode(firstLocation.latitude, firstLocation.longitude);
-      }
-
       const finalTrip: TripStats = {
         ...tripToSave,
         endTime: Date.now(),
         acceleration: maxAcceleration.current,
         maxGForce: maxGForce.current,
-        location: tripLocation,
+        location: tripToSave.location ?? { country: 'Unknown', city: 'Unknown' },
         carModel: carModel || tripToSave.carModel,
         time0to100: time0to100.current ?? undefined,
         time0to200: time0to200.current ?? undefined,
@@ -1181,26 +1174,42 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       const updatedTrips = [finalTrip, ...trips];
       saveTrips(updatedTrips);
       setLastSavedTrip(finalTrip);
-      
-      // Sync trip to backend for leaderboard - AWAIT to ensure it completes
-      const syncSuccess = await syncTripToBackend(finalTrip);
-      console.log('[STOP_TRACKING] Trip sync result:', syncSuccess);
-      
-      // Send trip completion notification
-      const durationMins = Math.round(finalTrip.duration / 60);
-      const distanceKm = finalTrip.distance.toFixed(1);
-      await sendLocalNotification(
-        '🏁 Trip Complete!',
-        `${distanceKm} km in ${durationMins} min • Top speed: ${Math.round(finalTrip.topSpeed)} km/h`,
-        { type: 'trip_complete', tripId: finalTrip.id }
-      );
-      
-      // Check for personal records (stored for weekly recap, no push notification)
-      await checkAndUpdateRecords(finalTrip);
-      
-      // Check for milestones (stored for weekly recap, no push notification)
+
+      const doBackgroundWork = async () => {
+        try {
+          if (finalTrip.locations.length > 0) {
+            const firstLocation = finalTrip.locations[0];
+            const tripLocation = await reverseGeocode(firstLocation.latitude, firstLocation.longitude);
+            const tripWithLocation: TripStats = { ...finalTrip, location: tripLocation };
+            const tripsWithLocation = [tripWithLocation, ...trips];
+            saveTrips(tripsWithLocation);
+            setLastSavedTrip(tripWithLocation);
+
+            await syncTripToBackend(tripWithLocation);
+          } else {
+            await syncTripToBackend(finalTrip);
+          }
+        } catch (e) {
+          console.error('[STOP_TRACKING] Background sync/geocode failed:', e);
+        }
+
+        try {
+          const durationMins = Math.round(finalTrip.duration / 60);
+          const distanceKm = finalTrip.distance.toFixed(1);
+          sendLocalNotification(
+            '🏁 Trip Complete!',
+            `${distanceKm} km in ${durationMins} min • Top speed: ${Math.round(finalTrip.topSpeed)} km/h`,
+            { type: 'trip_complete', tripId: finalTrip.id }
+          ).catch(console.error);
+
+          await checkAndUpdateRecords(finalTrip);
+        } catch (e) {
+          console.error('[STOP_TRACKING] Background tasks failed:', e);
+        }
+      };
+      doBackgroundWork();
       const totalDistance = updatedTrips.reduce((sum, t) => sum + t.distance, 0);
-      await checkMilestones(updatedTrips.length, totalDistance);
+      checkMilestones(updatedTrips.length, totalDistance).catch(console.error);
     }
 
     setIsTracking(false);
