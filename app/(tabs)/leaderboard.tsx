@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef, ReactNode } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef, ReactNode, memo } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, TextInput, Image, Platform, Alert, ActivityIndicator, Linking, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Trophy, Zap, Navigation, Gauge, ChevronDown, X, MapPin, Car, Filter, Activity, Route, Search, Clock, Calendar, CornerDownRight, ChevronRight, Timer, Users, Send, Bell, Check, XCircle, Share2, Navigation2, MessageCircle, AlertCircle } from 'lucide-react-native';
@@ -34,12 +34,12 @@ type TimePeriod = 'today' | 'week' | 'month' | 'year' | 'all';
 
 const MEETUP_DURATION_MS = 60 * 60 * 1000;
 
-function MeetupCountdownBar({ createdAt, expiresAt, colors }: { createdAt: number; expiresAt: number; colors: ThemeColors }) {
+const MeetupCountdownBar = memo(function MeetupCountdownBar({ createdAt, expiresAt, colors }: { createdAt: number; expiresAt: number; colors: ThemeColors }) {
   const [now, setNow] = useState(Date.now());
   const barWidth = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 1000);
+    const interval = setInterval(() => setNow(Date.now()), 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -99,7 +99,7 @@ function MeetupCountdownBar({ createdAt, expiresAt, colors }: { createdAt: numbe
       </View>
     </View>
   );
-}
+});
 
 export default function LeaderboardScreen() {
   const { trips } = useTrips();
@@ -695,15 +695,12 @@ export default function LeaderboardScreen() {
         }
       }
 
-      console.log('[LEADERBOARD_UI] Backend trip:', t.id, 'routePoints:', routePoints?.length ?? 0, 'rawKeys:', Object.keys(raw).filter(k => k.includes('route')).join(','));
       return {
         ...t,
         locations: [],
         routePoints,
       };
     });
-    
-    console.log('[LEADERBOARD_UI] Backend trips:', backendTrips.length, 'Local trips:', filteredLocalTrips.length);
     
     const allTrips = [...backendTrips];
     
@@ -713,13 +710,11 @@ export default function LeaderboardScreen() {
         const updates: Partial<LeaderboardTrip> = {};
         if (localTrip.locations && localTrip.locations.length > 1) {
           updates.locations = localTrip.locations;
-          console.log('[LEADERBOARD_UI] Merged local locations for trip:', localTrip.id, 'count:', localTrip.locations.length);
         }
         if (Object.keys(updates).length > 0) {
           allTrips[backendIdx] = { ...allTrips[backendIdx], ...updates };
         }
       } else {
-        console.log('[LEADERBOARD_UI] Adding local-only trip:', localTrip.id);
         allTrips.push(localTrip);
       }
     });
@@ -845,40 +840,47 @@ export default function LeaderboardScreen() {
     };
   };
 
-  const getSecondaryStats = (trip: TripStats) => {
-    const stats: { label: string; value: string; icon: ReactNode }[] = [];
+  const getSecondaryStats = useCallback((trip: TripStats) => {
+    const stats: { label: string; value: string; iconType: 'speed' | 'distance' | 'gforce' | 'accel' }[] = [];
     
     if (activeCategory !== 'topSpeed' && trip.topSpeed > 0) {
       stats.push({
         label: 'Top Speed',
         value: `${Math.round(convertSpeed(trip.topSpeed))} ${getSpeedLabel()}`,
-        icon: <Zap size={12} color={colors.warning} />,
+        iconType: 'speed',
       });
     }
     if (activeCategory !== 'distance' && activeCategory !== 'totalDistance' && trip.distance > 0) {
       stats.push({
         label: 'Distance',
         value: `${convertDistance(trip.distance).toFixed(1)} ${getDistanceLabel()}`,
-        icon: <Navigation size={12} color={colors.accent} />,
+        iconType: 'distance',
       });
     }
     if (activeCategory !== 'gForce' && (trip.maxGForce ?? 0) > 0) {
       stats.push({
         label: 'G-Force',
         value: `${(trip.maxGForce ?? 0).toFixed(2)} G`,
-        icon: <Activity size={12} color={colors.danger} />,
+        iconType: 'gforce',
       });
     }
     if (activeCategory !== 'acceleration' && (trip.acceleration ?? 0) > 0) {
       stats.push({
         label: 'Accel',
         value: `${(trip.acceleration ?? 0).toFixed(1)} m/s²`,
-        icon: <Gauge size={12} color={colors.success} />,
+        iconType: 'accel',
       });
     }
 
     return stats;
-  };
+  }, [activeCategory, convertSpeed, getSpeedLabel, convertDistance, getDistanceLabel]);
+
+  const statIconMap = useMemo(() => ({
+    speed: <Zap size={12} color={colors.warning} />,
+    distance: <Navigation size={12} color={colors.accent} />,
+    gforce: <Activity size={12} color={colors.danger} />,
+    accel: <Gauge size={12} color={colors.success} />,
+  }), [colors]);
 
   const openFilterModal = useCallback((type: FilterType) => {
     setActiveFilterType(type);
@@ -917,29 +919,32 @@ export default function LeaderboardScreen() {
     setActiveFilterType(null);
   }, [activeFilterType]);
 
-  const getFilterOptions = (): { value: string; label: string }[] => {
+  const filterOptions = useMemo((): { value: string; label: string }[] => {
     switch (activeFilterType) {
-      case 'country':
+      case 'country': {
         const filteredCountries = countrySearch
           ? countries.filter(c => c.name.toLowerCase().includes(countrySearch.toLowerCase()))
           : countries;
         return filteredCountries.map(c => ({ value: c.name, label: `${c.flag} ${c.name}` }));
+      }
       case 'city':
         return cities.map(c => ({ value: c, label: c }));
-      case 'carBrand':
+      case 'carBrand': {
         const filteredBrands = carBrandSearch
           ? carBrands.filter(b => b.toLowerCase().includes(carBrandSearch.toLowerCase()))
           : carBrands;
         return filteredBrands.map(b => ({ value: b, label: b }));
-      case 'carModel':
+      }
+      case 'carModel': {
         const filteredModels = carModelSearch
           ? carModels.filter(m => m.toLowerCase().includes(carModelSearch.toLowerCase()))
           : carModels;
         return filteredModels.map(m => ({ value: m, label: m }));
+      }
       default:
         return [];
     }
-  };
+  }, [activeFilterType, countrySearch, carBrandSearch, carModelSearch, countries, cities, carBrands, carModels]);
 
   const getFilterTitle = () => {
     switch (activeFilterType) {
@@ -1207,7 +1212,7 @@ export default function LeaderboardScreen() {
                       <View style={styles.secondaryStatsRow}>
                         {secondaryStats.map((stat, statIndex) => (
                           <View key={statIndex} style={styles.secondaryStat}>
-                            {stat.icon}
+                            {statIconMap[stat.iconType]}
                             <Text style={styles.secondaryStatValue}>{stat.value}</Text>
                           </View>
                         ))}
@@ -1292,7 +1297,7 @@ export default function LeaderboardScreen() {
                 <Text style={styles.modalOptionText}>All</Text>
               </TouchableOpacity>
 
-              {getFilterOptions().map((option, optionIndex) => (
+              {filterOptions.map((option, optionIndex) => (
                 <TouchableOpacity
                   key={option.value || `option-${optionIndex}`}
                   style={[
@@ -1313,7 +1318,7 @@ export default function LeaderboardScreen() {
                 </TouchableOpacity>
               ))}
 
-              {getFilterOptions().length === 0 && (
+              {filterOptions.length === 0 && (
                 <View style={styles.modalEmpty}>
                   <Text style={styles.modalEmptyText}>No options available</Text>
                 </View>
@@ -1342,12 +1347,8 @@ export default function LeaderboardScreen() {
               let mapCoords: RoutePoint[] = [];
               if (selectedTrip.locations && selectedTrip.locations.length > 1) {
                 mapCoords = selectedTrip.locations.map(l => ({ latitude: l.latitude, longitude: l.longitude }));
-                console.log('[TRIP_DETAIL] Using locations for map, count:', mapCoords.length);
               } else if (selectedTrip.routePoints && selectedTrip.routePoints.length > 1) {
                 mapCoords = selectedTrip.routePoints;
-                console.log('[TRIP_DETAIL] Using routePoints for map, count:', mapCoords.length);
-              } else {
-                console.log('[TRIP_DETAIL] No map data available. locations:', selectedTrip.locations?.length ?? 0, 'routePoints:', selectedTrip.routePoints?.length ?? 0, 'tripId:', selectedTrip.id);
               }
               const hasMap = mapCoords.length > 1;
 
