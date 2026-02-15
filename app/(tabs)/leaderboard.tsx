@@ -124,6 +124,8 @@ export default function LeaderboardScreen() {
   const [selectedMeetup, setSelectedMeetup] = useState<DriveMeetup | null>(null);
   const [showMeetupDetail, setShowMeetupDetail] = useState(false);
   const selectedMeetupId = useRef<string | null>(null);
+  const [viewLocationCoords, setViewLocationCoords] = useState<{ latitude: number; longitude: number; name: string } | null>(null);
+  const [showLocationMapModal, setShowLocationMapModal] = useState(false);
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('all');
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
@@ -203,8 +205,17 @@ export default function LeaderboardScreen() {
 
   meetupsRefetchRef.current = meetupsQuery.refetch;
 
+  const lastHandledActionRef = useRef<number>(0);
+
   useEffect(() => {
     if (pendingAction?.type === 'open_meetups') {
+      const now = Date.now();
+      if (now - lastHandledActionRef.current < 2000) {
+        console.log('[LEADERBOARD] Ignoring duplicate pending action');
+        clearPendingAction();
+        return;
+      }
+      lastHandledActionRef.current = now;
       console.log('[LEADERBOARD] Pending action detected, opening meetups modal');
       setShowMeetupsModal(true);
       meetupsRefetchRef.current?.();
@@ -430,13 +441,18 @@ export default function LeaderboardScreen() {
     }
   }, [meetupsQuery.data, user]);
 
-  const handleNavigateToLocation = useCallback((latitude: number, longitude: number) => {
+  const handleNavigateToLocation = useCallback((latitude: number, longitude: number, name?: string) => {
+    console.log('[MEETUP] Opening in-app location map for:', name, latitude, longitude);
+    setViewLocationCoords({ latitude, longitude, name: name || 'Driver' });
+    setShowLocationMapModal(true);
+  }, []);
+
+  const handleOpenExternalMaps = useCallback((latitude: number, longitude: number) => {
     const url = Platform.select({
       ios: `maps://app?daddr=${latitude},${longitude}`,
       android: `google.navigation:q=${latitude},${longitude}`,
       default: `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`,
     });
-    
     Linking.openURL(url).catch(() => {
       Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`);
     });
@@ -1746,7 +1762,7 @@ export default function LeaderboardScreen() {
                             {theirLocation && (
                               <TouchableOpacity
                                 style={styles.navigateButton}
-                                onPress={() => handleNavigateToLocation(theirLocation.latitude, theirLocation.longitude)}
+                                onPress={() => handleNavigateToLocation(theirLocation.latitude, theirLocation.longitude, otherUserName)}
                                 activeOpacity={0.7}
                               >
                                 <Navigation2 size={14} color={colors.textInverted} />
@@ -1967,11 +1983,11 @@ export default function LeaderboardScreen() {
                         {theirLocation ? (
                           <TouchableOpacity
                             style={styles.navigateButtonLarge}
-                            onPress={() => handleNavigateToLocation(theirLocation.latitude, theirLocation.longitude)}
+                            onPress={() => handleNavigateToLocation(theirLocation.latitude, theirLocation.longitude, otherUserName)}
                             activeOpacity={0.7}
                           >
-                            <Navigation2 size={16} color={colors.textInverted} />
-                            <Text style={styles.navigateButtonText}>Navigate</Text>
+                            <MapPin size={16} color={colors.textInverted} />
+                            <Text style={styles.navigateButtonText}>View</Text>
                           </TouchableOpacity>
                         ) : (
                           <Text style={styles.waitingLocationText}>Waiting...</Text>
@@ -1991,6 +2007,96 @@ export default function LeaderboardScreen() {
                 </ScrollView>
               );
             })()}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showLocationMapModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setShowLocationMapModal(false);
+          setViewLocationCoords(null);
+        }}
+      >
+        <View style={styles.tripDetailOverlay}>
+          <View style={[styles.tripDetailContent, { maxHeight: '95%' }]}>
+            <View style={styles.tripDetailHeader}>
+              <Text style={styles.tripDetailTitle}>{viewLocationCoords?.name || 'Location'}</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowLocationMapModal(false);
+                  setViewLocationCoords(null);
+                }}
+                activeOpacity={0.7}
+                style={styles.closeButton}
+              >
+                <X size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {viewLocationCoords && (
+              <View style={{ flex: 1, minHeight: 400 }}>
+                {Platform.OS !== 'web' ? (
+                  <View style={{ flex: 1 }}>
+                    <MapView
+                      style={{ flex: 1, minHeight: 350 }}
+                      initialRegion={{
+                        latitude: viewLocationCoords.latitude,
+                        longitude: viewLocationCoords.longitude,
+                        latitudeDelta: 0.02,
+                        longitudeDelta: 0.02,
+                      }}
+                      scrollEnabled={true}
+                      zoomEnabled={true}
+                      rotateEnabled={true}
+                    >
+                      {userCoords && (
+                        <Marker
+                          coordinate={{ latitude: userCoords.latitude, longitude: userCoords.longitude }}
+                          title="You"
+                          pinColor={colors.primary}
+                        />
+                      )}
+                      <Marker
+                        coordinate={{ latitude: viewLocationCoords.latitude, longitude: viewLocationCoords.longitude }}
+                        title={viewLocationCoords.name}
+                        pinColor={colors.success}
+                      />
+                    </MapView>
+                    <View style={styles.meetupMapLegend}>
+                      {userCoords && (
+                        <View style={styles.meetupMapLegendItem}>
+                          <View style={[styles.meetupMapLegendDot, { backgroundColor: colors.primary }]} />
+                          <Text style={styles.meetupMapLegendText}>You</Text>
+                        </View>
+                      )}
+                      <View style={styles.meetupMapLegendItem}>
+                        <View style={[styles.meetupMapLegendDot, { backgroundColor: colors.success }]} />
+                        <Text style={styles.meetupMapLegendText}>{viewLocationCoords.name}</Text>
+                      </View>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={[styles.noMapContainer, { flex: 1 }]}>
+                    <MapPin size={32} color={colors.textLight} />
+                    <Text style={styles.noMapText}>Map not available on web</Text>
+                  </View>
+                )}
+
+                <View style={{ padding: 16, gap: 10 }}>
+                  <TouchableOpacity
+                    style={[styles.navigateButtonLarge, { justifyContent: 'center', paddingVertical: 14, borderRadius: 12 }]}
+                    onPress={() => handleOpenExternalMaps(viewLocationCoords.latitude, viewLocationCoords.longitude)}
+                    activeOpacity={0.7}
+                  >
+                    <Navigation2 size={18} color={colors.textInverted} />
+                    <Text style={[styles.navigateButtonText, { fontSize: 14 }]}>Open in Maps App</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
         </View>
       </Modal>

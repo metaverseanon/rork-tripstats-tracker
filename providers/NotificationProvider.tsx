@@ -153,14 +153,12 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
               text: 'View',
               onPress: () => {
                 console.log('[PUSH] User tapped View on foreground drive ping');
-                const action = {
+                setPendingAction({
                   type: 'open_meetups' as const,
                   meetupId: data.meetupId as string,
                   fromUserName: fromName,
-                };
-                setPendingAction(action);
+                });
                 router.navigate('/(tabs)/leaderboard');
-                setTimeout(() => { setPendingAction({ ...action }); }, 800);
               },
             },
           ]
@@ -175,14 +173,12 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
             {
               text: 'View',
               onPress: () => {
-                const action = {
+                setPendingAction({
                   type: 'open_meetups' as const,
                   meetupId: data.meetupId as string,
                   fromUserName: undefined,
-                };
-                setPendingAction(action);
+                });
                 router.navigate('/(tabs)/leaderboard');
-                setTimeout(() => { setPendingAction({ ...action }); }, 800);
               },
             },
           ]
@@ -197,14 +193,12 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
             {
               text: 'View',
               onPress: () => {
-                const action = {
+                setPendingAction({
                   type: 'open_meetups' as const,
                   meetupId: data.meetupId as string,
                   fromUserName: undefined,
-                };
-                setPendingAction(action);
+                });
                 router.navigate('/(tabs)/leaderboard');
-                setTimeout(() => { setPendingAction({ ...action }); }, 800);
               },
             },
           ]
@@ -218,15 +212,13 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
       
       if (data?.type === 'drive_ping' || data?.type === 'ping_accepted' || data?.type === 'ping_declined' || data?.type === 'location_shared' || data?.type === 'meetup_cancelled') {
         console.log('[PUSH] Drive-related notification tapped, navigating to meetups');
-        const action = {
+        setPendingAction({
           type: 'open_meetups' as const,
           meetupId: data.meetupId as string,
           fromUserName: data.fromUserName as string | undefined,
-        };
-        setPendingAction(action);
+        });
         setTimeout(() => {
           router.navigate('/(tabs)/leaderboard');
-          setTimeout(() => { setPendingAction({ ...action }); }, 800);
         }, 300);
       }
     });
