@@ -158,7 +158,7 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
                   meetupId: data.meetupId as string,
                   fromUserName: fromName,
                 });
-                router.navigate('/(tabs)/leaderboard');
+                router.navigate('/(tabs)/leaderboard' as any);
               },
             },
           ]
@@ -178,7 +178,7 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
                   meetupId: data.meetupId as string,
                   fromUserName: undefined,
                 });
-                router.navigate('/(tabs)/leaderboard');
+                router.navigate('/(tabs)/leaderboard' as any);
               },
             },
           ]
@@ -198,7 +198,7 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
                   meetupId: data.meetupId as string,
                   fromUserName: undefined,
                 });
-                router.navigate('/(tabs)/leaderboard');
+                router.navigate('/(tabs)/leaderboard' as any);
               },
             },
           ]
@@ -218,7 +218,7 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
           fromUserName: data.fromUserName as string | undefined,
         });
         setTimeout(() => {
-          router.navigate('/(tabs)/leaderboard');
+          router.navigate('/(tabs)/leaderboard' as any);
         }, 300);
       }
     });

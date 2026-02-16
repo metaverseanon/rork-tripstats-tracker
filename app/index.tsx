@@ -13,7 +13,7 @@ export default function WelcomeScreen() {
         duration: 400,
         useNativeDriver: true,
       }).start(() => {
-        router.replace('/(tabs)/track');
+        router.replace('/(tabs)/track' as any);
       });
     }, 4000);
 

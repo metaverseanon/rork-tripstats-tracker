@@ -1207,7 +1207,7 @@ export default function LeaderboardScreen() {
                       style={styles.avatarContainer}
                       onPress={() => {
                         if (trip.userId && trip.userId !== user?.id) {
-                          router.push(`/user-profile?userId=${trip.userId}`);
+                          router.push({ pathname: '/user-profile', params: { userId: trip.userId } } as any);
                         }
                       }}
                       disabled={!trip.userId || trip.userId === user?.id}
@@ -1229,7 +1229,7 @@ export default function LeaderboardScreen() {
                       <TouchableOpacity
                         onPress={() => {
                           if (trip.userId && trip.userId !== user?.id) {
-                            router.push(`/user-profile?userId=${trip.userId}`);
+                            router.push({ pathname: '/user-profile', params: { userId: trip.userId } } as any);
                           }
                         }}
                         disabled={!trip.userId || trip.userId === user?.id}
@@ -1542,9 +1542,9 @@ export default function LeaderboardScreen() {
                     const tripUserId = selectedTrip?.userId;
                     closeTripDetail();
                     if (tripUserId && tripUserId !== user?.id) {
-                      router.push(`/user-profile?userId=${tripUserId}`);
+                      router.push({ pathname: '/user-profile', params: { userId: tripUserId } } as any);
                     } else {
-                      router.push('/profile');
+                      router.push('/profile' as any);
                     }
                   }}
                   activeOpacity={0.7}
