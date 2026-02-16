@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef, ReactNode, memo } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, TextInput, Image, Platform, Alert, ActivityIndicator, Linking, Animated } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, TextInput, Image, Platform, Alert, ActivityIndicator, Linking, Animated, InteractionManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Trophy, Zap, Navigation, Gauge, ChevronDown, X, MapPin, Car, Filter, Activity, Route, Search, Clock, Calendar, CornerDownRight, ChevronRight, Timer, Users, Send, Bell, Check, XCircle, Share2, Navigation2, MessageCircle, AlertCircle } from 'lucide-react-native';
 import * as Location from 'expo-location';
@@ -217,9 +217,11 @@ export default function LeaderboardScreen() {
       }
       lastHandledActionRef.current = now;
       console.log('[LEADERBOARD] Pending action detected, opening meetups modal');
-      setShowMeetupsModal(true);
-      meetupsRefetchRef.current?.();
       clearPendingAction();
+      InteractionManager.runAfterInteractions(() => {
+        setShowMeetupsModal(true);
+        meetupsRefetchRef.current?.();
+      });
     }
   }, [pendingAction, clearPendingAction]);
 
@@ -228,7 +230,7 @@ export default function LeaderboardScreen() {
       if (data.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert('Ping Sent!', 'Your drive invite has been sent.');
-        meetupsQuery.refetch();
+        setTimeout(() => meetupsQuery.refetch(), 300);
       } else {
         Alert.alert('Could not send', data.message || 'User may not have notifications enabled.');
       }
@@ -248,10 +250,12 @@ export default function LeaderboardScreen() {
     onSuccess: (data) => {
       if (data.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        meetupsQuery.refetch();
         if (data.status === 'accepted') {
           autoShareLocationRef.current = respondingMeetupId;
         }
+        setTimeout(() => {
+          meetupsQuery.refetch();
+        }, 300);
       }
       setRespondingMeetupId(null);
     },
@@ -403,48 +407,80 @@ export default function LeaderboardScreen() {
 
     const refetchAndShare = async () => {
       console.log('[MEETUP] Auto-sharing location after accepting meetup:', meetupIdToAutoShare);
-      const result = await meetupsQuery.refetch();
-      const freshMeetups = result.data || [];
-      const acceptedMeetup = freshMeetups.find((m: DriveMeetup) => m.id === meetupIdToAutoShare && m.status === 'accepted');
-      if (acceptedMeetup) {
-        const isAccepter = acceptedMeetup.toUserId === user.id;
-        const myLoc = isAccepter ? acceptedMeetup.toUserLocation : acceptedMeetup.fromUserLocation;
-        if (!myLoc) {
-          autoSharedMeetupIds.current.add(meetupIdToAutoShare);
-          handleShareLocationRef.current(acceptedMeetup, true);
+      try {
+        const result = await meetupsQuery.refetch();
+        const freshMeetups = result.data || [];
+        const acceptedMeetup = freshMeetups.find((m: DriveMeetup) => m.id === meetupIdToAutoShare && m.status === 'accepted');
+        if (acceptedMeetup) {
+          const isAccepter = acceptedMeetup.toUserId === user.id;
+          const myLoc = isAccepter ? acceptedMeetup.toUserLocation : acceptedMeetup.fromUserLocation;
+          if (!myLoc) {
+            autoSharedMeetupIds.current.add(meetupIdToAutoShare);
+            handleShareLocationRef.current(acceptedMeetup, true);
+          }
         }
+      } catch (e) {
+        console.error('[MEETUP] Auto-share refetch failed:', e);
       }
     };
 
-    setTimeout(refetchAndShare, 500);
+    const timer = setTimeout(refetchAndShare, 800);
+    return () => clearTimeout(timer);
   }, [respondToPingMutation.isSuccess]);
+
+  const autoShareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!user || !meetupsQuery.data) return;
 
-    const acceptedMeetups = meetupsQuery.data.filter((m: DriveMeetup) => m.status === 'accepted');
-    
-    for (const meetup of acceptedMeetups) {
-      if (autoSharedMeetupIds.current.has(meetup.id)) continue;
-      
-      const isFromUser = meetup.fromUserId === user.id;
-      const isToUser = meetup.toUserId === user.id;
-      if (!isFromUser && !isToUser) continue;
-
-      const myLoc = isToUser ? meetup.toUserLocation : meetup.fromUserLocation;
-      if (!myLoc) {
-        console.log('[MEETUP] Auto-sharing location for accepted meetup:', meetup.id, isFromUser ? '(sender)' : '(accepter)');
-        autoSharedMeetupIds.current.add(meetup.id);
-        handleShareLocationRef.current(meetup, true);
-        break;
-      }
+    if (autoShareTimerRef.current) {
+      clearTimeout(autoShareTimerRef.current);
     }
+
+    autoShareTimerRef.current = setTimeout(() => {
+      const acceptedMeetups = meetupsQuery.data!.filter((m: DriveMeetup) => m.status === 'accepted');
+      
+      for (const meetup of acceptedMeetups) {
+        if (autoSharedMeetupIds.current.has(meetup.id)) continue;
+        
+        const isFromUser = meetup.fromUserId === user!.id;
+        const isToUser = meetup.toUserId === user!.id;
+        if (!isFromUser && !isToUser) continue;
+
+        const myLoc = isToUser ? meetup.toUserLocation : meetup.fromUserLocation;
+        if (!myLoc) {
+          console.log('[MEETUP] Auto-sharing location for accepted meetup:', meetup.id, isFromUser ? '(sender)' : '(accepter)');
+          autoSharedMeetupIds.current.add(meetup.id);
+          handleShareLocationRef.current(meetup, true);
+          break;
+        }
+      }
+    }, 500);
+
+    return () => {
+      if (autoShareTimerRef.current) {
+        clearTimeout(autoShareTimerRef.current);
+      }
+    };
   }, [meetupsQuery.data, user]);
+
+  const pendingLocationRef = useRef<{ latitude: number; longitude: number; name: string } | null>(null);
 
   const handleNavigateToLocation = useCallback((latitude: number, longitude: number, name?: string) => {
     console.log('[MEETUP] Opening in-app location map for:', name, latitude, longitude);
-    setViewLocationCoords({ latitude, longitude, name: name || 'Driver' });
-    setShowLocationMapModal(true);
+    const coords = { latitude, longitude, name: name || 'Driver' };
+    pendingLocationRef.current = coords;
+    setShowMeetupDetail(false);
+    setSelectedMeetup(null);
+    selectedMeetupId.current = null;
+    setShowMeetupsModal(false);
+    setTimeout(() => {
+      if (pendingLocationRef.current) {
+        setViewLocationCoords(pendingLocationRef.current);
+        setShowLocationMapModal(true);
+        pendingLocationRef.current = null;
+      }
+    }, 400);
   }, []);
 
   const handleOpenExternalMaps = useCallback((latitude: number, longitude: number) => {
