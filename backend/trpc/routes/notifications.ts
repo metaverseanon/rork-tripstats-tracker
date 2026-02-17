@@ -180,18 +180,27 @@ async function getUsersWithPushTokens(): Promise<UserWithToken[]> {
   }
 }
 
-async function getAllMeetups(): Promise<DriveMeetup[]> {
+async function getAllMeetups(userId?: string): Promise<DriveMeetup[]> {
   if (!isDbConfigured()) {
     return [];
   }
 
   try {
-    const response = await fetch(getSupabaseRestUrl("meetups"), {
+    let url = getSupabaseRestUrl("meetups");
+    if (userId) {
+      url += `?status=in.(pending,accepted)&or=(fromUserId.eq.${userId},toUserId.eq.${userId},from_user_id.eq.${userId},to_user_id.eq.${userId})`;
+    }
+    console.log("[PUSH] Fetching meetups with URL:", url);
+
+    const response = await fetch(url, {
       method: "GET",
       headers: getSupabaseHeaders(),
     });
 
-    if (!response.ok) return [];
+    if (!response.ok) {
+      console.error("[PUSH] Failed to fetch meetups:", response.status, await response.text().catch(() => ''));
+      return [];
+    }
 
     const data = await response.json();
     const rows = data.items || data || [];
@@ -583,7 +592,7 @@ export const notificationsRouter = createTRPCRouter({
   getMeetups: publicProcedure
     .input(z.object({ userId: z.string() }))
     .query(async ({ input }) => {
-      const meetups = await getAllMeetups();
+      const meetups = await getAllMeetups(input.userId);
       const now = Date.now();
       
       const userMeetups = meetups.filter(m => 
