@@ -89,6 +89,45 @@ function tripToSupabaseRow(trip: SyncedTrip): SupabaseTripRow {
   return row;
 }
 
+async function enrichTripsWithUserCars(trips: SyncedTrip[]): Promise<SyncedTrip[]> {
+  const tripsWithoutCar = trips.filter(t => !t.carModel);
+  if (tripsWithoutCar.length === 0) return trips;
+
+  const userIdsNeedingCar = [...new Set(tripsWithoutCar.map(t => t.userId))];
+  console.log('[LEADERBOARD] Enriching car info for', userIdsNeedingCar.length, 'users');
+
+  try {
+    const userCarMap = new Map<string, string>();
+
+    for (const userId of userIdsNeedingCar) {
+      const url = `${getSupabaseRestUrl('users')}?id=eq.${userId}&select=id,car_brand,car_model`;
+      const resp = await fetch(url, { method: 'GET', headers: getSupabaseHeaders() });
+      if (resp.ok) {
+        const rows = await resp.json();
+        if (rows.length > 0) {
+          const u = rows[0];
+          if (u.car_brand) {
+            const carFull = u.car_model ? `${u.car_brand} ${u.car_model}` : u.car_brand;
+            userCarMap.set(userId, carFull);
+          }
+        }
+      }
+    }
+
+    console.log('[LEADERBOARD] Found car info for', userCarMap.size, 'users');
+
+    return trips.map(trip => {
+      if (!trip.carModel && userCarMap.has(trip.userId)) {
+        return { ...trip, carModel: userCarMap.get(trip.userId) };
+      }
+      return trip;
+    });
+  } catch (error) {
+    console.error('[LEADERBOARD] Error enriching car info:', error);
+    return trips;
+  }
+}
+
 function supabaseRowToTrip(row: SupabaseTripRow): SyncedTrip {
   let routePoints: { latitude: number; longitude: number }[] | undefined;
   if (row.route_points) {
@@ -218,7 +257,7 @@ async function getTotalDistanceLeaderboard(input: {
       .slice(0, input.limit);
 
     console.log("[LEADERBOARD] totalDistance aggregated:", aggregated.length, "users");
-    return aggregated;
+    return await enrichTripsWithUserCars(aggregated);
   } catch (error) {
     console.error("[LEADERBOARD] totalDistance error:", error);
     return [];
@@ -454,7 +493,7 @@ export const tripsRouter = createTRPCRouter({
           return `${t?.userName || 'unknown'}(${uid})`;
         }).join(', '));
         
-        return trips;
+        return await enrichTripsWithUserCars(trips);
       } catch (error) {
         console.error("[LEADERBOARD] Error fetching trips:", error);
         return [];
