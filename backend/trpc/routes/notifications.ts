@@ -180,6 +180,57 @@ async function getUsersWithPushTokens(): Promise<UserWithToken[]> {
   }
 }
 
+function meetupToSnakeCase(meetup: DriveMeetup): Record<string, unknown> {
+  return {
+    id: meetup.id,
+    from_user_id: meetup.fromUserId,
+    from_user_name: meetup.fromUserName,
+    from_user_car: meetup.fromUserCar ?? null,
+    to_user_id: meetup.toUserId,
+    to_user_name: meetup.toUserName,
+    to_user_car: meetup.toUserCar ?? null,
+    status: meetup.status,
+    created_at: meetup.createdAt,
+    expires_at: meetup.expiresAt,
+    responded_at: meetup.respondedAt ?? null,
+    from_user_location: meetup.fromUserLocation ?? null,
+    to_user_location: meetup.toUserLocation ?? null,
+  };
+}
+
+function partialMeetupToSnakeCase(updates: Partial<DriveMeetup>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  if (updates.status !== undefined) result.status = updates.status;
+  if (updates.respondedAt !== undefined) result.responded_at = updates.respondedAt;
+  if (updates.fromUserLocation !== undefined) result.from_user_location = updates.fromUserLocation;
+  if (updates.toUserLocation !== undefined) result.to_user_location = updates.toUserLocation;
+  if (updates.fromUserName !== undefined) result.from_user_name = updates.fromUserName;
+  if (updates.toUserName !== undefined) result.to_user_name = updates.toUserName;
+  if (updates.fromUserCar !== undefined) result.from_user_car = updates.fromUserCar;
+  if (updates.toUserCar !== undefined) result.to_user_car = updates.toUserCar;
+  if (updates.expiresAt !== undefined) result.expires_at = updates.expiresAt;
+  if (updates.createdAt !== undefined) result.created_at = updates.createdAt;
+  return result;
+}
+
+function rowToMeetup(m: any): DriveMeetup {
+  return {
+    id: m.id,
+    fromUserId: m.from_user_id ?? m.fromUserId,
+    fromUserName: m.from_user_name ?? m.fromUserName,
+    fromUserCar: m.from_user_car ?? m.fromUserCar,
+    toUserId: m.to_user_id ?? m.toUserId,
+    toUserName: m.to_user_name ?? m.toUserName,
+    toUserCar: m.to_user_car ?? m.toUserCar,
+    status: m.status,
+    createdAt: m.created_at ?? m.createdAt,
+    expiresAt: m.expires_at ?? m.expiresAt,
+    respondedAt: m.responded_at ?? m.respondedAt,
+    fromUserLocation: m.from_user_location ?? m.fromUserLocation ?? null,
+    toUserLocation: m.to_user_location ?? m.toUserLocation ?? null,
+  };
+}
+
 async function getAllMeetups(userId?: string): Promise<DriveMeetup[]> {
   if (!isDbConfigured()) {
     return [];
@@ -188,7 +239,7 @@ async function getAllMeetups(userId?: string): Promise<DriveMeetup[]> {
   try {
     let url = getSupabaseRestUrl("meetups");
     if (userId) {
-      url += `?status=in.(pending,accepted)&or=(fromUserId.eq.${userId},toUserId.eq.${userId},from_user_id.eq.${userId},to_user_id.eq.${userId})`;
+      url += `?status=in.(pending,accepted)&or=(from_user_id.eq.${userId},to_user_id.eq.${userId})`;
     }
     console.log("[PUSH] Fetching meetups with URL:", url);
 
@@ -204,21 +255,8 @@ async function getAllMeetups(userId?: string): Promise<DriveMeetup[]> {
 
     const data = await response.json();
     const rows = data.items || data || [];
-    return rows.map((m: any) => ({
-      id: m.id,
-      fromUserId: m.fromUserId ?? m.from_user_id,
-      fromUserName: m.fromUserName ?? m.from_user_name,
-      fromUserCar: m.fromUserCar ?? m.from_user_car,
-      toUserId: m.toUserId ?? m.to_user_id,
-      toUserName: m.toUserName ?? m.to_user_name,
-      toUserCar: m.toUserCar ?? m.to_user_car,
-      status: m.status,
-      createdAt: m.createdAt ?? m.created_at,
-      expiresAt: m.expiresAt ?? m.expires_at,
-      respondedAt: m.respondedAt ?? m.responded_at,
-      fromUserLocation: m.fromUserLocation ?? m.from_user_location ?? null,
-      toUserLocation: m.toUserLocation ?? m.to_user_location ?? null,
-    }));
+    console.log("[PUSH] Fetched meetups count:", rows.length);
+    return rows.map(rowToMeetup);
   } catch (error) {
     console.error("[PUSH] Error fetching meetups:", error);
     return [];
@@ -229,13 +267,21 @@ async function storeMeetup(meetup: DriveMeetup): Promise<boolean> {
   if (!isDbConfigured()) return false;
 
   try {
+    const snakeMeetup = meetupToSnakeCase(meetup);
+    console.log("[PUSH] Storing meetup:", JSON.stringify(snakeMeetup));
     const response = await fetch(getSupabaseRestUrl("meetups"), {
       method: "POST",
       headers: getSupabaseHeaders(),
-      body: JSON.stringify(meetup),
+      body: JSON.stringify(snakeMeetup),
     });
 
-    return response.ok;
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      console.error("[PUSH] Failed to store meetup:", response.status, errText);
+      return false;
+    }
+    console.log("[PUSH] Meetup stored successfully:", meetup.id);
+    return true;
   } catch (error) {
     console.error("[PUSH] Error storing meetup:", error);
     return false;
@@ -246,13 +292,21 @@ async function updateMeetup(meetupId: string, updates: Partial<DriveMeetup>): Pr
   if (!isDbConfigured()) return false;
 
   try {
+    const snakeUpdates = partialMeetupToSnakeCase(updates);
+    console.log("[PUSH] Updating meetup:", meetupId, JSON.stringify(snakeUpdates));
     const response = await fetch(`${getSupabaseRestUrl("meetups")}?id=eq.${meetupId}`, {
       method: "PATCH",
       headers: getSupabaseHeaders(),
-      body: JSON.stringify(updates),
+      body: JSON.stringify(snakeUpdates),
     });
 
-    return response.ok;
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      console.error("[PUSH] Failed to update meetup:", response.status, errText);
+      return false;
+    }
+    console.log("[PUSH] Meetup updated successfully:", meetupId);
+    return true;
   } catch (error) {
     console.error("[PUSH] Error updating meetup:", error);
     return false;
@@ -494,7 +548,7 @@ export const notificationsRouter = createTRPCRouter({
       responderName: z.string(),
     }))
     .mutation(async ({ input }) => {
-      const meetups = await getAllMeetups();
+      const meetups = await getAllMeetups(input.responderId);
       const meetup = meetups.find(m => m.id === input.meetupId);
 
       if (!meetup) return { success: false, message: "Meetup not found" };
@@ -543,7 +597,7 @@ export const notificationsRouter = createTRPCRouter({
       longitude: z.number(),
     }))
     .mutation(async ({ input }) => {
-      const meetups = await getAllMeetups();
+      const meetups = await getAllMeetups(input.userId);
       const meetup = meetups.find(m => m.id === input.meetupId);
 
       if (!meetup) return { success: false, message: "Meetup not found" };
@@ -624,7 +678,7 @@ export const notificationsRouter = createTRPCRouter({
       userName: z.string(),
     }))
     .mutation(async ({ input }) => {
-      const meetups = await getAllMeetups();
+      const meetups = await getAllMeetups(input.userId);
       const meetup = meetups.find(m => m.id === input.meetupId);
 
       if (!meetup) return { success: false, message: "Meetup not found" };
