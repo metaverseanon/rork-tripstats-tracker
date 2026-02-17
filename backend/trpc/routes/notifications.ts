@@ -194,7 +194,22 @@ async function getAllMeetups(): Promise<DriveMeetup[]> {
     if (!response.ok) return [];
 
     const data = await response.json();
-    return data.items || data || [];
+    const rows = data.items || data || [];
+    return rows.map((m: any) => ({
+      id: m.id,
+      fromUserId: m.fromUserId ?? m.from_user_id,
+      fromUserName: m.fromUserName ?? m.from_user_name,
+      fromUserCar: m.fromUserCar ?? m.from_user_car,
+      toUserId: m.toUserId ?? m.to_user_id,
+      toUserName: m.toUserName ?? m.to_user_name,
+      toUserCar: m.toUserCar ?? m.to_user_car,
+      status: m.status,
+      createdAt: m.createdAt ?? m.created_at,
+      expiresAt: m.expiresAt ?? m.expires_at,
+      respondedAt: m.respondedAt ?? m.responded_at,
+      fromUserLocation: m.fromUserLocation ?? m.from_user_location ?? null,
+      toUserLocation: m.toUserLocation ?? m.to_user_location ?? null,
+    }));
   } catch (error) {
     console.error("[PUSH] Error fetching meetups:", error);
     return [];
