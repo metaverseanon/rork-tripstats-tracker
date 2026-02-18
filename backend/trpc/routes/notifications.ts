@@ -239,7 +239,11 @@ async function getAllMeetups(userId?: string): Promise<DriveMeetup[]> {
   try {
     let url = getSupabaseRestUrl("meetups");
     if (userId) {
-      url += `?status=in.(pending,accepted)&or=(from_user_id.eq.${userId},to_user_id.eq.${userId})`;
+      const params = new URLSearchParams();
+      params.append("status", "in.(pending,accepted)");
+      params.append("or", `(from_user_id.eq.${userId},to_user_id.eq.${userId})`);
+      params.append("order", "created_at.desc");
+      url += `?${params.toString()}`;
     }
     console.log("[PUSH] Fetching meetups with URL:", url);
 
@@ -249,7 +253,23 @@ async function getAllMeetups(userId?: string): Promise<DriveMeetup[]> {
     });
 
     if (!response.ok) {
-      console.error("[PUSH] Failed to fetch meetups:", response.status, await response.text().catch(() => ''));
+      const errText = await response.text().catch(() => '');
+      console.error("[PUSH] Failed to fetch meetups:", response.status, errText);
+      
+      if (response.status === 400 && userId) {
+        console.log("[PUSH] Retrying without filters...");
+        const fallbackUrl = getSupabaseRestUrl("meetups") + "?order=created_at.desc&limit=50";
+        const fallbackResp = await fetch(fallbackUrl, { method: "GET", headers: getSupabaseHeaders() });
+        if (fallbackResp.ok) {
+          const fallbackData = await fallbackResp.json();
+          const allRows = fallbackData.items || fallbackData || [];
+          const mapped = allRows.map(rowToMeetup);
+          return mapped.filter((m: DriveMeetup) =>
+            (m.status === 'pending' || m.status === 'accepted') &&
+            (m.fromUserId === userId || m.toUserId === userId)
+          );
+        }
+      }
       return [];
     }
 

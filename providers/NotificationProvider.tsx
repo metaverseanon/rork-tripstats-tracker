@@ -219,9 +219,33 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
         });
         setTimeout(() => {
           router.navigate('/(tabs)/leaderboard' as any);
-        }, 300);
+        }, 500);
       }
     });
+
+    const checkInitialNotification = async () => {
+      try {
+        const lastResponse = await Notifications.getLastNotificationResponseAsync();
+        if (lastResponse) {
+          const data = lastResponse.notification.request.content.data as Record<string, unknown> | undefined;
+          if (data?.type === 'drive_ping' || data?.type === 'ping_accepted' || data?.type === 'ping_declined' || data?.type === 'location_shared' || data?.type === 'meetup_cancelled') {
+            console.log('[PUSH] Cold start notification detected:', data.type);
+            setPendingAction({
+              type: 'open_meetups' as const,
+              meetupId: data.meetupId as string,
+              fromUserName: data.fromUserName as string | undefined,
+            });
+            setTimeout(() => {
+              router.navigate('/(tabs)/leaderboard' as any);
+            }, 1000);
+          }
+        }
+      } catch (e) {
+        console.log('[PUSH] Error checking initial notification:', e);
+      }
+    };
+
+    setTimeout(() => checkInitialNotification(), 500);
 
     return () => {
       if (notificationListener.current) {

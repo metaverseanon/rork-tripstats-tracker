@@ -126,6 +126,8 @@ export default function LeaderboardScreen() {
   const selectedMeetupId = useRef<string | null>(null);
   const [viewLocationCoords, setViewLocationCoords] = useState<{ latitude: number; longitude: number; name: string } | null>(null);
   const [showLocationMapModal, setShowLocationMapModal] = useState(false);
+  const [showNavChooser, setShowNavChooser] = useState(false);
+  const [navTarget, setNavTarget] = useState<{ latitude: number; longitude: number; name: string } | null>(null);
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('all');
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
@@ -253,6 +255,17 @@ export default function LeaderboardScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         if (data.status === 'accepted') {
           autoShareLocationRef.current = respondingMeetupId;
+          const meetup = meetups.find(m => m.id === respondingMeetupId);
+          if (meetup?.fromUserLocation) {
+            setTimeout(() => {
+              setNavTarget({
+                latitude: meetup.fromUserLocation!.latitude,
+                longitude: meetup.fromUserLocation!.longitude,
+                name: meetup.fromUserName,
+              });
+              setShowNavChooser(true);
+            }, 500);
+          }
         }
         setTimeout(() => {
           meetupsQuery.refetch();
@@ -467,35 +480,63 @@ export default function LeaderboardScreen() {
     };
   }, [meetupsQuery.data, user, shareLocationMutation.isPending]);
 
-  const pendingLocationRef = useRef<{ latitude: number; longitude: number; name: string } | null>(null);
+
 
   const handleNavigateToLocation = useCallback((latitude: number, longitude: number, name?: string) => {
-    console.log('[MEETUP] Opening in-app location map for:', name, latitude, longitude);
-    const coords = { latitude, longitude, name: name || 'Driver' };
-    pendingLocationRef.current = coords;
-    setSelectedMeetup(null);
-    selectedMeetupId.current = null;
-    setMeetupView('list');
-    setShowMeetupsModal(false);
-    setTimeout(() => {
-      if (pendingLocationRef.current) {
-        setViewLocationCoords(pendingLocationRef.current);
-        setShowLocationMapModal(true);
-        pendingLocationRef.current = null;
-      }
-    }, 400);
+    console.log('[MEETUP] Opening nav chooser for:', name, latitude, longitude);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setNavTarget({ latitude, longitude, name: name || 'Driver' });
+    setShowNavChooser(true);
   }, []);
 
   const handleOpenExternalMaps = useCallback((latitude: number, longitude: number) => {
-    const url = Platform.select({
-      ios: `maps://app?daddr=${latitude},${longitude}`,
-      android: `google.navigation:q=${latitude},${longitude}`,
-      default: `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`,
-    });
-    Linking.openURL(url).catch(() => {
-      Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`);
-    });
+    setNavTarget({ latitude, longitude, name: 'Driver' });
+    setShowNavChooser(true);
   }, []);
+
+  const openNavApp = useCallback(async (app: 'apple' | 'google' | 'waze' | 'web') => {
+    if (!navTarget) return;
+    const { latitude, longitude } = navTarget;
+    let url = '';
+    
+    switch (app) {
+      case 'apple':
+        url = `maps://app?daddr=${latitude},${longitude}&dirflg=d`;
+        break;
+      case 'google':
+        url = `comgooglemaps://?daddr=${latitude},${longitude}&directionsmode=driving`;
+        break;
+      case 'waze':
+        url = `waze://?ll=${latitude},${longitude}&navigate=yes`;
+        break;
+      case 'web':
+        url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}&travelmode=driving`;
+        break;
+    }
+
+    try {
+      if (app === 'web') {
+        await Linking.openURL(url);
+      } else {
+        const canOpen = await Linking.canOpenURL(url);
+        if (canOpen) {
+          await Linking.openURL(url);
+        } else {
+          if (app === 'google') {
+            await Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}&travelmode=driving`);
+          } else if (app === 'waze') {
+            await Linking.openURL(`https://waze.com/ul?ll=${latitude},${longitude}&navigate=yes`);
+          } else {
+            await Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}&travelmode=driving`);
+          }
+        }
+      }
+    } catch {
+      await Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}&travelmode=driving`);
+    }
+    setShowNavChooser(false);
+    setNavTarget(null);
+  }, [navTarget]);
 
   const handleCancelMeetup = useCallback((meetup: DriveMeetup) => {
     if (!user) return;
@@ -2037,7 +2078,7 @@ export default function LeaderboardScreen() {
                                 activeOpacity={0.7}
                               >
                                 <MapPin size={16} color={colors.textInverted} />
-                                <Text style={styles.navigateButtonText}>View</Text>
+                                <Text style={styles.navigateButtonText}>Navigate</Text>
                               </TouchableOpacity>
                             ) : (
                               <Text style={styles.waitingLocationText}>Waiting...</Text>
@@ -2064,93 +2105,77 @@ export default function LeaderboardScreen() {
       </Modal>
 
       <Modal
-        visible={showLocationMapModal}
+        visible={showNavChooser}
         transparent
         animationType="slide"
-        onRequestClose={() => {
-          setShowLocationMapModal(false);
-          setViewLocationCoords(null);
-        }}
+        onRequestClose={() => { setShowNavChooser(false); setNavTarget(null); }}
       >
-        <View style={styles.tripDetailOverlay}>
-          <View style={[styles.tripDetailContent, { maxHeight: '95%' }]}>
-            <View style={styles.tripDetailHeader}>
-              <Text style={styles.tripDetailTitle}>{viewLocationCoords?.name || 'Location'}</Text>
+        <Pressable style={styles.navChooserOverlay} onPress={() => { setShowNavChooser(false); setNavTarget(null); }}>
+          <Pressable style={styles.navChooserContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.navChooserHandle} />
+            <Text style={styles.navChooserTitle}>Navigate to {navTarget?.name}</Text>
+            <Text style={styles.navChooserSubtitle}>Choose your navigation app</Text>
+
+            <View style={styles.navChooserOptions}>
+              {Platform.OS === 'ios' && (
+                <TouchableOpacity
+                  style={styles.navChooserOption}
+                  onPress={() => openNavApp('apple')}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.navChooserIconBg, { backgroundColor: '#34C759' }]}>
+                    <Navigation2 size={22} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.navChooserOptionInfo}>
+                    <Text style={styles.navChooserOptionTitle}>Apple Maps</Text>
+                    <Text style={styles.navChooserOptionSub}>Built-in navigation</Text>
+                  </View>
+                  <ChevronRight size={18} color={colors.textLight} />
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity
-                onPress={() => {
-                  setShowLocationMapModal(false);
-                  setViewLocationCoords(null);
-                }}
+                style={styles.navChooserOption}
+                onPress={() => openNavApp(Platform.OS === 'web' ? 'web' : 'google')}
                 activeOpacity={0.7}
-                style={styles.closeButton}
               >
-                <X size={24} color={colors.text} />
+                <View style={[styles.navChooserIconBg, { backgroundColor: '#4285F4' }]}>
+                  <MapPin size={22} color="#FFFFFF" />
+                </View>
+                <View style={styles.navChooserOptionInfo}>
+                  <Text style={styles.navChooserOptionTitle}>Google Maps</Text>
+                  <Text style={styles.navChooserOptionSub}>Turn-by-turn directions</Text>
+                </View>
+                <ChevronRight size={18} color={colors.textLight} />
               </TouchableOpacity>
+
+              {Platform.OS !== 'web' && (
+                <TouchableOpacity
+                  style={styles.navChooserOption}
+                  onPress={() => openNavApp('waze')}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.navChooserIconBg, { backgroundColor: '#33CCFF' }]}>
+                    <Navigation size={22} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.navChooserOptionInfo}>
+                    <Text style={styles.navChooserOptionTitle}>Waze</Text>
+                    <Text style={styles.navChooserOptionSub}>Community-based navigation</Text>
+                  </View>
+                  <ChevronRight size={18} color={colors.textLight} />
+                </TouchableOpacity>
+              )}
             </View>
 
-            {viewLocationCoords && (
-              <View style={{ flex: 1, minHeight: 400 }}>
-                {Platform.OS !== 'web' ? (
-                  <View style={{ flex: 1 }}>
-                    <MapView
-                      style={{ flex: 1, minHeight: 350 }}
-                      initialRegion={{
-                        latitude: viewLocationCoords.latitude,
-                        longitude: viewLocationCoords.longitude,
-                        latitudeDelta: 0.02,
-                        longitudeDelta: 0.02,
-                      }}
-                      scrollEnabled={true}
-                      zoomEnabled={true}
-                      rotateEnabled={true}
-                    >
-                      {userCoords && (
-                        <Marker
-                          coordinate={{ latitude: userCoords.latitude, longitude: userCoords.longitude }}
-                          title="You"
-                          pinColor={colors.primary}
-                        />
-                      )}
-                      <Marker
-                        coordinate={{ latitude: viewLocationCoords.latitude, longitude: viewLocationCoords.longitude }}
-                        title={viewLocationCoords.name}
-                        pinColor={colors.success}
-                      />
-                    </MapView>
-                    <View style={styles.meetupMapLegend}>
-                      {userCoords && (
-                        <View style={styles.meetupMapLegendItem}>
-                          <View style={[styles.meetupMapLegendDot, { backgroundColor: colors.primary }]} />
-                          <Text style={styles.meetupMapLegendText}>You</Text>
-                        </View>
-                      )}
-                      <View style={styles.meetupMapLegendItem}>
-                        <View style={[styles.meetupMapLegendDot, { backgroundColor: colors.success }]} />
-                        <Text style={styles.meetupMapLegendText}>{viewLocationCoords.name}</Text>
-                      </View>
-                    </View>
-                  </View>
-                ) : (
-                  <View style={[styles.noMapContainer, { flex: 1 }]}>
-                    <MapPin size={32} color={colors.textLight} />
-                    <Text style={styles.noMapText}>Map not available on web</Text>
-                  </View>
-                )}
-
-                <View style={{ padding: 16, gap: 10 }}>
-                  <TouchableOpacity
-                    style={[styles.navigateButtonLarge, { justifyContent: 'center', paddingVertical: 14, borderRadius: 12 }]}
-                    onPress={() => handleOpenExternalMaps(viewLocationCoords.latitude, viewLocationCoords.longitude)}
-                    activeOpacity={0.7}
-                  >
-                    <Navigation2 size={18} color={colors.textInverted} />
-                    <Text style={[styles.navigateButtonText, { fontSize: 14 }]}>Open in Maps App</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-          </View>
-        </View>
+            <TouchableOpacity
+              style={styles.navChooserCancel}
+              onPress={() => { setShowNavChooser(false); setNavTarget(null); }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.navChooserCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       <Modal
@@ -3268,5 +3293,87 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Orbitron_600SemiBold',
     color: colors.textInverted,
+  },
+  navChooserOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end' as const,
+  },
+  navChooserContent: {
+    backgroundColor: colors.cardLight,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 40,
+    paddingTop: 12,
+  },
+  navChooserHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    alignSelf: 'center' as const,
+    marginBottom: 16,
+  },
+  navChooserTitle: {
+    fontSize: 18,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.text,
+    textAlign: 'center' as const,
+    paddingHorizontal: 20,
+  },
+  navChooserSubtitle: {
+    fontSize: 12,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    textAlign: 'center' as const,
+    marginTop: 4,
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  navChooserOptions: {
+    paddingHorizontal: 20,
+    gap: 10,
+  },
+  navChooserOption: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: colors.background,
+    borderRadius: 14,
+    padding: 14,
+    gap: 14,
+  },
+  navChooserIconBg: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  navChooserOptionInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  navChooserOptionTitle: {
+    fontSize: 15,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.text,
+  },
+  navChooserOptionSub: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+  },
+  navChooserCancel: {
+    marginTop: 16,
+    marginHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: colors.background,
+    alignItems: 'center' as const,
+  },
+  navChooserCancelText: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.textLight,
   },
 });
