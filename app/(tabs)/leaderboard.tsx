@@ -258,27 +258,55 @@ export default function LeaderboardScreen() {
   const autoShareLocationRef = useRef<string | null>(null);
   const autoSharedMeetupIds = useRef<Set<string>>(new Set());
 
+  const acceptedMeetupIdRef = useRef<string | null>(null);
+
   const respondToPingMutation = trpc.notifications.respondToPing.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data: any) => {
       if (data.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         if (data.status === 'accepted') {
-          autoShareLocationRef.current = respondingMeetupId;
-          const meetup = meetups.find(m => m.id === respondingMeetupId);
-          if (meetup?.fromUserLocation) {
+          acceptedMeetupIdRef.current = respondingMeetupId;
+          console.log('[MEETUP] Accepted meetup:', respondingMeetupId);
+
+          const fromLoc = data.fromUserLocation;
+          if (fromLoc && fromLoc.latitude && fromLoc.longitude) {
+            console.log('[MEETUP] Pinger location available from response, opening nav chooser');
+            const meetup = meetups.find(m => m.id === respondingMeetupId);
+            const pingerName = meetup?.fromUserName || 'Driver';
             setTimeout(() => {
               setNavTarget({
-                latitude: meetup.fromUserLocation!.latitude,
-                longitude: meetup.fromUserLocation!.longitude,
-                name: meetup.fromUserName,
+                latitude: fromLoc.latitude,
+                longitude: fromLoc.longitude,
+                name: pingerName,
               });
               setShowNavChooser(true);
-            }, 500);
+            }, 300);
+          } else {
+            console.log('[MEETUP] No pinger location in response, will try after refetch');
           }
         }
-        setTimeout(() => {
-          meetupsQuery.refetch();
-        }, 300);
+        try {
+          const result = await meetupsQuery.refetch();
+          console.log('[MEETUP] Refetched meetups after respond, count:', result.data?.length);
+          if (data.status === 'accepted' && acceptedMeetupIdRef.current && !data.fromUserLocation) {
+            const freshMeetup = result.data?.find((m: DriveMeetup) => m.id === acceptedMeetupIdRef.current);
+            if (freshMeetup?.fromUserLocation) {
+              setTimeout(() => {
+                setNavTarget({
+                  latitude: freshMeetup.fromUserLocation!.latitude,
+                  longitude: freshMeetup.fromUserLocation!.longitude,
+                  name: freshMeetup.fromUserName,
+                });
+                setShowNavChooser(true);
+                console.log('[MEETUP] Opened nav chooser from refetch for:', freshMeetup.fromUserName);
+              }, 300);
+            }
+          }
+          acceptedMeetupIdRef.current = null;
+        } catch (e) {
+          console.error('[MEETUP] Refetch after respond failed:', e);
+          acceptedMeetupIdRef.current = null;
+        }
       }
       setRespondingMeetupId(null);
     },
@@ -286,6 +314,7 @@ export default function LeaderboardScreen() {
       console.error('Failed to respond to ping:', error);
       Alert.alert('Error', 'Failed to respond. Please try again.');
       setRespondingMeetupId(null);
+      acceptedMeetupIdRef.current = null;
     },
   });
 
@@ -316,40 +345,6 @@ export default function LeaderboardScreen() {
       selectedMeetupId.current = null;
     },
   });
-
-  const handlePingUser = useCallback((targetUserId: string, targetUserName: string, targetUserCar?: string) => {
-    if (!user) return;
-    
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setPingingUserId(targetUserId);
-    
-    const carInfo = user.carBrand && user.carModel 
-      ? `${user.carBrand} ${user.carModel}` 
-      : undefined;
-    
-    sendPingMutation.mutate({
-      fromUserId: user.id,
-      fromUserName: user.displayName,
-      fromUserCar: carInfo,
-      toUserId: targetUserId,
-      toUserName: targetUserName,
-      toUserCar: targetUserCar,
-    });
-  }, [user, sendPingMutation]);
-
-  const handleRespondToPing = useCallback((meetupId: string, response: 'accepted' | 'declined') => {
-    if (!user) return;
-    
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setRespondingMeetupId(meetupId);
-    
-    respondToPingMutation.mutate({
-      meetupId,
-      response,
-      responderId: user.id,
-      responderName: user.displayName,
-    });
-  }, [user, respondToPingMutation]);
 
   const getLocationWithTimeout = useCallback(async (timeoutMs: number = 8000): Promise<{ latitude: number; longitude: number } | null> => {
     try {
@@ -388,6 +383,60 @@ export default function LeaderboardScreen() {
       return userCoords;
     }
   }, [userCoords]);
+
+  const handlePingUser = useCallback((targetUserId: string, targetUserName: string, targetUserCar?: string) => {
+    if (!user) return;
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setPingingUserId(targetUserId);
+    
+    const carInfo = user.carBrand && user.carModel 
+      ? `${user.carBrand} ${user.carModel}` 
+      : undefined;
+    
+    sendPingMutation.mutate({
+      fromUserId: user.id,
+      fromUserName: user.displayName,
+      fromUserCar: carInfo,
+      toUserId: targetUserId,
+      toUserName: targetUserName,
+      toUserCar: targetUserCar,
+      latitude: userCoords?.latitude,
+      longitude: userCoords?.longitude,
+    });
+  }, [user, sendPingMutation, userCoords]);
+
+  const handleRespondToPing = useCallback(async (meetupId: string, response: 'accepted' | 'declined') => {
+    if (!user) return;
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setRespondingMeetupId(meetupId);
+    
+    let lat: number | undefined;
+    let lng: number | undefined;
+    
+    if (response === 'accepted') {
+      try {
+        const coords = await getLocationWithTimeout(5000);
+        if (coords) {
+          lat = coords.latitude;
+          lng = coords.longitude;
+          console.log('[MEETUP] Got location for accept response:', lat, lng);
+        }
+      } catch (e) {
+        console.log('[MEETUP] Could not get location for accept:', e);
+      }
+    }
+    
+    respondToPingMutation.mutate({
+      meetupId,
+      response,
+      responderId: user.id,
+      responderName: user.displayName,
+      latitude: lat,
+      longitude: lng,
+    });
+  }, [user, respondToPingMutation, getLocationWithTimeout]);
 
   const handleShareLocation = useCallback(async (meetup: DriveMeetup, silent: boolean = false) => {
     if (!user) return;

@@ -233,17 +233,16 @@ function rowToMeetup(m: any): DriveMeetup {
 
 async function getAllMeetups(userId?: string): Promise<DriveMeetup[]> {
   if (!isDbConfigured()) {
+    console.log("[PUSH] DB not configured, returning empty meetups");
     return [];
   }
 
   try {
     let url = getSupabaseRestUrl("meetups");
     if (userId) {
-      const params = new URLSearchParams();
-      params.append("status", "in.(pending,accepted)");
-      params.append("or", `(from_user_id.eq.${userId},to_user_id.eq.${userId})`);
-      params.append("order", "created_at.desc");
-      url += `?${params.toString()}`;
+      url += `?status=in.(pending,accepted)&or=(from_user_id.eq.${userId},to_user_id.eq.${userId})&order=created_at.desc`;
+    } else {
+      url += `?order=created_at.desc&limit=100`;
     }
     console.log("[PUSH] Fetching meetups with URL:", url);
 
@@ -256,18 +255,22 @@ async function getAllMeetups(userId?: string): Promise<DriveMeetup[]> {
       const errText = await response.text().catch(() => '');
       console.error("[PUSH] Failed to fetch meetups:", response.status, errText);
       
-      if (response.status === 400 && userId) {
-        console.log("[PUSH] Retrying without filters...");
+      if (userId) {
+        console.log("[PUSH] Retrying with simple query...");
         const fallbackUrl = getSupabaseRestUrl("meetups") + "?order=created_at.desc&limit=50";
         const fallbackResp = await fetch(fallbackUrl, { method: "GET", headers: getSupabaseHeaders() });
         if (fallbackResp.ok) {
           const fallbackData = await fallbackResp.json();
           const allRows = fallbackData.items || fallbackData || [];
+          console.log("[PUSH] Fallback fetched rows:", allRows.length);
           const mapped = allRows.map(rowToMeetup);
           return mapped.filter((m: DriveMeetup) =>
             (m.status === 'pending' || m.status === 'accepted') &&
             (m.fromUserId === userId || m.toUserId === userId)
           );
+        } else {
+          const fallbackErr = await fallbackResp.text().catch(() => '');
+          console.error("[PUSH] Fallback also failed:", fallbackResp.status, fallbackErr);
         }
       }
       return [];
@@ -514,6 +517,8 @@ export const notificationsRouter = createTRPCRouter({
       toUserId: z.string(),
       toUserName: z.string(),
       toUserCar: z.string().optional(),
+      latitude: z.number().optional(),
+      longitude: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
       console.log("[PUSH] Drive ping from", input.fromUserName, "to", input.toUserId);
@@ -527,6 +532,9 @@ export const notificationsRouter = createTRPCRouter({
 
       const meetupId = `meetup_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const now = Date.now();
+      const fromLocation = (input.latitude != null && input.longitude != null)
+        ? { latitude: input.latitude, longitude: input.longitude, timestamp: now }
+        : undefined;
       const meetup: DriveMeetup = {
         id: meetupId,
         fromUserId: input.fromUserId,
@@ -538,6 +546,7 @@ export const notificationsRouter = createTRPCRouter({
         status: 'pending',
         createdAt: now,
         expiresAt: now + 60 * 60 * 1000,
+        fromUserLocation: fromLocation,
       };
 
       await storeMeetup(meetup);
@@ -566,18 +575,38 @@ export const notificationsRouter = createTRPCRouter({
       response: z.enum(['accepted', 'declined']),
       responderId: z.string(),
       responderName: z.string(),
+      latitude: z.number().optional(),
+      longitude: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
+      console.log("[PUSH] respondToPing called:", input.meetupId, input.response, "by", input.responderId);
       const meetups = await getAllMeetups(input.responderId);
+      console.log("[PUSH] Found meetups for responder:", meetups.length, meetups.map(m => ({ id: m.id, status: m.status })));
       const meetup = meetups.find(m => m.id === input.meetupId);
 
-      if (!meetup) return { success: false, message: "Meetup not found" };
-      if (meetup.toUserId !== input.responderId) return { success: false, message: "Not authorized" };
+      if (!meetup) {
+        console.error("[PUSH] Meetup not found:", input.meetupId, "among", meetups.map(m => m.id));
+        return { success: false, message: "Meetup not found" };
+      }
+      if (meetup.toUserId !== input.responderId) {
+        console.error("[PUSH] Not authorized: meetup.toUserId=", meetup.toUserId, "responderId=", input.responderId);
+        return { success: false, message: "Not authorized" };
+      }
 
-      const updated = await updateMeetup(input.meetupId, {
+      const updateData: Partial<DriveMeetup> = {
         status: input.response,
         respondedAt: Date.now(),
-      });
+      };
+
+      if (input.response === 'accepted' && input.latitude != null && input.longitude != null) {
+        updateData.toUserLocation = {
+          latitude: input.latitude,
+          longitude: input.longitude,
+          timestamp: Date.now(),
+        };
+      }
+
+      const updated = await updateMeetup(input.meetupId, updateData);
 
       if (!updated) return { success: false, message: "Failed to update meetup" };
 
@@ -605,7 +634,12 @@ export const notificationsRouter = createTRPCRouter({
         });
       }
 
-      return { success: true, status: input.response };
+      const fromLocation = meetup.fromUserLocation || null;
+      return {
+        success: true,
+        status: input.response,
+        fromUserLocation: fromLocation,
+      };
     }),
 
   shareLocation: publicProcedure
