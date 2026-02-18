@@ -223,7 +223,16 @@ export default function LeaderboardScreen() {
       InteractionManager.runAfterInteractions(() => {
         setMeetupView('list');
         setShowMeetupsModal(true);
-        meetupsRefetchRef.current?.();
+        const doRefetch = async () => {
+          console.log('[LEADERBOARD] Refetching meetups after notification open...');
+          try {
+            await meetupsQuery.refetch();
+            console.log('[LEADERBOARD] Meetups refetch complete');
+          } catch (e) {
+            console.error('[LEADERBOARD] Meetups refetch failed:', e);
+          }
+        };
+        doRefetch();
       });
     }
   }, [pendingAction, clearPendingAction]);
@@ -3069,8 +3078,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.success,
   },
   pendingMeetupItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: colors.background,
     borderRadius: 12,
     padding: 12,
