@@ -180,54 +180,54 @@ async function getUsersWithPushTokens(): Promise<UserWithToken[]> {
   }
 }
 
-function meetupToSnakeCase(meetup: DriveMeetup): Record<string, unknown> {
+function meetupToDbRow(meetup: DriveMeetup): Record<string, unknown> {
   return {
     id: meetup.id,
-    from_user_id: meetup.fromUserId,
-    from_user_name: meetup.fromUserName,
-    from_user_car: meetup.fromUserCar ?? null,
-    to_user_id: meetup.toUserId,
-    to_user_name: meetup.toUserName,
-    to_user_car: meetup.toUserCar ?? null,
+    fromUserId: meetup.fromUserId,
+    fromUserName: meetup.fromUserName,
+    fromUserCar: meetup.fromUserCar ?? null,
+    toUserId: meetup.toUserId,
+    toUserName: meetup.toUserName,
+    toUserCar: meetup.toUserCar ?? null,
     status: meetup.status,
-    created_at: meetup.createdAt,
-    expires_at: meetup.expiresAt,
-    responded_at: meetup.respondedAt ?? null,
-    from_user_location: meetup.fromUserLocation ?? null,
-    to_user_location: meetup.toUserLocation ?? null,
+    createdAt: meetup.createdAt,
+    expiresAt: meetup.expiresAt,
+    respondedAt: meetup.respondedAt ?? null,
+    fromUserLocation: meetup.fromUserLocation ?? null,
+    toUserLocation: meetup.toUserLocation ?? null,
   };
 }
 
-function partialMeetupToSnakeCase(updates: Partial<DriveMeetup>): Record<string, unknown> {
+function partialMeetupToDbRow(updates: Partial<DriveMeetup>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   if (updates.status !== undefined) result.status = updates.status;
-  if (updates.respondedAt !== undefined) result.responded_at = updates.respondedAt;
-  if (updates.fromUserLocation !== undefined) result.from_user_location = updates.fromUserLocation;
-  if (updates.toUserLocation !== undefined) result.to_user_location = updates.toUserLocation;
-  if (updates.fromUserName !== undefined) result.from_user_name = updates.fromUserName;
-  if (updates.toUserName !== undefined) result.to_user_name = updates.toUserName;
-  if (updates.fromUserCar !== undefined) result.from_user_car = updates.fromUserCar;
-  if (updates.toUserCar !== undefined) result.to_user_car = updates.toUserCar;
-  if (updates.expiresAt !== undefined) result.expires_at = updates.expiresAt;
-  if (updates.createdAt !== undefined) result.created_at = updates.createdAt;
+  if (updates.respondedAt !== undefined) result.respondedAt = updates.respondedAt;
+  if (updates.fromUserLocation !== undefined) result.fromUserLocation = updates.fromUserLocation;
+  if (updates.toUserLocation !== undefined) result.toUserLocation = updates.toUserLocation;
+  if (updates.fromUserName !== undefined) result.fromUserName = updates.fromUserName;
+  if (updates.toUserName !== undefined) result.toUserName = updates.toUserName;
+  if (updates.fromUserCar !== undefined) result.fromUserCar = updates.fromUserCar;
+  if (updates.toUserCar !== undefined) result.toUserCar = updates.toUserCar;
+  if (updates.expiresAt !== undefined) result.expiresAt = updates.expiresAt;
+  if (updates.createdAt !== undefined) result.createdAt = updates.createdAt;
   return result;
 }
 
 function rowToMeetup(m: any): DriveMeetup {
   return {
     id: m.id,
-    fromUserId: m.from_user_id ?? m.fromUserId,
-    fromUserName: m.from_user_name ?? m.fromUserName,
-    fromUserCar: m.from_user_car ?? m.fromUserCar,
-    toUserId: m.to_user_id ?? m.toUserId,
-    toUserName: m.to_user_name ?? m.toUserName,
-    toUserCar: m.to_user_car ?? m.toUserCar,
+    fromUserId: m.fromUserId ?? m.from_user_id,
+    fromUserName: m.fromUserName ?? m.from_user_name,
+    fromUserCar: m.fromUserCar ?? m.from_user_car,
+    toUserId: m.toUserId ?? m.to_user_id,
+    toUserName: m.toUserName ?? m.to_user_name,
+    toUserCar: m.toUserCar ?? m.to_user_car,
     status: m.status,
-    createdAt: m.created_at ?? m.createdAt,
-    expiresAt: m.expires_at ?? m.expiresAt,
-    respondedAt: m.responded_at ?? m.respondedAt,
-    fromUserLocation: m.from_user_location ?? m.fromUserLocation ?? null,
-    toUserLocation: m.to_user_location ?? m.toUserLocation ?? null,
+    createdAt: m.createdAt ?? m.created_at,
+    expiresAt: m.expiresAt ?? m.expires_at,
+    respondedAt: m.respondedAt ?? m.responded_at,
+    fromUserLocation: m.fromUserLocation ?? m.from_user_location ?? null,
+    toUserLocation: m.toUserLocation ?? m.to_user_location ?? null,
   };
 }
 
@@ -240,9 +240,9 @@ async function getAllMeetups(userId?: string): Promise<DriveMeetup[]> {
   try {
     let url = getSupabaseRestUrl("meetups");
     if (userId) {
-      url += `?status=in.(pending,accepted)&or=(from_user_id.eq.${userId},to_user_id.eq.${userId})&order=created_at.desc`;
+      url += `?status=in.(pending,accepted)&or=(fromUserId.eq.${userId},toUserId.eq.${userId})&order=createdAt.desc`;
     } else {
-      url += `?order=created_at.desc&limit=100`;
+      url += `?order=createdAt.desc&limit=100`;
     }
     console.log("[PUSH] Fetching meetups with URL:", url);
 
@@ -257,7 +257,7 @@ async function getAllMeetups(userId?: string): Promise<DriveMeetup[]> {
       
       if (userId) {
         console.log("[PUSH] Retrying with simple query...");
-        const fallbackUrl = getSupabaseRestUrl("meetups") + "?order=created_at.desc&limit=50";
+        const fallbackUrl = getSupabaseRestUrl("meetups") + "?order=createdAt.desc&limit=50";
         const fallbackResp = await fetch(fallbackUrl, { method: "GET", headers: getSupabaseHeaders() });
         if (fallbackResp.ok) {
           const fallbackData = await fallbackResp.json();
@@ -290,12 +290,12 @@ async function storeMeetup(meetup: DriveMeetup): Promise<boolean> {
   if (!isDbConfigured()) return false;
 
   try {
-    const snakeMeetup = meetupToSnakeCase(meetup);
-    console.log("[PUSH] Storing meetup:", JSON.stringify(snakeMeetup));
+    const dbRow = meetupToDbRow(meetup);
+    console.log("[PUSH] Storing meetup:", JSON.stringify(dbRow));
     const response = await fetch(getSupabaseRestUrl("meetups"), {
       method: "POST",
       headers: getSupabaseHeaders(),
-      body: JSON.stringify(snakeMeetup),
+      body: JSON.stringify(dbRow),
     });
 
     if (!response.ok) {
@@ -315,12 +315,12 @@ async function updateMeetup(meetupId: string, updates: Partial<DriveMeetup>): Pr
   if (!isDbConfigured()) return false;
 
   try {
-    const snakeUpdates = partialMeetupToSnakeCase(updates);
-    console.log("[PUSH] Updating meetup:", meetupId, JSON.stringify(snakeUpdates));
+    const dbUpdates = partialMeetupToDbRow(updates);
+    console.log("[PUSH] Updating meetup:", meetupId, JSON.stringify(dbUpdates));
     const response = await fetch(`${getSupabaseRestUrl("meetups")}?id=eq.${meetupId}`, {
       method: "PATCH",
       headers: getSupabaseHeaders(),
-      body: JSON.stringify(snakeUpdates),
+      body: JSON.stringify(dbUpdates),
     });
 
     if (!response.ok) {
