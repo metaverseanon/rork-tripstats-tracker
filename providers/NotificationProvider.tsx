@@ -211,25 +211,26 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
       const data = response.notification.request.content.data as Record<string, unknown> | undefined;
       
       if (data?.type === 'drive_ping' || data?.type === 'ping_accepted' || data?.type === 'ping_declined' || data?.type === 'location_shared' || data?.type === 'meetup_cancelled') {
-        console.log('[PUSH] Drive-related notification tapped, navigating to meetups');
+        console.log('[PUSH] Drive-related notification tapped, type:', data.type, 'meetupId:', data.meetupId);
         const action: NotificationAction = {
           type: 'open_meetups' as const,
           meetupId: data.meetupId as string,
           fromUserName: data.fromUserName as string | undefined,
         };
-        setPendingAction(action);
         const tryNavigate = (attempt: number) => {
           console.log('[PUSH] Navigate attempt', attempt);
           try {
+            setPendingAction(action);
             router.navigate('/(tabs)/leaderboard' as any);
+            console.log('[PUSH] Navigate succeeded on attempt', attempt);
           } catch (e) {
             console.log('[PUSH] Navigate failed, retrying...', e);
-            if (attempt < 3) {
-              setTimeout(() => tryNavigate(attempt + 1), 500);
+            if (attempt < 5) {
+              setTimeout(() => tryNavigate(attempt + 1), 400);
             }
           }
         };
-        setTimeout(() => tryNavigate(1), 300);
+        setTimeout(() => tryNavigate(1), 200);
       }
     });
 
@@ -238,26 +239,30 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
         const lastResponse = await Notifications.getLastNotificationResponseAsync();
         if (lastResponse) {
           const data = lastResponse.notification.request.content.data as Record<string, unknown> | undefined;
-          if (data?.type === 'drive_ping' || data?.type === 'ping_accepted' || data?.type === 'ping_declined' || data?.type === 'location_shared' || data?.type === 'meetup_cancelled') {
-            console.log('[PUSH] Cold start notification detected:', data.type);
+          const receivedAt = lastResponse.notification.date;
+          const isRecent = receivedAt && (Date.now() - receivedAt * 1000) < 30000;
+          
+          if (isRecent && (data?.type === 'drive_ping' || data?.type === 'ping_accepted' || data?.type === 'ping_declined' || data?.type === 'location_shared' || data?.type === 'meetup_cancelled')) {
+            console.log('[PUSH] Cold start notification detected:', data.type, 'meetupId:', data.meetupId);
             const action: NotificationAction = {
               type: 'open_meetups' as const,
               meetupId: data.meetupId as string,
               fromUserName: data.fromUserName as string | undefined,
             };
-            setPendingAction(action);
             const tryNavigate = (attempt: number) => {
               console.log('[PUSH] Cold start navigate attempt', attempt);
               try {
+                setPendingAction(action);
                 router.navigate('/(tabs)/leaderboard' as any);
+                console.log('[PUSH] Cold start navigate succeeded on attempt', attempt);
               } catch (e) {
                 console.log('[PUSH] Cold start navigate failed, retrying...', e);
-                if (attempt < 5) {
-                  setTimeout(() => tryNavigate(attempt + 1), 600);
+                if (attempt < 6) {
+                  setTimeout(() => tryNavigate(attempt + 1), 500);
                 }
               }
             };
-            setTimeout(() => tryNavigate(1), 1500);
+            setTimeout(() => tryNavigate(1), 1200);
           }
         }
       } catch (e) {

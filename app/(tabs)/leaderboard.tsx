@@ -218,22 +218,30 @@ export default function LeaderboardScreen() {
         return;
       }
       lastHandledActionRef.current = now;
-      console.log('[LEADERBOARD] Pending action detected, opening meetups modal');
+      const actionMeetupId = pendingAction.meetupId;
+      const actionFromUserName = pendingAction.fromUserName;
+      console.log('[LEADERBOARD] Pending action detected, meetupId:', actionMeetupId, 'from:', actionFromUserName);
       clearPendingAction();
-      InteractionManager.runAfterInteractions(() => {
+
+      const openModal = () => {
+        console.log('[LEADERBOARD] Opening meetups modal from notification');
         setMeetupView('list');
         setShowMeetupsModal(true);
-        const doRefetch = async () => {
-          console.log('[LEADERBOARD] Refetching meetups after notification open...');
-          try {
-            await meetupsQuery.refetch();
-            console.log('[LEADERBOARD] Meetups refetch complete');
-          } catch (e) {
-            console.error('[LEADERBOARD] Meetups refetch failed:', e);
-          }
-        };
-        doRefetch();
-      });
+      };
+
+      const doRefetchAndOpen = async () => {
+        console.log('[LEADERBOARD] Refetching meetups after notification open...');
+        try {
+          const result = await meetupsQuery.refetch();
+          console.log('[LEADERBOARD] Meetups refetch complete, count:', result.data?.length);
+          openModal();
+        } catch (e) {
+          console.error('[LEADERBOARD] Meetups refetch failed:', e);
+          openModal();
+        }
+      };
+
+      setTimeout(() => doRefetchAndOpen(), 200);
     }
   }, [pendingAction, clearPendingAction]);
 
@@ -265,14 +273,16 @@ export default function LeaderboardScreen() {
       if (data.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         if (data.status === 'accepted') {
-          acceptedMeetupIdRef.current = respondingMeetupId;
-          console.log('[MEETUP] Accepted meetup:', respondingMeetupId);
+          const acceptedId = respondingMeetupId;
+          acceptedMeetupIdRef.current = acceptedId;
+          console.log('[MEETUP] Accepted meetup:', acceptedId);
+
+          const meetup = meetups.find(m => m.id === acceptedId);
+          const pingerName = meetup?.fromUserName || 'Driver';
 
           const fromLoc = data.fromUserLocation;
           if (fromLoc && fromLoc.latitude && fromLoc.longitude) {
             console.log('[MEETUP] Pinger location available from response, opening nav chooser');
-            const meetup = meetups.find(m => m.id === respondingMeetupId);
-            const pingerName = meetup?.fromUserName || 'Driver';
             setTimeout(() => {
               setNavTarget({
                 latitude: fromLoc.latitude,
@@ -280,32 +290,42 @@ export default function LeaderboardScreen() {
                 name: pingerName,
               });
               setShowNavChooser(true);
-            }, 300);
+            }, 500);
           } else {
             console.log('[MEETUP] No pinger location in response, will try after refetch');
           }
-        }
-        try {
-          const result = await meetupsQuery.refetch();
-          console.log('[MEETUP] Refetched meetups after respond, count:', result.data?.length);
-          if (data.status === 'accepted' && acceptedMeetupIdRef.current && !data.fromUserLocation) {
-            const freshMeetup = result.data?.find((m: DriveMeetup) => m.id === acceptedMeetupIdRef.current);
-            if (freshMeetup?.fromUserLocation) {
-              setTimeout(() => {
-                setNavTarget({
-                  latitude: freshMeetup.fromUserLocation!.latitude,
-                  longitude: freshMeetup.fromUserLocation!.longitude,
-                  name: freshMeetup.fromUserName,
-                });
-                setShowNavChooser(true);
-                console.log('[MEETUP] Opened nav chooser from refetch for:', freshMeetup.fromUserName);
-              }, 300);
+
+          try {
+            const result = await meetupsQuery.refetch();
+            console.log('[MEETUP] Refetched meetups after accept, count:', result.data?.length);
+            if (!fromLoc && acceptedId) {
+              const freshMeetup = result.data?.find((m: DriveMeetup) => m.id === acceptedId);
+              if (freshMeetup?.fromUserLocation) {
+                setTimeout(() => {
+                  setNavTarget({
+                    latitude: freshMeetup.fromUserLocation!.latitude,
+                    longitude: freshMeetup.fromUserLocation!.longitude,
+                    name: freshMeetup.fromUserName,
+                  });
+                  setShowNavChooser(true);
+                  console.log('[MEETUP] Opened nav chooser from refetch for:', freshMeetup.fromUserName);
+                }, 500);
+              } else {
+                console.log('[MEETUP] Pinger location still not available after refetch');
+                Alert.alert(
+                  'Drive Accepted!',
+                  `You accepted ${pingerName}'s invite! Their location will appear once they share it. You can navigate to them from the meetup details.`,
+                  [{ text: 'OK' }]
+                );
+              }
             }
+            acceptedMeetupIdRef.current = null;
+          } catch (e) {
+            console.error('[MEETUP] Refetch after accept failed:', e);
+            acceptedMeetupIdRef.current = null;
           }
-          acceptedMeetupIdRef.current = null;
-        } catch (e) {
-          console.error('[MEETUP] Refetch after respond failed:', e);
-          acceptedMeetupIdRef.current = null;
+        } else {
+          await meetupsQuery.refetch();
         }
       }
       setRespondingMeetupId(null);
@@ -1144,24 +1164,85 @@ export default function LeaderboardScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navHeader}>
         <Text style={styles.navTitle}>Leaderboard</Text>
+        <View style={styles.navHeaderRight}>
+          {(pendingIncomingPings.length > 0 || activeMeetups.length > 0) && (
+            <TouchableOpacity
+              style={[styles.headerMeetupsButton, pendingIncomingPings.length > 0 && styles.headerMeetupsButtonAlert]}
+              onPress={() => { setMeetupView('list'); setShowMeetupsModal(true); }}
+              activeOpacity={0.7}
+            >
+              <MessageCircle size={16} color={colors.textInverted} />
+              {pendingIncomingPings.length > 0 && (
+                <View style={styles.headerMeetupsBadge}>
+                  <Text style={styles.headerMeetupsBadgeText}>{pendingIncomingPings.length}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
+
+      {pendingIncomingPings.length > 0 && (
+        <View style={styles.incomingPingBanner}>
+          <View style={styles.incomingPingBannerContent}>
+            <View style={styles.incomingPingIcon}>
+              <Bell size={18} color={colors.textInverted} />
+            </View>
+            <View style={styles.incomingPingInfo}>
+              <Text style={styles.incomingPingTitle}>
+                {pendingIncomingPings.length === 1
+                  ? `${pendingIncomingPings[0].fromUserName} wants to drive!`
+                  : `${pendingIncomingPings.length} drive invites`}
+              </Text>
+              {pendingIncomingPings.length === 1 && pendingIncomingPings[0].fromUserCar && (
+                <Text style={styles.incomingPingCar}>{pendingIncomingPings[0].fromUserCar}</Text>
+              )}
+            </View>
+          </View>
+          {pendingIncomingPings.length === 1 ? (
+            <View style={styles.incomingPingActions}>
+              <TouchableOpacity
+                style={styles.incomingPingAccept}
+                onPress={() => handleRespondToPing(pendingIncomingPings[0].id, 'accepted')}
+                disabled={respondingMeetupId === pendingIncomingPings[0].id}
+                activeOpacity={0.7}
+              >
+                {respondingMeetupId === pendingIncomingPings[0].id ? (
+                  <ActivityIndicator size="small" color={colors.textInverted} />
+                ) : (
+                  <>
+                    <Check size={16} color={colors.textInverted} />
+                    <Text style={styles.incomingPingAcceptText}>Accept</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.incomingPingDecline}
+                onPress={() => handleRespondToPing(pendingIncomingPings[0].id, 'declined')}
+                disabled={respondingMeetupId === pendingIncomingPings[0].id}
+                activeOpacity={0.7}
+              >
+                <X size={16} color={colors.danger} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.incomingPingViewAll}
+              onPress={() => { setMeetupView('list'); setShowMeetupsModal(true); }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.incomingPingViewAllText}>View All</Text>
+              <ChevronRight size={16} color={colors.textInverted} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
       {userLocation && (
         <View style={styles.userLocationBanner}>
           <MapPin size={14} color={colors.primary} />
           <Text style={styles.userLocationText}>{userLocation}</Text>
           <View style={styles.bannerButtonsRow}>
-            {(pendingIncomingPings.length > 0 || activeMeetups.length > 0) && (
-              <TouchableOpacity
-                style={[styles.nearbyDriversButton, styles.meetupsButton]}
-                onPress={() => { setMeetupView('list'); setShowMeetupsModal(true); }}
-                activeOpacity={0.7}
-              >
-                <MessageCircle size={14} color={colors.textInverted} />
-                <Text style={styles.nearbyDriversButtonText}>
-                  {pendingIncomingPings.length > 0 ? `${pendingIncomingPings.length} New` : `${activeMeetups.length} Active`}
-                </Text>
-              </TouchableOpacity>
-            )}
             {nearbyUsers.length > 0 && (
               <TouchableOpacity
                 style={styles.nearbyDriversButton}
@@ -2292,7 +2373,126 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 12,
+    flexDirection: 'row' as const,
     alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  navHeaderRight: {
+    position: 'absolute' as const,
+    right: 16,
+    top: 10,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+  },
+  headerMeetupsButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.success,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  headerMeetupsButtonAlert: {
+    backgroundColor: colors.danger,
+  },
+  headerMeetupsBadge: {
+    position: 'absolute' as const,
+    top: -2,
+    right: -2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingHorizontal: 4,
+  },
+  headerMeetupsBadgeText: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.danger,
+  },
+  incomingPingBanner: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    backgroundColor: colors.cardLight,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: colors.success,
+  },
+  incomingPingBannerContent: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    marginBottom: 12,
+  },
+  incomingPingIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.success,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  incomingPingInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  incomingPingTitle: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.text,
+  },
+  incomingPingCar: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_500Medium',
+    color: colors.primary,
+  },
+  incomingPingActions: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+  },
+  incomingPingAccept: {
+    flex: 1,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 6,
+    backgroundColor: colors.success,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  incomingPingAcceptText: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.textInverted,
+  },
+  incomingPingDecline: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  incomingPingViewAll: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 4,
+    backgroundColor: colors.success,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  incomingPingViewAllText: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.textInverted,
   },
   navTitle: {
     fontSize: 16,
