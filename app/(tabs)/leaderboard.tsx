@@ -421,10 +421,8 @@ export default function LeaderboardScreen() {
       toUserId: targetUserId,
       toUserName: targetUserName,
       toUserCar: targetUserCar,
-      latitude: userCoords?.latitude,
-      longitude: userCoords?.longitude,
     });
-  }, [user, sendPingMutation, userCoords]);
+  }, [user, sendPingMutation]);
 
   const handleRespondToPing = useCallback(async (meetupId: string, response: 'accepted' | 'declined') => {
     if (!user) return;
@@ -432,31 +430,13 @@ export default function LeaderboardScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setRespondingMeetupId(meetupId);
     
-    let lat: number | undefined;
-    let lng: number | undefined;
-    
-    if (response === 'accepted') {
-      try {
-        const coords = await getLocationWithTimeout(5000);
-        if (coords) {
-          lat = coords.latitude;
-          lng = coords.longitude;
-          console.log('[MEETUP] Got location for accept response:', lat, lng);
-        }
-      } catch (e) {
-        console.log('[MEETUP] Could not get location for accept:', e);
-      }
-    }
-    
     respondToPingMutation.mutate({
       meetupId,
       response,
       responderId: user.id,
       responderName: user.displayName,
-      latitude: lat,
-      longitude: lng,
     });
-  }, [user, respondToPingMutation, getLocationWithTimeout]);
+  }, [user, respondToPingMutation]);
 
   const handleShareLocation = useCallback(async (meetup: DriveMeetup, silent: boolean = false) => {
     if (!user) return;

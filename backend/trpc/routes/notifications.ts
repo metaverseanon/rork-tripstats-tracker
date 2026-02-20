@@ -4,6 +4,31 @@ import type { DriveMeetup } from "@/types/meetup";
 
 import { getSupabaseRestUrl, getSupabaseHeaders, isDbConfigured } from "../db";
 
+interface StoredUserWithLocation {
+  id: string;
+  displayName: string;
+  pushToken: string;
+  country?: string;
+  carBrand?: string;
+  carModel?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+const MAX_PING_DISTANCE_KM = 100;
+
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
 interface UserWithToken {
@@ -163,7 +188,6 @@ async function getUsersWithPushTokens(): Promise<UserWithToken[]> {
     const data = await response.json();
     const users = data.items || data || [];
     
-    // Map snake_case from Supabase to camelCase and filter users with push tokens
     return users
       .filter((u: any) => u.push_token)
       .map((u: any) => ({
@@ -176,6 +200,42 @@ async function getUsersWithPushTokens(): Promise<UserWithToken[]> {
       }));
   } catch (error) {
     console.error("[PUSH] Error fetching users:", error);
+    return [];
+  }
+}
+
+async function getUsersWithLocations(): Promise<StoredUserWithLocation[]> {
+  if (!isDbConfigured()) {
+    console.log("[PUSH] Database not configured");
+    return [];
+  }
+
+  try {
+    const response = await fetch(getSupabaseRestUrl("users"), {
+      method: "GET",
+      headers: getSupabaseHeaders(),
+    });
+
+    if (!response.ok) {
+      console.error("[PUSH] Failed to fetch users with locations");
+      return [];
+    }
+
+    const data = await response.json();
+    const users = data.items || data || [];
+    
+    return users.map((u: any) => ({
+      id: u.id,
+      displayName: u.display_name,
+      pushToken: u.push_token,
+      country: u.country,
+      carBrand: u.car_brand,
+      carModel: u.car_model,
+      latitude: u.latitude ?? null,
+      longitude: u.longitude ?? null,
+    }));
+  } catch (error) {
+    console.error("[PUSH] Error fetching users with locations:", error);
     return [];
   }
 }
@@ -526,24 +586,43 @@ export const notificationsRouter = createTRPCRouter({
       toUserId: z.string(),
       toUserName: z.string(),
       toUserCar: z.string().optional(),
-      latitude: z.number().optional(),
-      longitude: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
       console.log("[PUSH] Drive ping from", input.fromUserName, "to", input.toUserId);
       
-      const users = await getUsersWithPushTokens();
-      const targetUser = users.find(u => u.id === input.toUserId);
+      const allUsers = await getUsersWithLocations();
+      const fromUser = allUsers.find(u => u.id === input.fromUserId);
+      const toUser = allUsers.find(u => u.id === input.toUserId);
 
-      if (!targetUser) {
+      if (!toUser || !toUser.pushToken) {
         return { success: false, message: "User not found or notifications not enabled" };
+      }
+
+      if (fromUser?.latitude == null || fromUser?.longitude == null) {
+        console.log("[PUSH] Sender has no stored location");
+        return { success: false, message: "Your location is not set. Please enable location services and try again." };
+      }
+
+      if (toUser.latitude == null || toUser.longitude == null) {
+        console.log("[PUSH] Target user has no stored location");
+        return { success: false, message: "This user has no location set. They need to open the app with location enabled." };
+      }
+
+      const distance = haversineDistance(
+        fromUser.latitude,
+        fromUser.longitude,
+        toUser.latitude,
+        toUser.longitude
+      );
+      console.log("[PUSH] Distance between users:", Math.round(distance), "km");
+
+      if (distance > MAX_PING_DISTANCE_KM) {
+        return { success: false, message: `This user is ${Math.round(distance)} km away. Pings only work within ${MAX_PING_DISTANCE_KM} km.` };
       }
 
       const meetupId = `meetup_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const now = Date.now();
-      const fromLocation = (input.latitude != null && input.longitude != null)
-        ? { latitude: input.latitude, longitude: input.longitude, timestamp: now }
-        : undefined;
+
       const meetup: DriveMeetup = {
         id: meetupId,
         fromUserId: input.fromUserId,
@@ -555,16 +634,26 @@ export const notificationsRouter = createTRPCRouter({
         status: 'pending',
         createdAt: now,
         expiresAt: now + 60 * 60 * 1000,
-        fromUserLocation: fromLocation,
+        fromUserLocation: {
+          latitude: fromUser.latitude,
+          longitude: fromUser.longitude,
+          timestamp: now,
+        },
+        toUserLocation: {
+          latitude: toUser.latitude,
+          longitude: toUser.longitude,
+          timestamp: now,
+        },
       };
 
       await storeMeetup(meetup);
 
       const carInfo = input.fromUserCar ? ` (${input.fromUserCar})` : '';
+      const distanceText = Math.round(distance) > 0 ? ` (~${Math.round(distance)} km away)` : '';
       const success = await sendExpoPushNotification({
-        to: targetUser.pushToken,
+        to: toUser.pushToken,
         title: "🚗 Drive Invite!",
-        body: `${input.fromUserName}${carInfo} wants to go for a drive with you!`,
+        body: `${input.fromUserName}${carInfo} wants to go for a drive with you!${distanceText}`,
         sound: "default",
         priority: "high",
         data: { 
@@ -584,8 +673,6 @@ export const notificationsRouter = createTRPCRouter({
       response: z.enum(['accepted', 'declined']),
       responderId: z.string(),
       responderName: z.string(),
-      latitude: z.number().optional(),
-      longitude: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
       console.log("[PUSH] respondToPing called:", input.meetupId, input.response, "by", input.responderId);
@@ -602,17 +689,36 @@ export const notificationsRouter = createTRPCRouter({
         return { success: false, message: "Not authorized" };
       }
 
+      const now = Date.now();
+      const expiry = meetup.expiresAt || (meetup.createdAt + 60 * 60 * 1000);
+      if (now > expiry) {
+        await updateMeetup(input.meetupId, { status: 'expired' as any });
+        return { success: false, message: "This ping has expired." };
+      }
+
       const updateData: Partial<DriveMeetup> = {
         status: input.response,
-        respondedAt: Date.now(),
+        respondedAt: now,
       };
 
-      if (input.response === 'accepted' && input.latitude != null && input.longitude != null) {
-        updateData.toUserLocation = {
-          latitude: input.latitude,
-          longitude: input.longitude,
-          timestamp: Date.now(),
-        };
+      if (input.response === 'accepted') {
+        const allUsers = await getUsersWithLocations();
+        const responder = allUsers.find(u => u.id === input.responderId);
+        if (responder?.latitude != null && responder?.longitude != null) {
+          updateData.toUserLocation = {
+            latitude: responder.latitude,
+            longitude: responder.longitude,
+            timestamp: now,
+          };
+        }
+        const sender = allUsers.find(u => u.id === meetup.fromUserId);
+        if (sender?.latitude != null && sender?.longitude != null) {
+          updateData.fromUserLocation = {
+            latitude: sender.latitude,
+            longitude: sender.longitude,
+            timestamp: now,
+          };
+        }
       }
 
       const updated = await updateMeetup(input.meetupId, updateData);
@@ -625,7 +731,7 @@ export const notificationsRouter = createTRPCRouter({
       if (pinger) {
         const title = input.response === 'accepted' ? "✅ Drive Accepted!" : "❌ Drive Declined";
         const body = input.response === 'accepted'
-          ? `${input.responderName} accepted your drive invite!`
+          ? `${input.responderName} accepted your drive invite! Open the app to navigate.`
           : `${input.responderName} declined your drive invite.`;
 
         await sendExpoPushNotification({
@@ -643,11 +749,13 @@ export const notificationsRouter = createTRPCRouter({
         });
       }
 
-      const fromLocation = meetup.fromUserLocation || null;
+      const fromLocation = updateData.fromUserLocation || meetup.fromUserLocation || null;
+      const toLocation = updateData.toUserLocation || meetup.toUserLocation || null;
       return {
         success: true,
         status: input.response,
         fromUserLocation: fromLocation,
+        toUserLocation: toLocation,
       };
     }),
 
