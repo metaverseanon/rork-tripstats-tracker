@@ -220,17 +220,20 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
         const tryNavigate = (attempt: number) => {
           console.log('[PUSH] Navigate attempt', attempt);
           try {
-            setPendingAction(action);
             router.navigate('/(tabs)/leaderboard' as any);
             console.log('[PUSH] Navigate succeeded on attempt', attempt);
+            setTimeout(() => {
+              console.log('[PUSH] Setting pending action after navigate, attempt:', attempt);
+              setPendingAction(action);
+            }, 500);
           } catch (e) {
             console.log('[PUSH] Navigate failed, retrying...', e);
-            if (attempt < 5) {
-              setTimeout(() => tryNavigate(attempt + 1), 400);
+            if (attempt < 8) {
+              setTimeout(() => tryNavigate(attempt + 1), 500);
             }
           }
         };
-        setTimeout(() => tryNavigate(1), 200);
+        setTimeout(() => tryNavigate(1), 300);
       }
     });
 
@@ -252,17 +255,20 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
             const tryNavigate = (attempt: number) => {
               console.log('[PUSH] Cold start navigate attempt', attempt);
               try {
-                setPendingAction(action);
                 router.navigate('/(tabs)/leaderboard' as any);
                 console.log('[PUSH] Cold start navigate succeeded on attempt', attempt);
+                setTimeout(() => {
+                  console.log('[PUSH] Cold start setting pending action after navigate');
+                  setPendingAction(action);
+                }, 600);
               } catch (e) {
                 console.log('[PUSH] Cold start navigate failed, retrying...', e);
-                if (attempt < 6) {
-                  setTimeout(() => tryNavigate(attempt + 1), 500);
+                if (attempt < 10) {
+                  setTimeout(() => tryNavigate(attempt + 1), 600);
                 }
               }
             };
-            setTimeout(() => tryNavigate(1), 1200);
+            setTimeout(() => tryNavigate(1), 1500);
           }
         }
       } catch (e) {
@@ -270,7 +276,7 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
       }
     };
 
-    setTimeout(() => checkInitialNotification(), 800);
+    setTimeout(() => checkInitialNotification(), 1000);
 
     return () => {
       if (notificationListener.current) {

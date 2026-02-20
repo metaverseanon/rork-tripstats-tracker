@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef, ReactNode, memo } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, TextInput, Image, Platform, Alert, ActivityIndicator, Linking, Animated, InteractionManager } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, TextInput, Image, Platform, Alert, ActivityIndicator, Linking, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Trophy, Zap, Navigation, Gauge, ChevronDown, X, MapPin, Car, Filter, Activity, Route, Search, Clock, Calendar, CornerDownRight, ChevronRight, Timer, Users, Send, Bell, Check, XCircle, Share2, Navigation2, MessageCircle, AlertCircle } from 'lucide-react-native';
 import * as Location from 'expo-location';
@@ -130,6 +130,9 @@ export default function LeaderboardScreen() {
   const [navTarget, setNavTarget] = useState<{ latitude: number; longitude: number; name: string } | null>(null);
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('all');
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [nearbyModalReady, setNearbyModalReady] = useState(false);
+  const [meetupsModalReady, setMeetupsModalReady] = useState(false);
+  const pendingNavRef = useRef<{ latitude: number; longitude: number; name: string } | null>(null);
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -207,17 +210,17 @@ export default function LeaderboardScreen() {
 
   meetupsRefetchRef.current = meetupsQuery.refetch;
 
-  const lastHandledActionRef = useRef<number>(0);
+  const lastHandledActionRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (pendingAction?.type === 'open_meetups') {
-      const now = Date.now();
-      if (now - lastHandledActionRef.current < 2000) {
-        console.log('[LEADERBOARD] Ignoring duplicate pending action');
+      const actionKey = `${pendingAction.meetupId || ''}_${Date.now()}`;
+      if (lastHandledActionRef.current === pendingAction.meetupId && pendingAction.meetupId) {
+        console.log('[LEADERBOARD] Already handled this meetup action:', pendingAction.meetupId);
         clearPendingAction();
         return;
       }
-      lastHandledActionRef.current = now;
+      lastHandledActionRef.current = pendingAction.meetupId || null;
       const actionMeetupId = pendingAction.meetupId;
       const actionFromUserName = pendingAction.fromUserName;
       console.log('[LEADERBOARD] Pending action detected, meetupId:', actionMeetupId, 'from:', actionFromUserName);
@@ -227,6 +230,7 @@ export default function LeaderboardScreen() {
         console.log('[LEADERBOARD] Opening meetups modal from notification');
         setMeetupView('list');
         setShowMeetupsModal(true);
+        setMeetupsModalReady(true);
       };
 
       const doRefetchAndOpen = async () => {
@@ -241,9 +245,21 @@ export default function LeaderboardScreen() {
         }
       };
 
-      setTimeout(() => doRefetchAndOpen(), 200);
+      setTimeout(() => doRefetchAndOpen(), 300);
     }
   }, [pendingAction, clearPendingAction]);
+
+  useEffect(() => {
+    if (pendingNavRef.current && !showMeetupsModal) {
+      const target = pendingNavRef.current;
+      pendingNavRef.current = null;
+      console.log('[MEETUP] Opening nav chooser after modal closed for:', target.name);
+      setTimeout(() => {
+        setNavTarget(target);
+        setShowNavChooser(true);
+      }, 400);
+    }
+  }, [showMeetupsModal]);
 
   const sendPingMutation = trpc.notifications.sendDrivePing.useMutation({
     onSuccess: (data) => {
@@ -281,37 +297,40 @@ export default function LeaderboardScreen() {
           const pingerName = meetup?.fromUserName || 'Driver';
 
           const fromLoc = data.fromUserLocation;
-          if (fromLoc && fromLoc.latitude && fromLoc.longitude) {
-            console.log('[MEETUP] Pinger location available from response, opening nav chooser');
-            setTimeout(() => {
-              setNavTarget({
-                latitude: fromLoc.latitude,
-                longitude: fromLoc.longitude,
-                name: pingerName,
-              });
-              setShowNavChooser(true);
-            }, 500);
-          } else {
-            console.log('[MEETUP] No pinger location in response, will try after refetch');
-          }
+          
+          const openNavForLocation = (lat: number, lng: number, name: string) => {
+            console.log('[MEETUP] Scheduling nav chooser for:', name, lat, lng);
+            const navData = { latitude: lat, longitude: lng, name };
+            if (showMeetupsModal) {
+              pendingNavRef.current = navData;
+              setShowMeetupsModal(false);
+              setMeetupsModalReady(false);
+            } else {
+              setTimeout(() => {
+                setNavTarget(navData);
+                setShowNavChooser(true);
+              }, 300);
+            }
+          };
 
           try {
             const result = await meetupsQuery.refetch();
             console.log('[MEETUP] Refetched meetups after accept, count:', result.data?.length);
-            if (!fromLoc && acceptedId) {
+            
+            if (fromLoc && fromLoc.latitude && fromLoc.longitude) {
+              console.log('[MEETUP] Pinger location available from response');
+              openNavForLocation(fromLoc.latitude, fromLoc.longitude, pingerName);
+            } else if (acceptedId) {
               const freshMeetup = result.data?.find((m: DriveMeetup) => m.id === acceptedId);
               if (freshMeetup?.fromUserLocation) {
-                setTimeout(() => {
-                  setNavTarget({
-                    latitude: freshMeetup.fromUserLocation!.latitude,
-                    longitude: freshMeetup.fromUserLocation!.longitude,
-                    name: freshMeetup.fromUserName,
-                  });
-                  setShowNavChooser(true);
-                  console.log('[MEETUP] Opened nav chooser from refetch for:', freshMeetup.fromUserName);
-                }, 500);
+                console.log('[MEETUP] Pinger location found after refetch');
+                openNavForLocation(
+                  freshMeetup.fromUserLocation!.latitude,
+                  freshMeetup.fromUserLocation!.longitude,
+                  freshMeetup.fromUserName
+                );
               } else {
-                console.log('[MEETUP] Pinger location still not available after refetch');
+                console.log('[MEETUP] Pinger location not available yet');
                 Alert.alert(
                   'Drive Accepted!',
                   `You accepted ${pingerName}'s invite! Their location will appear once they share it. You can navigate to them from the meetup details.`,
@@ -322,6 +341,9 @@ export default function LeaderboardScreen() {
             acceptedMeetupIdRef.current = null;
           } catch (e) {
             console.error('[MEETUP] Refetch after accept failed:', e);
+            if (fromLoc && fromLoc.latitude && fromLoc.longitude) {
+              openNavForLocation(fromLoc.latitude, fromLoc.longitude, pingerName);
+            }
             acceptedMeetupIdRef.current = null;
           }
         } else {
@@ -543,9 +565,16 @@ export default function LeaderboardScreen() {
   const handleNavigateToLocation = useCallback((latitude: number, longitude: number, name?: string) => {
     console.log('[MEETUP] Opening nav chooser for:', name, latitude, longitude);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setNavTarget({ latitude, longitude, name: name || 'Driver' });
-    setShowNavChooser(true);
-  }, []);
+    const navData = { latitude, longitude, name: name || 'Driver' };
+    if (showMeetupsModal) {
+      pendingNavRef.current = navData;
+      setShowMeetupsModal(false);
+      setMeetupsModalReady(false);
+    } else {
+      setNavTarget(navData);
+      setShowNavChooser(true);
+    }
+  }, [showMeetupsModal]);
 
   const handleOpenExternalMaps = useCallback((latitude: number, longitude: number) => {
     setNavTarget({ latitude, longitude, name: 'Driver' });
@@ -1226,7 +1255,7 @@ export default function LeaderboardScreen() {
             {nearbyUsers.length > 0 && (
               <TouchableOpacity
                 style={styles.nearbyDriversButton}
-                onPress={() => setShowNearbyDrivers(true)}
+                onPress={() => { setShowNearbyDrivers(true); requestAnimationFrame(() => setNearbyModalReady(true)); }}
                 activeOpacity={0.7}
               >
                 <Users size={14} color={colors.textInverted} />
@@ -1726,7 +1755,7 @@ export default function LeaderboardScreen() {
         visible={showNearbyDrivers}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowNearbyDrivers(false)}
+        onRequestClose={() => { setShowNearbyDrivers(false); setNearbyModalReady(false); }}
       >
         <View style={styles.nearbyDriversOverlay}>
           <View style={styles.nearbyDriversContent}>
@@ -1735,7 +1764,7 @@ export default function LeaderboardScreen() {
                 <Users size={22} color={colors.primary} />
                 <Text style={styles.nearbyDriversTitle}>Nearby Drivers</Text>
               </View>
-              <TouchableOpacity onPress={() => setShowNearbyDrivers(false)} activeOpacity={0.7}>
+              <TouchableOpacity onPress={() => { setShowNearbyDrivers(false); setNearbyModalReady(false); }} activeOpacity={0.7}>
                 <X size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
@@ -1745,7 +1774,7 @@ export default function LeaderboardScreen() {
             </Text>
 
             <ScrollView style={styles.nearbyDriversList} showsVerticalScrollIndicator={false}>
-              {nearbyUsersQuery.isLoading ? (
+              {!nearbyModalReady || nearbyUsersQuery.isLoading ? (
                 <View style={styles.nearbyLoadingContainer}>
                   <ActivityIndicator size="small" color={colors.primary} />
                   <Text style={styles.nearbyLoadingText}>Finding drivers...</Text>
@@ -1831,8 +1860,10 @@ export default function LeaderboardScreen() {
           } else {
             setShowMeetupsModal(false);
             setMeetupView('list');
+            setMeetupsModalReady(false);
           }
         }}
+        onShow={() => setMeetupsModalReady(true)}
       >
         <View style={styles.nearbyDriversOverlay}>
           <View style={styles.nearbyDriversContent}>
@@ -1843,7 +1874,7 @@ export default function LeaderboardScreen() {
                     <MessageCircle size={22} color={colors.primary} />
                     <Text style={styles.nearbyDriversTitle}>Drive Meetups</Text>
                   </View>
-                  <TouchableOpacity onPress={() => { setShowMeetupsModal(false); setMeetupView('list'); }} activeOpacity={0.7}>
+                  <TouchableOpacity onPress={() => { setShowMeetupsModal(false); setMeetupView('list'); setMeetupsModalReady(false); }} activeOpacity={0.7}>
                     <X size={24} color={colors.text} />
                   </TouchableOpacity>
                 </View>
@@ -2047,6 +2078,7 @@ export default function LeaderboardScreen() {
                       setMeetupView('list');
                       setSelectedMeetup(null);
                       selectedMeetupId.current = null;
+                      setMeetupsModalReady(false);
                     }}
                     activeOpacity={0.7}
                     style={styles.closeButton}
