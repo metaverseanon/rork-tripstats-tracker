@@ -5,6 +5,7 @@ import { Play, Clock, Trophy, BarChart3, Settings } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { useSettings } from "@/providers/SettingsProvider";
 
+// v1.1
 export default function TabLayout() {
   const { colors } = useSettings();
 
