@@ -2,8 +2,8 @@ import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Linking, Image, S
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { router } from 'expo-router';
-import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle, Bell, Mail, MessageSquare, X, Send } from 'lucide-react-native';
-import { useSettings, SpeedUnit, DistanceUnit } from '@/providers/SettingsProvider';
+import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle, Bell, Mail, MessageSquare, X, Send, Share2, Check } from 'lucide-react-native';
+import { useSettings, SpeedUnit, DistanceUnit, ShareCardFields, ShareCardPage } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
 import { useNotifications } from '@/providers/NotificationProvider';
 import { ThemeType } from '@/constants/colors';
@@ -11,7 +11,7 @@ import { useState, useEffect } from 'react';
 import { trpc } from '@/lib/trpc';
 
 export default function SettingsScreen() {
-  const { settings, colors, setSpeedUnit, setDistanceUnit, setTheme } = useSettings();
+  const { settings, colors, setSpeedUnit, setDistanceUnit, setTheme, setShareCardField, setShareCardPage } = useSettings();
   const { user, isAuthenticated, getCarDisplayName } = useUser();
   const { notificationsEnabled, pushToken, registerForPushNotifications, disableNotifications } = useNotifications();
 
@@ -405,6 +405,35 @@ export default function SettingsScreen() {
       fontWeight: '600' as const,
       color: '#FFFFFF',
     },
+    checkboxList: {
+      gap: 4,
+    },
+    checkboxRow: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      paddingVertical: 10,
+      paddingHorizontal: 4,
+    },
+    checkbox: {
+      width: 24,
+      height: 24,
+      borderRadius: 6,
+      borderWidth: 2,
+      borderColor: colors.border,
+      backgroundColor: colors.background === '#000000' ? '#1C1C1E' : colors.background,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      marginRight: 12,
+    },
+    checkboxActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    checkboxLabel: {
+      fontSize: 15,
+      fontWeight: '500' as const,
+      color: colors.text,
+    },
   });
 
   return (
@@ -558,6 +587,78 @@ export default function SettingsScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
+            </View>
+          </View>
+        </View>
+
+        <Text style={styles.sectionTitle}>Share Card</Text>
+        
+        <View style={styles.settingsCard}>
+          <View style={styles.settingItem}>
+            <View style={styles.settingHeader}>
+              <View style={styles.settingIconContainer}>
+                <Share2 size={20} color={colors.accent} />
+              </View>
+              <Text style={styles.settingLabel}>Visible Pages</Text>
+            </View>
+            <View style={styles.checkboxList}>
+              {([
+                { key: 'stats' as ShareCardPage, label: 'Stats Card' },
+                { key: 'route' as ShareCardPage, label: 'Route Card' },
+              ]).map((item) => {
+                const isActive = settings.shareCardPages[item.key];
+                return (
+                  <TouchableOpacity
+                    key={item.key}
+                    style={styles.checkboxRow}
+                    onPress={() => setShareCardPage(item.key, !isActive)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.checkbox, isActive && styles.checkboxActive]}>
+                      {isActive && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
+                    </View>
+                    <Text style={styles.checkboxLabel}>{item.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.settingItem}>
+            <View style={styles.settingHeader}>
+              <View style={styles.settingIconContainer}>
+                <FileText size={20} color={colors.accent} />
+              </View>
+              <Text style={styles.settingLabel}>Visible Stats</Text>
+            </View>
+            <View style={styles.checkboxList}>
+              {([
+                { key: 'topSpeed' as keyof ShareCardFields, label: 'Top Speed' },
+                { key: 'distance' as keyof ShareCardFields, label: 'Distance' },
+                { key: 'duration' as keyof ShareCardFields, label: 'Duration' },
+                { key: 'avgSpeed' as keyof ShareCardFields, label: 'Average Speed' },
+                { key: 'corners' as keyof ShareCardFields, label: 'Corners Taken' },
+                { key: 'acceleration' as keyof ShareCardFields, label: 'Acceleration (0-100)' },
+                { key: 'ranking' as keyof ShareCardFields, label: 'Leaderboard Ranking' },
+                { key: 'routeMap' as keyof ShareCardFields, label: 'Route Map' },
+              ]).map((item) => {
+                const isActive = settings.shareCardFields[item.key];
+                return (
+                  <TouchableOpacity
+                    key={item.key}
+                    style={styles.checkboxRow}
+                    onPress={() => setShareCardField(item.key, !isActive)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.checkbox, isActive && styles.checkboxActive]}>
+                      {isActive && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
+                    </View>
+                    <Text style={styles.checkboxLabel}>{item.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
         </View>

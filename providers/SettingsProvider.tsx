@@ -6,18 +6,51 @@ import { ThemeType, ThemeColors, getThemeColors } from '@/constants/colors';
 export type SpeedUnit = 'kmh' | 'mph';
 export type DistanceUnit = 'km' | 'mi';
 
+export interface ShareCardFields {
+  distance: boolean;
+  duration: boolean;
+  corners: boolean;
+  avgSpeed: boolean;
+  acceleration: boolean;
+  topSpeed: boolean;
+  ranking: boolean;
+  routeMap: boolean;
+}
+
+export type ShareCardPage = 'stats' | 'route';
+
 interface Settings {
   speedUnit: SpeedUnit;
   distanceUnit: DistanceUnit;
   theme: ThemeType;
+  shareCardFields: ShareCardFields;
+  shareCardPages: Record<ShareCardPage, boolean>;
 }
 
 const SETTINGS_KEY = 'app_settings';
+
+const DEFAULT_SHARE_CARD_FIELDS: ShareCardFields = {
+  distance: true,
+  duration: true,
+  corners: true,
+  avgSpeed: true,
+  acceleration: true,
+  topSpeed: true,
+  ranking: true,
+  routeMap: true,
+};
+
+const DEFAULT_SHARE_CARD_PAGES: Record<ShareCardPage, boolean> = {
+  stats: true,
+  route: true,
+};
 
 const DEFAULT_SETTINGS: Settings = {
   speedUnit: 'kmh',
   distanceUnit: 'km',
   theme: 'dark',
+  shareCardFields: DEFAULT_SHARE_CARD_FIELDS,
+  shareCardPages: DEFAULT_SHARE_CARD_PAGES,
 };
 
 export const [SettingsProvider, useSettings] = createContextHook(() => {
@@ -66,6 +99,20 @@ export const [SettingsProvider, useSettings] = createContextHook(() => {
     saveSettings(newSettings);
   }, [settings]);
 
+  const setShareCardField = useCallback((field: keyof ShareCardFields, value: boolean) => {
+    const newFields = { ...settings.shareCardFields, [field]: value };
+    const newSettings = { ...settings, shareCardFields: newFields };
+    saveSettings(newSettings);
+  }, [settings]);
+
+  const setShareCardPage = useCallback((page: ShareCardPage, value: boolean) => {
+    const otherPage = page === 'stats' ? 'route' : 'stats';
+    if (!value && !settings.shareCardPages[otherPage]) return;
+    const newPages = { ...settings.shareCardPages, [page]: value };
+    const newSettings = { ...settings, shareCardPages: newPages };
+    saveSettings(newSettings);
+  }, [settings]);
+
   const colors: ThemeColors = getThemeColors(settings.theme);
 
   const convertSpeed = useCallback((speedKmh: number): number => {
@@ -111,6 +158,8 @@ export const [SettingsProvider, useSettings] = createContextHook(() => {
     setSpeedUnit,
     setDistanceUnit,
     setTheme,
+    setShareCardField,
+    setShareCardPage,
     convertSpeed,
     convertDistance,
     getSpeedLabel,
