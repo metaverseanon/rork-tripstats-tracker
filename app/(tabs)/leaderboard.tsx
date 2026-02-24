@@ -263,19 +263,33 @@ export default function LeaderboardScreen() {
 
   const sendPingMutation = trpc.notifications.sendDrivePing.useMutation({
     onSuccess: (data) => {
-      if (data.success) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert('Ping Sent!', 'Your drive invite has been sent.');
-        setTimeout(() => meetupsQuery.refetch(), 300);
-      } else {
-        Alert.alert('Could not send', data.message || 'User may not have notifications enabled.');
-      }
       setPingingUserId(null);
+      const wasSuccess = data.success;
+      const failMessage = data.message;
+      
+      setShowNearbyDrivers(false);
+      setNearbyModalReady(false);
+      
+      setTimeout(() => {
+        if (wasSuccess) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          Alert.alert('Ping Sent!', 'Your drive invite has been sent.');
+          meetupsQuery.refetch();
+        } else {
+          Alert.alert('Could not send', failMessage || 'User may not have notifications enabled.');
+        }
+      }, 400);
     },
     onError: (error) => {
       console.error('Failed to send ping:', error);
-      Alert.alert('Error', 'Failed to send drive invite. Please try again.');
       setPingingUserId(null);
+      
+      setShowNearbyDrivers(false);
+      setNearbyModalReady(false);
+      
+      setTimeout(() => {
+        Alert.alert('Error', 'Failed to send drive invite. Please try again.');
+      }, 400);
     },
   });
 
@@ -1173,22 +1187,6 @@ export default function LeaderboardScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navHeader}>
         <Text style={styles.navTitle}>Leaderboard</Text>
-        <View style={styles.navHeaderRight}>
-          {(pendingIncomingPings.length > 0 || activeMeetups.length > 0) && (
-            <TouchableOpacity
-              style={[styles.headerMeetupsButton, pendingIncomingPings.length > 0 && styles.headerMeetupsButtonAlert]}
-              onPress={() => { setMeetupView('list'); setShowMeetupsModal(true); }}
-              activeOpacity={0.7}
-            >
-              <MessageCircle size={16} color={colors.textInverted} />
-              {pendingIncomingPings.length > 0 && (
-                <View style={styles.headerMeetupsBadge}>
-                  <Text style={styles.headerMeetupsBadgeText}>{pendingIncomingPings.length}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          )}
-        </View>
       </View>
 
       {pendingIncomingPings.length > 0 && (
@@ -1260,6 +1258,26 @@ export default function LeaderboardScreen() {
               >
                 <Users size={14} color={colors.textInverted} />
                 <Text style={styles.nearbyDriversButtonText}>{nearbyUsers.length} Nearby</Text>
+              </TouchableOpacity>
+            )}
+            {activeMeetups.length > 0 && (
+              <TouchableOpacity
+                style={styles.activeMeetupBannerButton}
+                onPress={() => { setMeetupView('list'); setShowMeetupsModal(true); }}
+                activeOpacity={0.7}
+              >
+                <Navigation2 size={14} color={colors.textInverted} />
+                <Text style={styles.activeMeetupBannerText}>Active</Text>
+              </TouchableOpacity>
+            )}
+            {pendingIncomingPings.length > 0 && activeMeetups.length === 0 && (
+              <TouchableOpacity
+                style={styles.pendingPingBannerButton}
+                onPress={() => { setMeetupView('list'); setShowMeetupsModal(true); }}
+                activeOpacity={0.7}
+              >
+                <Bell size={14} color={colors.textInverted} />
+                <Text style={styles.pendingPingBannerText}>{pendingIncomingPings.length}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -2389,40 +2407,33 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
-  navHeaderRight: {
-    position: 'absolute' as const,
-    right: 16,
-    top: 10,
+  activeMeetupBannerButton: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-  },
-  headerMeetupsButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    gap: 4,
     backgroundColor: colors.success,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 16,
   },
-  headerMeetupsButtonAlert: {
+  activeMeetupBannerText: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.textInverted,
+  },
+  pendingPingBannerButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
     backgroundColor: colors.danger,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 16,
   },
-  headerMeetupsBadge: {
-    position: 'absolute' as const,
-    top: -2,
-    right: -2,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    paddingHorizontal: 4,
-  },
-  headerMeetupsBadgeText: {
-    fontSize: 10,
+  pendingPingBannerText: {
+    fontSize: 11,
     fontFamily: 'Orbitron_700Bold',
-    color: colors.danger,
+    color: colors.textInverted,
   },
   incomingPingBanner: {
     marginHorizontal: 16,
