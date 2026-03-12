@@ -137,10 +137,12 @@ export default function OnboardingScreen() {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     if (currentPage < pages.length - 1) {
+      const nextPage = currentPage + 1;
       scrollViewRef.current?.scrollTo({
-        x: (currentPage + 1) * SCREEN_WIDTH,
+        x: nextPage * SCREEN_WIDTH,
         animated: true,
       });
+      setCurrentPage(nextPage);
     } else {
       void completeOnboarding();
     }
