@@ -10,13 +10,12 @@ import {
   ScrollView,
   NativeSyntheticEvent,
   NativeScrollEvent,
-  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { Gauge, Trophy, Navigation, UserPlus, ChevronRight, Zap, MapPin, Users } from 'lucide-react-native';
+import { Activity, Crown, Compass, UserCheck, ChevronRight, Flame, Target, Radio } from 'lucide-react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ONBOARDING_KEY = 'onboarding_completed';
@@ -34,8 +33,8 @@ interface OnboardingPage {
 const pages: OnboardingPage[] = [
   {
     id: 'track',
-    icon: <Gauge size={48} color="#FFFFFF" strokeWidth={1.5} />,
-    decorIcon: <Zap size={20} color="#CC0000" />,
+    icon: <Activity size={48} color="#FFFFFF" strokeWidth={1.5} />,
+    decorIcon: <Flame size={20} color="#CC0000" />,
     title: 'Track Your',
     highlight: 'Drives',
     description: 'Real-time speed, distance, acceleration times and route mapping for every drive you take.',
@@ -43,8 +42,8 @@ const pages: OnboardingPage[] = [
   },
   {
     id: 'compete',
-    icon: <Trophy size={48} color="#FFFFFF" strokeWidth={1.5} />,
-    decorIcon: <Users size={20} color="#CC0000" />,
+    icon: <Crown size={48} color="#FFFFFF" strokeWidth={1.5} />,
+    decorIcon: <Target size={20} color="#CC0000" />,
     title: 'Climb The',
     highlight: 'Leaderboard',
     description: 'Compete with drivers worldwide. Top speed, longest distance, best acceleration — claim your rank.',
@@ -52,8 +51,8 @@ const pages: OnboardingPage[] = [
   },
   {
     id: 'ping',
-    icon: <Navigation size={48} color="#FFFFFF" strokeWidth={1.5} />,
-    decorIcon: <MapPin size={20} color="#CC0000" />,
+    icon: <Compass size={48} color="#FFFFFF" strokeWidth={1.5} />,
+    decorIcon: <Radio size={20} color="#CC0000" />,
     title: 'Find Nearby',
     highlight: 'Drivers',
     description: 'Ping drivers around you, get directions to meet up and cruise together.',
@@ -61,7 +60,7 @@ const pages: OnboardingPage[] = [
   },
   {
     id: 'account',
-    icon: <UserPlus size={48} color="#FFFFFF" strokeWidth={1.5} />,
+    icon: <UserCheck size={48} color="#FFFFFF" strokeWidth={1.5} />,
     decorIcon: <ChevronRight size={20} color="#CC0000" />,
     title: 'Create Your',
     highlight: 'Account',
@@ -198,13 +197,9 @@ export default function OnboardingScreen() {
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
-        <Image
-          source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/88i29a3ot5yzdi1xhkc39' }}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-        {!isLastPage && (
+      {!isLastPage && (
+        <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
+          <View />
           <TouchableOpacity
             onPress={skipOnboarding}
             style={styles.skipButton}
@@ -213,8 +208,8 @@ export default function OnboardingScreen() {
           >
             <Text style={styles.skipText}>Skip</Text>
           </TouchableOpacity>
-        )}
-      </View>
+        </View>
+      )}
 
       <ScrollView
         ref={scrollViewRef}
@@ -313,10 +308,7 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 10,
   },
-  logo: {
-    width: 100,
-    height: 28,
-  },
+
   skipButton: {
     paddingVertical: 6,
     paddingHorizontal: 14,
