@@ -8,14 +8,12 @@ import { useUser } from '@/providers/UserProvider';
 import TripShareCard from '@/components/TripShareCard';
 
 let MapView: React.ComponentType<any> | null = null;
-let Marker: React.ComponentType<any> | null = null;
 let Polyline: React.ComponentType<any> | null = null;
 
 if (Platform.OS !== 'web') {
   try {
     const Maps = require('react-native-maps');
     MapView = Maps.default;
-    Marker = Maps.Marker;
     Polyline = Maps.Polyline;
   } catch {
     console.log('react-native-maps not available');
@@ -222,25 +220,13 @@ export default function TrackScreen() {
           ref={mapRef}
           style={mapStyles.map}
           initialRegion={mapRegion}
-          showsUserLocation={false}
+          showsUserLocation={true}
           showsMyLocationButton={false}
           showsCompass={false}
           customMapStyle={isDark ? darkMapStyle : []}
           mapType="standard"
         >
-          {currentLocation && Marker && (
-            <Marker
-              coordinate={{
-                latitude: currentLocation.latitude,
-                longitude: currentLocation.longitude,
-              }}
-              anchor={{ x: 0.5, y: 0.5 }}
-            >
-              <View style={mapStyles.markerOuter}>
-                <View style={[mapStyles.markerInner, { backgroundColor: speedColor }]} />
-              </View>
-            </Marker>
-          )}
+
           {routeCoords.length > 1 && Polyline && (
             <Polyline
               coordinates={routeCoords}
