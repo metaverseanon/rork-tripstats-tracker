@@ -191,7 +191,7 @@ function PushTokenSync() {
     if (user?.id && pushToken && notificationsEnabled && !syncedRef.current) {
       console.log('[PUSH_SYNC] User logged in with existing push token, syncing to backend...');
       syncedRef.current = true;
-      syncPushTokenToBackend(user.id).then((success) => {
+      void syncPushTokenToBackend(user.id).then((success) => {
         if (success) {
           console.log('[PUSH_SYNC] Push token synced successfully on app start');
         }
@@ -270,7 +270,7 @@ function LocationSync() {
       }
     };
 
-    updateLocation();
+    void updateLocation();
   }, [user?.id]);
 
   return null;
@@ -280,6 +280,7 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerBackTitle: "Back", contentStyle: { backgroundColor: '#000000' } }}>
       <Stack.Screen name="index" options={{ headerShown: false, animation: 'none' }} />
+      <Stack.Screen name="onboarding" options={{ headerShown: false, animation: 'none' }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'none' }} />
       <Stack.Screen name="profile" options={{ presentation: "card" }} />
       <Stack.Screen name="user-profile" options={{ presentation: "card" }} />
@@ -324,7 +325,7 @@ export default function RootLayout() {
       console.log('Orbitron fonts loaded successfully');
     }
     if (fontsLoaded || fontError || timedOut) {
-      SplashScreen.hideAsync();
+      void SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError, timedOut]);
 

@@ -1,23 +1,49 @@
 import { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, Image } from 'react-native';
+import { StyleSheet, Animated, Image } from 'react-native';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const ONBOARDING_KEY = 'onboarding_completed';
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 400,
-        useNativeDriver: true,
-      }).start(() => {
-        router.replace('/(tabs)/track' as any);
-      });
-    }, 4000);
+    const checkOnboarding = async () => {
+      try {
+        const completed = await AsyncStorage.getItem(ONBOARDING_KEY);
+        const timer = setTimeout(() => {
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 400,
+            useNativeDriver: true,
+          }).start(() => {
+            if (completed === 'true') {
+              router.replace('/(tabs)/track' as any);
+            } else {
+              router.replace('/onboarding' as any);
+            }
+          });
+        }, 4000);
 
-    return () => clearTimeout(timer);
+        return () => clearTimeout(timer);
+      } catch (e) {
+        console.warn('[WELCOME] Error checking onboarding:', e);
+        const timer = setTimeout(() => {
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 400,
+            useNativeDriver: true,
+          }).start(() => {
+            router.replace('/onboarding' as any);
+          });
+        }, 4000);
+        return () => clearTimeout(timer);
+      }
+    };
+
+    void checkOnboarding();
   }, [fadeAnim, router]);
 
   return (
