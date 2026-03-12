@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Platform, Animated } from 'react-native';
+import * as ExpoLocation from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Play, Square, Map, Gauge } from 'lucide-react-native';
 import { useTrips } from '@/providers/TripProvider';
@@ -33,6 +34,8 @@ export default function TrackScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('standard');
   const mapRef = useRef<any>(null);
   const toggleAnim = useRef(new Animated.Value(0)).current;
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const locationFetched = useRef(false);
 
   useEffect(() => {
     if (lastSavedTrip && !isTracking) {
@@ -49,13 +52,46 @@ export default function TrackScreen() {
   }, [viewMode, toggleAnim]);
 
   useEffect(() => {
+    if (viewMode === 'map' && !locationFetched.current && Platform.OS !== 'web') {
+      locationFetched.current = true;
+      void (async () => {
+        try {
+          const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
+          if (status !== 'granted') {
+            console.log('Location permission not granted');
+            return;
+          }
+          const loc = await ExpoLocation.getCurrentPositionAsync({
+            accuracy: ExpoLocation.Accuracy.High,
+          });
+          console.log('Fetched user location for map:', loc.coords.latitude, loc.coords.longitude);
+          setUserLocation({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          });
+          if (mapRef.current) {
+            mapRef.current.animateToRegion({
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+              latitudeDelta: 0.005,
+              longitudeDelta: 0.005,
+            }, 500);
+          }
+        } catch (e) {
+          console.log('Failed to fetch user location:', e);
+        }
+      })();
+    }
+  }, [viewMode]);
+
+  useEffect(() => {
     if (viewMode === 'map' && currentLocation && mapRef.current) {
       try {
         mapRef.current.animateToRegion({
           latitude: currentLocation.latitude,
           longitude: currentLocation.longitude,
-          latitudeDelta: 0.002,
-          longitudeDelta: 0.002,
+          latitudeDelta: 0.005,
+          longitudeDelta: 0.005,
         }, 500);
       } catch (e) {
         console.log('Failed to animate map:', e);
@@ -205,16 +241,17 @@ export default function TrackScreen() {
   const renderMapView = () => {
     if (!canShowMap || !MapView) return null;
 
-    const mapRegion = currentLocation ? {
-      latitude: currentLocation.latitude,
-      longitude: currentLocation.longitude,
-      latitudeDelta: 0.002,
-      longitudeDelta: 0.002,
+    const effectiveLocation = currentLocation || userLocation;
+    const mapRegion = effectiveLocation ? {
+      latitude: effectiveLocation.latitude,
+      longitude: effectiveLocation.longitude,
+      latitudeDelta: 0.005,
+      longitudeDelta: 0.005,
     } : {
       latitude: 45.815,
       longitude: 15.982,
-      latitudeDelta: 0.01,
-      longitudeDelta: 0.01,
+      latitudeDelta: 0.005,
+      longitudeDelta: 0.005,
     };
 
     return (
@@ -223,8 +260,9 @@ export default function TrackScreen() {
           ref={mapRef}
           style={mapStyles.map}
           initialRegion={mapRegion}
-          showsUserLocation={false}
+          showsUserLocation={true}
           showsMyLocationButton={false}
+          followsUserLocation={!isTracking}
           showsCompass={false}
           customMapStyle={isDark ? darkMapStyle : []}
           mapType="standard"
