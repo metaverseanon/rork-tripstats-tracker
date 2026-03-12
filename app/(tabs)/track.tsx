@@ -10,11 +10,14 @@ import TripShareCard from '@/components/TripShareCard';
 let MapView: React.ComponentType<any> | null = null;
 let Polyline: React.ComponentType<any> | null = null;
 
+let Marker: React.ComponentType<any> | null = null;
+
 if (Platform.OS !== 'web') {
   try {
     const Maps = require('react-native-maps');
     MapView = Maps.default;
     Polyline = Maps.Polyline;
+    Marker = Maps.Marker;
   } catch {
     console.log('react-native-maps not available');
   }
@@ -51,8 +54,8 @@ export default function TrackScreen() {
         mapRef.current.animateToRegion({
           latitude: currentLocation.latitude,
           longitude: currentLocation.longitude,
-          latitudeDelta: 0.005,
-          longitudeDelta: 0.005,
+          latitudeDelta: 0.002,
+          longitudeDelta: 0.002,
         }, 500);
       } catch (e) {
         console.log('Failed to animate map:', e);
@@ -205,13 +208,13 @@ export default function TrackScreen() {
     const mapRegion = currentLocation ? {
       latitude: currentLocation.latitude,
       longitude: currentLocation.longitude,
-      latitudeDelta: 0.005,
-      longitudeDelta: 0.005,
+      latitudeDelta: 0.002,
+      longitudeDelta: 0.002,
     } : {
       latitude: 45.815,
       longitude: 15.982,
-      latitudeDelta: 0.05,
-      longitudeDelta: 0.05,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
     };
 
     return (
@@ -220,12 +223,28 @@ export default function TrackScreen() {
           ref={mapRef}
           style={mapStyles.map}
           initialRegion={mapRegion}
-          showsUserLocation={true}
+          showsUserLocation={false}
           showsMyLocationButton={false}
           showsCompass={false}
           customMapStyle={isDark ? darkMapStyle : []}
           mapType="standard"
         >
+          {currentLocation && Marker && (
+            <Marker
+              coordinate={{
+                latitude: currentLocation.latitude,
+                longitude: currentLocation.longitude,
+              }}
+              anchor={{ x: 0.5, y: 0.5 }}
+              flat={true}
+              rotation={currentLocation.heading ?? 0}
+            >
+              <View style={mapStyles.arrowContainer}>
+                <View style={mapStyles.arrowHead} />
+                <View style={mapStyles.arrowBody} />
+              </View>
+            </Marker>
+          )}
 
           {routeCoords.length > 1 && Polyline && (
             <Polyline
@@ -547,17 +566,28 @@ const mapStyles = StyleSheet.create({
     left: 20,
     right: 20,
   },
-  markerOuter: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0,200,83,0.3)',
+  arrowContainer: {
+    width: 32,
+    height: 32,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
-  markerInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+  arrowHead: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 10,
+    borderRightWidth: 10,
+    borderBottomWidth: 18,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#CC0000',
+  },
+  arrowBody: {
+    width: 8,
+    height: 10,
+    backgroundColor: '#CC0000',
+    borderBottomLeftRadius: 3,
+    borderBottomRightRadius: 3,
+    marginTop: -1,
   },
 });

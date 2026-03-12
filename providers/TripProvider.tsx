@@ -522,6 +522,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       longitude: location.coords.longitude,
       speed: speed,
       timestamp: location.timestamp,
+      heading: location.coords.heading,
     };
 
     const now = Date.now();

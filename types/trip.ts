@@ -3,6 +3,7 @@ export interface Location {
   longitude: number;
   speed: number | null;
   timestamp: number;
+  heading?: number | null;
 }
 
 export interface TripLocation {
