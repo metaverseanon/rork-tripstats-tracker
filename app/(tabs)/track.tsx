@@ -73,8 +73,8 @@ export default function TrackScreen() {
             mapRef.current.animateToRegion({
               latitude: loc.coords.latitude,
               longitude: loc.coords.longitude,
-              latitudeDelta: 0.005,
-              longitudeDelta: 0.005,
+              latitudeDelta: 0.012,
+              longitudeDelta: 0.012,
             }, 500);
           }
         } catch (e) {
@@ -90,8 +90,8 @@ export default function TrackScreen() {
         mapRef.current.animateToRegion({
           latitude: currentLocation.latitude,
           longitude: currentLocation.longitude,
-          latitudeDelta: 0.005,
-          longitudeDelta: 0.005,
+          latitudeDelta: 0.012,
+          longitudeDelta: 0.012,
         }, 300);
       } catch (e) {
         console.log('Failed to animate map:', e);
@@ -114,8 +114,8 @@ export default function TrackScreen() {
             if (mapRef.current) {
               mapRef.current.animateToRegion({
                 ...coords,
-                latitudeDelta: 0.005,
-                longitudeDelta: 0.005,
+                latitudeDelta: 0.012,
+                longitudeDelta: 0.012,
               }, 300);
             }
           },
@@ -273,13 +273,13 @@ export default function TrackScreen() {
     const mapRegion = effectiveLocation ? {
       latitude: effectiveLocation.latitude,
       longitude: effectiveLocation.longitude,
-      latitudeDelta: 0.005,
-      longitudeDelta: 0.005,
+      latitudeDelta: 0.012,
+      longitudeDelta: 0.012,
     } : {
       latitude: 45.815,
       longitude: 15.982,
-      latitudeDelta: 0.005,
-      longitudeDelta: 0.005,
+      latitudeDelta: 0.012,
+      longitudeDelta: 0.012,
     };
 
     return (
