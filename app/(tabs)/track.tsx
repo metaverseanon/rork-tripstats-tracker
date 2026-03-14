@@ -92,12 +92,40 @@ export default function TrackScreen() {
           longitude: currentLocation.longitude,
           latitudeDelta: 0.005,
           longitudeDelta: 0.005,
-        }, 500);
+        }, 300);
       } catch (e) {
         console.log('Failed to animate map:', e);
       }
     }
   }, [currentLocation, viewMode]);
+
+  useEffect(() => {
+    if (viewMode !== 'map' || Platform.OS === 'web') return;
+    let sub: ExpoLocation.LocationSubscription | null = null;
+    void (async () => {
+      try {
+        const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        sub = await ExpoLocation.watchPositionAsync(
+          { accuracy: ExpoLocation.Accuracy.High, distanceInterval: 5, timeInterval: 2000 },
+          (loc) => {
+            const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+            setUserLocation(coords);
+            if (mapRef.current) {
+              mapRef.current.animateToRegion({
+                ...coords,
+                latitudeDelta: 0.005,
+                longitudeDelta: 0.005,
+              }, 300);
+            }
+          },
+        );
+      } catch (e) {
+        console.log('Watch position error:', e);
+      }
+    })();
+    return () => { sub?.remove(); };
+  }, [viewMode]);
 
   const handleCloseShareCard = useCallback(() => {
     setShowShareCard(false);
@@ -260,26 +288,24 @@ export default function TrackScreen() {
           ref={mapRef}
           style={mapStyles.map}
           initialRegion={mapRegion}
-          showsUserLocation={true}
+          showsUserLocation={false}
           showsMyLocationButton={false}
-          followsUserLocation={!isTracking}
+          followsUserLocation={false}
           showsCompass={false}
           customMapStyle={isDark ? darkMapStyle : []}
           mapType="standard"
         >
-          {currentLocation && Marker && (
+          {effectiveLocation && Marker && (
             <Marker
               coordinate={{
-                latitude: currentLocation.latitude,
-                longitude: currentLocation.longitude,
+                latitude: effectiveLocation.latitude,
+                longitude: effectiveLocation.longitude,
               }}
               anchor={{ x: 0.5, y: 0.5 }}
               flat={true}
-              rotation={currentLocation.heading ?? 0}
             >
-              <View style={mapStyles.arrowContainer}>
-                <View style={mapStyles.arrowHead} />
-                <View style={mapStyles.arrowBody} />
+              <View style={mapStyles.dotOuter}>
+                <View style={mapStyles.dotInner} />
               </View>
             </Marker>
           )}
@@ -604,28 +630,20 @@ const mapStyles = StyleSheet.create({
     left: 20,
     right: 20,
   },
-  arrowContainer: {
-    width: 32,
-    height: 32,
+  dotOuter: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 122, 255, 0.2)',
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
-  arrowHead: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 10,
-    borderRightWidth: 10,
-    borderBottomWidth: 18,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderBottomColor: '#CC0000',
-  },
-  arrowBody: {
-    width: 8,
-    height: 10,
-    backgroundColor: '#CC0000',
-    borderBottomLeftRadius: 3,
-    borderBottomRightRadius: 3,
-    marginTop: -1,
+  dotInner: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#007AFF',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
   },
 });
