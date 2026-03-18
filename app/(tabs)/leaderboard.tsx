@@ -443,7 +443,7 @@ export default function LeaderboardScreen() {
   }, [userCoords]);
 
   const handlePingUser = useCallback((targetUserId: string, targetUserName: string, targetUserCar?: string) => {
-    if (!user) return;
+    if (!user || targetUserId === user.id) return;
     
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setPingingUserId(targetUserId);
@@ -991,7 +991,7 @@ export default function LeaderboardScreen() {
   });
 
   const handleFollowToggle = useCallback((targetUserId: string) => {
-    if (!user?.id || followLoadingUserId) return;
+    if (!user?.id || followLoadingUserId || targetUserId === user.id) return;
     setFollowLoadingUserId(targetUserId);
     const isCurrentlyFollowing = followingUsers[targetUserId] === true;
     if (isCurrentlyFollowing) {

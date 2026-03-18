@@ -589,6 +589,10 @@ export const notificationsRouter = createTRPCRouter({
     }))
     .mutation(async ({ input }) => {
       console.log("[PUSH] Drive ping from", input.fromUserName, "to", input.toUserId);
+
+      if (input.fromUserId === input.toUserId) {
+        return { success: false, message: "You cannot ping yourself" };
+      }
       
       const allUsers = await getUsersWithLocations();
       const fromUser = allUsers.find(u => u.id === input.fromUserId);
