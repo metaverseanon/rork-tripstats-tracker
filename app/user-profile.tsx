@@ -12,13 +12,14 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { MapPin, Car, Zap, Navigation, Gauge, Activity, CornerDownRight, Timer, Route, Trophy, Calendar, ChevronDown } from 'lucide-react-native';
+import { MapPin, Car, Zap, Navigation, Gauge, Activity, CornerDownRight, Timer, Route, Trophy, Calendar, ChevronDown, UserPlus, UserMinus } from 'lucide-react-native';
 import { useSettings } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
 import { useTrips } from '@/providers/TripProvider';
 import { trpc } from '@/lib/trpc';
 import { ThemeColors } from '@/constants/colors';
 import { TripStats } from '@/types/trip';
+import * as Haptics from 'expo-haptics';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -63,6 +64,41 @@ export default function UserProfileScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const isOwnProfile = !userId || userId === user?.id;
+
+  const isFollowingQuery = trpc.social.isFollowing.useQuery(
+    { followerId: user?.id || '', followingId: userId || '' },
+    { enabled: !isOwnProfile && !!user?.id && !!userId }
+  );
+
+  const followCountsQuery = trpc.social.getFollowCounts.useQuery(
+    { userId: isOwnProfile ? (user?.id || '') : (userId || '') },
+    { enabled: !!(isOwnProfile ? user?.id : userId) }
+  );
+
+  const followMutation = trpc.social.follow.useMutation({
+    onSuccess: () => {
+      void isFollowingQuery.refetch();
+      void followCountsQuery.refetch();
+      if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    },
+  });
+
+  const unfollowMutation = trpc.social.unfollow.useMutation({
+    onSuccess: () => {
+      void isFollowingQuery.refetch();
+      void followCountsQuery.refetch();
+      if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    },
+  });
+
+  const handleFollowToggle = useCallback(() => {
+    if (!user?.id || !userId) return;
+    if (isFollowingQuery.data?.following) {
+      unfollowMutation.mutate({ followerId: user.id, followingId: userId });
+    } else {
+      followMutation.mutate({ followerId: user.id, followingId: userId });
+    }
+  }, [user?.id, userId, isFollowingQuery.data?.following, unfollowMutation, followMutation]);
 
   const remoteProfileQuery = trpc.user.getPublicProfile.useQuery(
     { userId: userId || '' },
@@ -275,6 +311,43 @@ export default function UserProfileScreen() {
               <Text style={styles.memberText}>Member since {memberSince}</Text>
             </View>
           ) : null}
+        </View>
+
+        <View style={styles.followRow}>
+          <View style={styles.followStat}>
+            <Text style={styles.followCount}>{followCountsQuery.data?.followers ?? 0}</Text>
+            <Text style={styles.followLabel}>Followers</Text>
+          </View>
+          <View style={styles.followStat}>
+            <Text style={styles.followCount}>{followCountsQuery.data?.following ?? 0}</Text>
+            <Text style={styles.followLabel}>Following</Text>
+          </View>
+          {!isOwnProfile && user?.id && userId && (
+            <TouchableOpacity
+              style={[
+                styles.followButton,
+                isFollowingQuery.data?.following && styles.followButtonActive,
+              ]}
+              onPress={handleFollowToggle}
+              disabled={followMutation.isPending || unfollowMutation.isPending}
+              activeOpacity={0.7}
+              testID="follow-button"
+            >
+              {followMutation.isPending || unfollowMutation.isPending ? (
+                <ActivityIndicator size="small" color={isFollowingQuery.data?.following ? colors.accent : '#fff'} />
+              ) : isFollowingQuery.data?.following ? (
+                <>
+                  <UserMinus size={16} color={colors.accent} />
+                  <Text style={styles.followButtonTextActive}>Following</Text>
+                </>
+              ) : (
+                <>
+                  <UserPlus size={16} color="#fff" />
+                  <Text style={styles.followButtonText}>Follow</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.overviewRow}>
@@ -535,6 +608,54 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 11,
     fontFamily: 'Orbitron_400Regular',
     color: colors.textLight,
+  },
+  followRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+    gap: 20,
+  },
+  followStat: {
+    alignItems: 'center',
+  },
+  followCount: {
+    fontSize: 16,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.text,
+  },
+  followLabel: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    marginTop: 2,
+  },
+  followButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.accent,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    minWidth: 110,
+    justifyContent: 'center',
+  },
+  followButtonActive: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: colors.accent,
+  },
+  followButtonText: {
+    fontSize: 13,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: '#FFFFFF',
+  },
+  followButtonTextActive: {
+    fontSize: 13,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.accent,
   },
   overviewRow: {
     flexDirection: 'row',

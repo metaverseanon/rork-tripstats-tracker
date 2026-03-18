@@ -4,6 +4,61 @@ import { isDbConfigured, getSupabaseHeaders, getSupabaseRestUrl } from "../db";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
+async function createActivityFeedEntry(input: {
+  id: string;
+  userId: string;
+  carModel?: string;
+  topSpeed: number;
+  distance: number;
+  duration: number;
+  location?: { country?: string; city?: string };
+}): Promise<void> {
+  if (!isDbConfigured()) return;
+
+  try {
+    const checkUrl = `${getSupabaseRestUrl("activity_feed")}?trip_id=eq.${encodeURIComponent(input.id)}&limit=1`;
+    const checkResp = await fetch(checkUrl, { method: "GET", headers: getSupabaseHeaders() });
+    if (checkResp.ok) {
+      const existing = await checkResp.json();
+      if (existing.length > 0) {
+        console.log("[TRIPS] Activity entry already exists for trip:", input.id);
+        return;
+      }
+    }
+
+    const activityId = `activity_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const row = {
+      id: activityId,
+      user_id: input.userId,
+      type: "trip",
+      trip_id: input.id,
+      car_model: input.carModel,
+      top_speed: input.topSpeed,
+      distance: input.distance,
+      duration: input.duration,
+      country: input.location?.country,
+      city: input.location?.city,
+      created_at: Date.now(),
+    };
+
+    const resp = await fetch(getSupabaseRestUrl("activity_feed"), {
+      method: "POST",
+      headers: getSupabaseHeaders(),
+      body: JSON.stringify(row),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.text();
+      console.error("[TRIPS] Activity feed insert failed:", err);
+      return;
+    }
+
+    console.log("[TRIPS] Activity feed entry created for trip:", input.id);
+  } catch (error) {
+    console.error("[TRIPS] Activity feed entry error:", error);
+  }
+}
+
 async function sendLeaderboardBeatNotifications(input: {
   userId: string;
   userName?: string;
@@ -448,6 +503,8 @@ export const tripsRouter = createTRPCRouter({
           topSpeed: input.topSpeed,
           carModel: input.carModel,
         }).catch(err => console.error("[TRIPS] Leaderboard notification error:", err));
+
+        createActivityFeedEntry(input).catch((err: unknown) => console.error("[TRIPS] Activity feed entry error:", err));
 
         return { success: true };
       } catch (error) {
