@@ -443,7 +443,7 @@ export default function LeaderboardScreen() {
   }, [userCoords]);
 
   const handlePingUser = useCallback((targetUserId: string, targetUserName: string, targetUserCar?: string) => {
-    if (!user || targetUserId === user.id) return;
+    if (!user || targetUserId === user.id || targetUserName === user.displayName) return;
     
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setPingingUserId(targetUserId);
@@ -990,8 +990,8 @@ export default function LeaderboardScreen() {
     },
   });
 
-  const handleFollowToggle = useCallback((targetUserId: string) => {
-    if (!user?.id || followLoadingUserId || targetUserId === user.id) return;
+  const handleFollowToggle = useCallback((targetUserId: string, targetUserName?: string) => {
+    if (!user?.id || followLoadingUserId || targetUserId === user.id || (targetUserName && targetUserName === user.displayName)) return;
     setFollowLoadingUserId(targetUserId);
     const isCurrentlyFollowing = followingUsers[targetUserId] === true;
     if (isCurrentlyFollowing) {
@@ -1475,11 +1475,11 @@ export default function LeaderboardScreen() {
                     <TouchableOpacity 
                       style={styles.avatarContainer}
                       onPress={() => {
-                        if (trip.userId && trip.userId !== user?.id) {
+                        if (trip.userId && trip.userId !== user?.id && trip.userName !== user?.displayName) {
                           router.push({ pathname: '/user-profile', params: { userId: trip.userId } } as any);
                         }
                       }}
-                      disabled={!trip.userId || trip.userId === user?.id}
+                      disabled={!trip.userId || trip.userId === user?.id || trip.userName === user?.displayName}
                     >
                       {trip.userProfilePicture ? (
                         <Image source={{ uri: trip.userProfilePicture }} style={styles.avatar} />
@@ -1497,15 +1497,15 @@ export default function LeaderboardScreen() {
                     <View style={styles.itemHeader}>
                       <TouchableOpacity
                         onPress={() => {
-                          if (trip.userId && trip.userId !== user?.id) {
+                          if (trip.userId && trip.userId !== user?.id && trip.userName !== user?.displayName) {
                             router.push({ pathname: '/user-profile', params: { userId: trip.userId } } as any);
                           }
                         }}
-                        disabled={!trip.userId || trip.userId === user?.id}
+                        disabled={!trip.userId || trip.userId === user?.id || trip.userName === user?.displayName}
                       >
-                        <Text style={[styles.userName, trip.userId && trip.userId !== user?.id && styles.userNameClickable]}>
+                        <Text style={[styles.userName, trip.userId && trip.userId !== user?.id && trip.userName !== user?.displayName && styles.userNameClickable]}>
                           {trip.userName || 'Driver'}
-                          {trip.userId === user?.id && ' (You)'}
+                          {(trip.userId === user?.id || trip.userName === user?.displayName) && ' (You)'}
                         </Text>
                       </TouchableOpacity>
                       <Text style={styles.itemDate}>{formatDate(trip.startTime)}</Text>
@@ -1545,7 +1545,7 @@ export default function LeaderboardScreen() {
                   </View>
 
                   <View style={styles.entryRightCol}>
-                    {trip.userId && trip.userId !== user?.id && (
+                    {trip.userId && trip.userId !== user?.id && trip.userName !== user?.displayName && (
                       <TouchableOpacity
                         style={[
                           styles.followButton,
@@ -1553,7 +1553,7 @@ export default function LeaderboardScreen() {
                         ]}
                         onPress={(e) => {
                           e.stopPropagation();
-                          handleFollowToggle(trip.userId!);
+                          handleFollowToggle(trip.userId!, trip.userName);
                         }}
                         activeOpacity={0.7}
                         disabled={followLoadingUserId === trip.userId}
