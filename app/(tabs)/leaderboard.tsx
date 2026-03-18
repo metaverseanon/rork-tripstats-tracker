@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef, ReactNode, memo } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, TextInput, Image, Platform, Alert, ActivityIndicator, Linking, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Trophy, Zap, Navigation, Gauge, ChevronDown, X, MapPin, Car, Filter, Activity, Route, Search, Clock, Calendar, CornerDownRight, ChevronRight, Timer, Users, Send, Bell, Check, XCircle, Share2, Navigation2, MessageCircle, AlertCircle } from 'lucide-react-native';
+import { Trophy, Zap, Navigation, Gauge, ChevronDown, X, MapPin, Car, Filter, Activity, Route, Search, Clock, Calendar, CornerDownRight, ChevronRight, Timer, Users, Send, Bell, Check, XCircle, Share2, Navigation2, MessageCircle, AlertCircle, UserPlus, UserCheck } from 'lucide-react-native';
 import * as Location from 'expo-location';
 import type { DriveMeetup } from '@/types/meetup';
 import * as Haptics from 'expo-haptics';
@@ -133,6 +133,8 @@ export default function LeaderboardScreen() {
   const [nearbyModalReady, setNearbyModalReady] = useState(false);
   const [meetupsModalReady, setMeetupsModalReady] = useState(false);
   const pendingNavRef = useRef<{ latitude: number; longitude: number; name: string } | null>(null);
+  const [followingUsers, setFollowingUsers] = useState<Record<string, boolean>>({});
+  const [followLoadingUserId, setFollowLoadingUserId] = useState<string | null>(null);
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -942,6 +944,63 @@ export default function LeaderboardScreen() {
     return sorted.slice(0, 10);
   }, [filteredLocalTrips, leaderboardTripsQuery.data, activeCategory]);
 
+  const leaderboardUserIds = useMemo(() => {
+    const ids = leaderboardData
+      .map(t => t.userId)
+      .filter((id): id is string => !!id && id !== user?.id);
+    return [...new Set(ids)];
+  }, [leaderboardData, user?.id]);
+
+  const batchFollowQuery = trpc.social.batchIsFollowing.useQuery(
+    { followerId: user?.id || '', followingIds: leaderboardUserIds },
+    { enabled: !!user?.id && leaderboardUserIds.length > 0 }
+  );
+
+  useEffect(() => {
+    if (batchFollowQuery.data?.followingMap) {
+      setFollowingUsers(prev => ({ ...prev, ...batchFollowQuery.data.followingMap }));
+    }
+  }, [batchFollowQuery.data]);
+
+  const followMutation = trpc.social.follow.useMutation({
+    onSuccess: (data, variables) => {
+      if (data.success) {
+        setFollowingUsers(prev => ({ ...prev, [variables.followingId]: true }));
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      setFollowLoadingUserId(null);
+    },
+    onError: () => {
+      setFollowLoadingUserId(null);
+      Alert.alert('Error', 'Failed to follow user.');
+    },
+  });
+
+  const unfollowMutation = trpc.social.unfollow.useMutation({
+    onSuccess: (data, variables) => {
+      if (data.success) {
+        setFollowingUsers(prev => ({ ...prev, [variables.followingId]: false }));
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      setFollowLoadingUserId(null);
+    },
+    onError: () => {
+      setFollowLoadingUserId(null);
+      Alert.alert('Error', 'Failed to unfollow user.');
+    },
+  });
+
+  const handleFollowToggle = useCallback((targetUserId: string) => {
+    if (!user?.id || followLoadingUserId) return;
+    setFollowLoadingUserId(targetUserId);
+    const isCurrentlyFollowing = followingUsers[targetUserId] === true;
+    if (isCurrentlyFollowing) {
+      unfollowMutation.mutate({ followerId: user.id, followingId: targetUserId });
+    } else {
+      followMutation.mutate({ followerId: user.id, followingId: targetUserId });
+    }
+  }, [user?.id, followingUsers, followLoadingUserId, followMutation, unfollowMutation]);
+
   const getMedalColor = (rank: number) => {
     switch (rank) {
       case 1:
@@ -1485,7 +1544,30 @@ export default function LeaderboardScreen() {
                     )}
                   </View>
 
-                  <View style={styles.chevronContainer}>
+                  <View style={styles.entryRightCol}>
+                    {trip.userId && trip.userId !== user?.id && (
+                      <TouchableOpacity
+                        style={[
+                          styles.followButton,
+                          followingUsers[trip.userId] && styles.followButtonActive,
+                        ]}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleFollowToggle(trip.userId!);
+                        }}
+                        activeOpacity={0.7}
+                        disabled={followLoadingUserId === trip.userId}
+                        testID={`follow-btn-${trip.userId}`}
+                      >
+                        {followLoadingUserId === trip.userId ? (
+                          <ActivityIndicator size="small" color={followingUsers[trip.userId] ? colors.accent : '#fff'} />
+                        ) : followingUsers[trip.userId] ? (
+                          <UserCheck size={14} color={colors.accent} />
+                        ) : (
+                          <UserPlus size={14} color="#fff" />
+                        )}
+                      </TouchableOpacity>
+                    )}
                     <ChevronRight size={18} color={colors.textLight} />
                   </View>
                 </TouchableOpacity>
@@ -2705,6 +2787,25 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingLeft: 4,
+  },
+  entryRightCol: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingLeft: 4,
+  },
+  followButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  followButtonActive: {
+    backgroundColor: colors.accent + '18',
+    borderWidth: 1.5,
+    borderColor: colors.accent,
   },
   rankAndAvatarContainer: {
     alignItems: 'center',

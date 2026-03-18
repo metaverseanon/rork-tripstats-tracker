@@ -350,6 +350,35 @@ export const socialRouter = createTRPCRouter({
       }
     }),
 
+  batchIsFollowing: publicProcedure
+    .input(z.object({
+      followerId: z.string(),
+      followingIds: z.array(z.string()),
+    }))
+    .query(async ({ input }) => {
+      if (!isDbConfigured()) return { followingMap: {} as Record<string, boolean> };
+      if (input.followingIds.length === 0) return { followingMap: {} as Record<string, boolean> };
+
+      try {
+        const ids = input.followingIds.filter(id => id !== input.followerId);
+        if (ids.length === 0) return { followingMap: {} as Record<string, boolean> };
+
+        const idFilter = ids.map(id => `"${id}"`).join(",");
+        const url = `${getSupabaseRestUrl("follows")}?follower_id=eq.${encodeURIComponent(input.followerId)}&following_id=in.(${idFilter})&select=following_id`;
+        const resp = await fetch(url, { method: "GET", headers: getSupabaseHeaders() });
+        if (!resp.ok) return { followingMap: {} as Record<string, boolean> };
+
+        const rows: { following_id: string }[] = await resp.json();
+        const followingMap: Record<string, boolean> = {};
+        for (const id of ids) {
+          followingMap[id] = rows.some(r => r.following_id === id);
+        }
+        return { followingMap };
+      } catch {
+        return { followingMap: {} as Record<string, boolean> };
+      }
+    }),
+
   searchUsers: publicProcedure
     .input(z.object({
       query: z.string().min(1),
