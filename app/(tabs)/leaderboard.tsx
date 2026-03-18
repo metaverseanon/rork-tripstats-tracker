@@ -1560,11 +1560,11 @@ export default function LeaderboardScreen() {
                         testID={`follow-btn-${trip.userId}`}
                       >
                         {followLoadingUserId === trip.userId ? (
-                          <ActivityIndicator size="small" color={followingUsers[trip.userId] ? colors.accent : '#fff'} />
+                          <ActivityIndicator size="small" color={colors.accent} />
                         ) : followingUsers[trip.userId] ? (
-                          <UserCheck size={14} color={colors.accent} />
+                          <UserCheck size={16} color={colors.accent} />
                         ) : (
-                          <UserPlus size={14} color="#fff" />
+                          <UserPlus size={16} color={colors.textLight} />
                         )}
                       </TouchableOpacity>
                     )}
@@ -2795,17 +2795,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingLeft: 4,
   },
   followButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.accent,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
   followButtonActive: {
-    backgroundColor: colors.accent + '18',
-    borderWidth: 1.5,
-    borderColor: colors.accent,
+    backgroundColor: 'transparent',
   },
   rankAndAvatarContainer: {
     alignItems: 'center',
