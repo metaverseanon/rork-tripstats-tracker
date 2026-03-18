@@ -203,6 +203,20 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
             },
           ]
         );
+      } else if (data?.type === 'leaderboard_beat') {
+        Alert.alert(
+          '🏁 You\'ve been overtaken!',
+          notification.request.content.body || 'Someone just beat your top speed on the leaderboard!',
+          [
+            { text: 'Dismiss', style: 'cancel' },
+            {
+              text: 'View Leaderboard',
+              onPress: () => {
+                router.navigate('/(tabs)/leaderboard' as any);
+              },
+            },
+          ]
+        );
       }
     });
 
@@ -210,7 +224,17 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
       console.log('[PUSH] Notification tapped:', response.notification.request.content.title);
       const data = response.notification.request.content.data as Record<string, unknown> | undefined;
       
-      if (data?.type === 'drive_ping' || data?.type === 'ping_accepted' || data?.type === 'ping_declined' || data?.type === 'location_shared' || data?.type === 'meetup_cancelled') {
+      if (data?.type === 'leaderboard_beat') {
+        console.log('[PUSH] Leaderboard beat notification tapped');
+        const tryNav = (attempt: number) => {
+          try {
+            router.navigate('/(tabs)/leaderboard' as any);
+          } catch (e) {
+            if (attempt < 5) setTimeout(() => tryNav(attempt + 1), 500);
+          }
+        };
+        setTimeout(() => tryNav(1), 300);
+      } else if (data?.type === 'drive_ping' || data?.type === 'ping_accepted' || data?.type === 'ping_declined' || data?.type === 'location_shared' || data?.type === 'meetup_cancelled') {
         console.log('[PUSH] Drive-related notification tapped, type:', data.type, 'meetupId:', data.meetupId);
         const action: NotificationAction = {
           type: 'open_meetups' as const,

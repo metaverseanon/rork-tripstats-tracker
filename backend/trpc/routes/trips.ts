@@ -2,6 +2,112 @@ import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../create-context";
 import { isDbConfigured, getSupabaseHeaders, getSupabaseRestUrl } from "../db";
 
+const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+
+async function sendLeaderboardBeatNotifications(input: {
+  userId: string;
+  userName?: string;
+  topSpeed: number;
+  carModel?: string;
+}): Promise<void> {
+  if (!isDbConfigured() || input.topSpeed <= 0) return;
+
+  try {
+    console.log("[LEADERBOARD_NOTIFY] Checking if user beat anyone. topSpeed:", input.topSpeed);
+
+    const tripsUrl = `${getSupabaseRestUrl("trips")}?select=user_id,top_speed&top_speed=gt.0&order=top_speed.desc&limit=500`;
+    const tripsResp = await fetch(tripsUrl, { method: "GET", headers: getSupabaseHeaders() });
+    if (!tripsResp.ok) {
+      console.error("[LEADERBOARD_NOTIFY] Failed to fetch trips for comparison");
+      return;
+    }
+
+    const allTrips: { user_id: string; top_speed: number }[] = await tripsResp.json();
+
+    const userBestSpeeds = new Map<string, number>();
+    for (const t of allTrips) {
+      if (t.user_id === input.userId) continue;
+      const existing = userBestSpeeds.get(t.user_id);
+      if (!existing || t.top_speed > existing) {
+        userBestSpeeds.set(t.user_id, t.top_speed);
+      }
+    }
+
+    const beatenUserIds: string[] = [];
+    for (const [uid, bestSpeed] of userBestSpeeds) {
+      if (input.topSpeed > bestSpeed) {
+        beatenUserIds.push(uid);
+      }
+    }
+
+    if (beatenUserIds.length === 0) {
+      console.log("[LEADERBOARD_NOTIFY] No users beaten");
+      return;
+    }
+
+    console.log("[LEADERBOARD_NOTIFY] Beaten user IDs:", beatenUserIds.length);
+
+    const usersUrl = `${getSupabaseRestUrl("users")}?select=id,display_name,push_token`;
+    const usersResp = await fetch(usersUrl, { method: "GET", headers: getSupabaseHeaders() });
+    if (!usersResp.ok) {
+      console.error("[LEADERBOARD_NOTIFY] Failed to fetch users");
+      return;
+    }
+
+    const allUsers: { id: string; display_name: string; push_token?: string }[] = await usersResp.json();
+    const usersToNotify = allUsers.filter(
+      u => beatenUserIds.includes(u.id) && u.push_token
+    );
+
+    if (usersToNotify.length === 0) {
+      console.log("[LEADERBOARD_NOTIFY] No beaten users have push tokens");
+      return;
+    }
+
+    const driverName = input.userName || "Someone";
+    const carInfo = input.carModel ? ` in a ${input.carModel}` : "";
+    const speedKmh = Math.round(input.topSpeed);
+
+    const messages = usersToNotify.map(u => ({
+      to: u.push_token!,
+      title: "🏁 You've been overtaken!",
+      body: `${driverName} just beat you${carInfo} hitting ${speedKmh} km/h!`,
+      sound: "default" as const,
+      data: { type: "leaderboard_beat", fromUserId: input.userId, topSpeed: input.topSpeed },
+      channelId: "default",
+      priority: "high" as const,
+    }));
+
+    console.log("[LEADERBOARD_NOTIFY] Sending notifications to", messages.length, "users");
+
+    const chunkSize = 100;
+    for (let i = 0; i < messages.length; i += chunkSize) {
+      const chunk = messages.slice(i, i + chunkSize);
+      try {
+        const resp = await fetch(EXPO_PUSH_URL, {
+          method: "POST",
+          headers: {
+            "Accept": "application/json",
+            "Accept-Encoding": "gzip, deflate",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(chunk),
+        });
+        if (resp.ok) {
+          const result = await resp.json();
+          console.log("[LEADERBOARD_NOTIFY] Batch sent, tickets:", result.data?.length);
+        } else {
+          console.error("[LEADERBOARD_NOTIFY] Batch send failed:", resp.status);
+        }
+      } catch (err) {
+        console.error("[LEADERBOARD_NOTIFY] Batch send error:", err);
+      }
+    }
+  } catch (error) {
+    console.error("[LEADERBOARD_NOTIFY] Error:", error);
+  }
+}
+
 const TripLocationSchema = z.object({
   country: z.string().optional(),
   city: z.string().optional(),
@@ -335,6 +441,13 @@ export const tripsRouter = createTRPCRouter({
           const insertResult = await insertResponse.json();
           console.log("[TRIPS] Trip inserted successfully:", input.id, "DB response:", JSON.stringify(insertResult).substring(0, 200));
         }
+
+        sendLeaderboardBeatNotifications({
+          userId: input.userId,
+          userName: input.userName,
+          topSpeed: input.topSpeed,
+          carModel: input.carModel,
+        }).catch(err => console.error("[TRIPS] Leaderboard notification error:", err));
 
         return { success: true };
       } catch (error) {
