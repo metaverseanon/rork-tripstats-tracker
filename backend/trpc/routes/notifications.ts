@@ -842,6 +842,78 @@ export const notificationsRouter = createTRPCRouter({
       return activeMeetups;
     }),
 
+  sendDriveReminderNotifications: publicProcedure
+    .input(z.object({
+      userId: z.string().optional(),
+    }).optional())
+    .mutation(async ({ input }) => {
+      console.log("[PUSH] Starting Friday drive reminder notifications...");
+
+      const users = await getUsersWithPushTokens();
+      if (users.length === 0) {
+        return { success: true, message: "No users with push tokens", sent: 0, failed: 0, skipped: 0 };
+      }
+
+      const now = new Date();
+      const dayOfWeek = now.getDay();
+      const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - daysToMonday);
+      weekStart.setHours(0, 0, 0, 0);
+      const weekStartTs = weekStart.getTime();
+
+      console.log("[PUSH] Week start:", weekStart.toISOString(), "ts:", weekStartTs);
+
+      const trips = await getAllTrips();
+
+      const usersToNotify = input?.userId
+        ? users.filter(u => u.id === input.userId)
+        : users;
+
+      const messages: ExpoPushMessage[] = [];
+      let skipped = 0;
+
+      for (const user of usersToNotify) {
+        const userTripsThisWeek = trips.filter(
+          t => t.userId === user.id && t.startTime >= weekStartTs
+        );
+
+        if (userTripsThisWeek.length > 0) {
+          console.log(`[PUSH] User ${user.displayName} has ${userTripsThisWeek.length} trips this week, skipping reminder`);
+          skipped++;
+          continue;
+        }
+
+        const carInfo = user.carBrand
+          ? user.carModel
+            ? `${user.carBrand} ${user.carModel}`
+            : user.carBrand
+          : null;
+
+        const carText = carInfo ? ` Your ${carInfo} misses you!` : "";
+
+        messages.push({
+          to: user.pushToken,
+          title: "🛣️ Time to hit the road!",
+          body: `Hey ${user.displayName}, you haven't logged a drive this week.${carText} Get out there before the weekend!`,
+          data: { type: "drive_reminder" },
+          channelId: "reminders",
+          priority: "default",
+        });
+      }
+
+      if (messages.length === 0) {
+        console.log("[PUSH] No users need a drive reminder");
+        return { success: true, message: "All users already drove this week", sent: 0, failed: 0, skipped };
+      }
+
+      console.log(`[PUSH] Sending drive reminders to ${messages.length} users (${skipped} skipped)`);
+      const { sent, failed } = await sendBatchNotifications(messages);
+
+      console.log(`[PUSH] Drive reminders: ${sent} sent, ${failed} failed, ${skipped} skipped`);
+      return { success: true, totalUsers: usersToNotify.length, sent, failed, skipped };
+    }),
+
   cancelMeetup: publicProcedure
     .input(z.object({
       meetupId: z.string(),

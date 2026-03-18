@@ -96,6 +96,40 @@ app.post("/cron/weekly-recap-notifications", weeklyRecapHandler);
 app.get("/cron/weekly_recap_notifications", weeklyRecapHandler);
 app.post("/cron/weekly_recap_notifications", weeklyRecapHandler);
 
+const driveReminderHandler = async (c: any) => {
+  const authHeader = c.req.header("Authorization");
+  const cronSecret = process.env.CRON_SECRET;
+  
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    console.log("[CRON] Unauthorized request to drive-reminder");
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  
+  console.log("[CRON] Friday drive reminder triggered at", new Date().toISOString());
+  
+  try {
+    const caller = appRouter.createCaller({ req: c.req.raw, db: getDbConfig() });
+    const result = await caller.notifications.sendDriveReminderNotifications({});
+    
+    console.log("[CRON] Drive reminder completed:", result);
+    return c.json({ 
+      ...result,
+      triggeredAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("[CRON] Drive reminder failed:", error);
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : "Unknown error",
+    }, 500);
+  }
+};
+
+app.get("/cron/drive-reminder", driveReminderHandler);
+app.post("/cron/drive-reminder", driveReminderHandler);
+app.get("/cron/drive_reminder", driveReminderHandler);
+app.post("/cron/drive_reminder", driveReminderHandler);
+
 app.all("/cron/*", (c) => {
   console.log("[CRON] Unmatched cron route:", c.req.method, c.req.url, c.req.path);
   return c.json({ error: "Unknown cron route", method: c.req.method, path: c.req.path, url: c.req.url }, 404);
