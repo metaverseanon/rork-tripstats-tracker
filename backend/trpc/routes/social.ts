@@ -2,6 +2,63 @@ import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../create-context";
 import { isDbConfigured, getSupabaseHeaders, getSupabaseRestUrl } from "../db";
 
+const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+
+async function sendFollowNotification(followerId: string, followingId: string): Promise<void> {
+  if (!isDbConfigured()) return;
+
+  try {
+    const followerUrl = `${getSupabaseRestUrl("users")}?id=eq.${encodeURIComponent(followerId)}&select=display_name,car_brand,car_model&limit=1`;
+    const followingUrl = `${getSupabaseRestUrl("users")}?id=eq.${encodeURIComponent(followingId)}&select=push_token&limit=1`;
+
+    const [followerResp, followingResp] = await Promise.all([
+      fetch(followerUrl, { method: "GET", headers: getSupabaseHeaders() }),
+      fetch(followingUrl, { method: "GET", headers: getSupabaseHeaders() }),
+    ]);
+
+    if (!followerResp.ok || !followingResp.ok) return;
+
+    const followerData = await followerResp.json();
+    const followingData = await followingResp.json();
+
+    const follower = followerData[0];
+    const following = followingData[0];
+
+    if (!follower || !following?.push_token) return;
+
+    const followerName = follower.display_name || "Someone";
+    const carInfo = follower.car_brand
+      ? follower.car_model
+        ? `${follower.car_brand} ${follower.car_model}`
+        : follower.car_brand
+      : null;
+    const carText = carInfo ? ` (${carInfo})` : "";
+
+    console.log("[SOCIAL] Sending follow notification to:", followingId);
+
+    await fetch(EXPO_PUSH_URL, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to: following.push_token,
+        title: "👋 New Follower!",
+        body: `${followerName}${carText} just started following you!`,
+        sound: "default",
+        data: { type: "new_follower", fromUserId: followerId },
+        channelId: "default",
+        priority: "high",
+      }),
+    });
+
+    console.log("[SOCIAL] Follow notification sent");
+  } catch (error) {
+    console.error("[SOCIAL] Follow notification error:", error);
+  }
+}
+
 interface FollowRow {
   id: string;
   follower_id: string;
@@ -66,6 +123,11 @@ export const socialRouter = createTRPCRouter({
         }
 
         console.log("[SOCIAL] Follow created:", id);
+
+        sendFollowNotification(input.followerId, input.followingId).catch(err =>
+          console.error("[SOCIAL] Follow notification failed:", err)
+        );
+
         return { success: true };
       } catch (error) {
         console.error("[SOCIAL] Follow error:", error);
