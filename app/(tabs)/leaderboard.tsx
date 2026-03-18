@@ -664,7 +664,7 @@ export default function LeaderboardScreen() {
     );
   }, [user, cancelMeetupMutation]);
 
-  const nearbyUsers = useMemo(() => (nearbyUsersQuery.data || []).filter(d => d.id !== user?.id), [nearbyUsersQuery.data, user?.id]);
+  const nearbyUsers = useMemo(() => (nearbyUsersQuery.data || []).filter(d => String(d.id) !== String(user?.id) && d.displayName !== user?.displayName), [nearbyUsersQuery.data, user?.id, user?.displayName]);
   const meetups = useMemo(() => meetupsQuery.data || [], [meetupsQuery.data]);
 
   const pendingIncomingPings = useMemo(() => {
