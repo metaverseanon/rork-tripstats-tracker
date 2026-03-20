@@ -21,8 +21,28 @@ import {
   Orbitron_900Black,
 } from "@expo-google-fonts/orbitron";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import appsFlyer from 'react-native-appsflyer';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+if (Platform.OS !== 'web') {
+  appsFlyer.initSdk(
+    {
+      devKey: 'FPDaeC6wQQ2zNXbRLgberm',
+      isDebug: false,
+      appId: '6758342404',
+      onInstallConversionDataListener: true,
+      onDeepLinkListener: true,
+      timeToWaitForATTUserAuthorization: 10,
+    },
+    (result: Record<string, unknown>) => {
+      console.log('[APPSFLYER] Init success:', result);
+    },
+    (error: Record<string, unknown>) => {
+      console.error('[APPSFLYER] Init error:', error);
+    }
+  );
+}
 
 interface ErrorBoundaryProps {
   children: ReactNode;

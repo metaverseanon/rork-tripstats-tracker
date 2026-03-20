@@ -93,6 +93,14 @@
           "icon": "./assets/images/icon.png",
           "color": "#000000"
         }
+      ],
+      [
+        "react-native-appsflyer",
+        {
+          "devKey": "FPDaeC6wQQ2zNXbRLgberm",
+          "appleAppId": "6758342404",
+          "isDebug": false
+        }
       ]
     ],
     "experiments": {
