@@ -53,6 +53,21 @@ export default function ProfileScreen() {
   const [selectedBrand, setSelectedBrand] = useState(user?.carBrand || '');
   const [selectedModel, setSelectedModel] = useState(user?.carModel || '');
   const [carPicture, setCarPicture] = useState(user?.carPicture || '');
+  const [profilePicLoadFailed, setProfilePicLoadFailed] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setEmail(prev => prev || user.email || '');
+      setDisplayName(prev => prev || user.displayName || '');
+      setProfilePicture(prev => prev || user.profilePicture || '');
+      setSelectedCountry(prev => prev || user.country || '');
+      setSelectedCity(prev => prev || user.city || '');
+      setSelectedBrand(prev => prev || user.carBrand || '');
+      setSelectedModel(prev => prev || user.carModel || '');
+      setCarPicture(prev => prev || user.carPicture || '');
+      setProfilePicLoadFailed(false);
+    }
+  }, [user]);
   const [additionalCars, setAdditionalCars] = useState<AdditionalCar[]>([]);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
@@ -734,8 +749,15 @@ export default function ProfileScreen() {
           <View style={styles.avatarSection}>
             {(isAuthenticated || authMode === 'signup') && (
               <TouchableOpacity style={styles.avatarContainer} onPress={pickProfilePicture}>
-                {profilePicture ? (
-                  <Image source={{ uri: profilePicture }} style={styles.avatarImage} />
+                {profilePicture && !profilePicLoadFailed ? (
+                  <Image 
+                    source={{ uri: profilePicture }} 
+                    style={styles.avatarImage}
+                    onError={() => {
+                      console.log('[PROFILE] Profile picture failed to load:', profilePicture);
+                      setProfilePicLoadFailed(true);
+                    }}
+                  />
                 ) : (
                   <View style={styles.avatar}>
                     <User color={colors.textInverted} size={48} />

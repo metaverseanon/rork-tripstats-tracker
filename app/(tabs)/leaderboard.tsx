@@ -1454,6 +1454,8 @@ export default function LeaderboardScreen() {
             {leaderboardData.map((trip, index) => {
               const carInfo = getCarInfo(trip);
               const secondaryStats = getSecondaryStats(trip);
+              const isCurrentUser = trip.userId === user?.id || trip.userName === user?.displayName;
+              const displayProfilePic = isCurrentUser ? (user?.profilePicture || trip.userProfilePicture) : trip.userProfilePicture;
               
               return (
                 <TouchableOpacity 
@@ -1475,14 +1477,14 @@ export default function LeaderboardScreen() {
                     <TouchableOpacity 
                       style={styles.avatarContainer}
                       onPress={() => {
-                        if (trip.userId && trip.userId !== user?.id && trip.userName !== user?.displayName) {
+                        if (trip.userId && !isCurrentUser) {
                           router.push({ pathname: '/user-profile', params: { userId: trip.userId } } as any);
                         }
                       }}
-                      disabled={!trip.userId || trip.userId === user?.id || trip.userName === user?.displayName}
+                      disabled={!trip.userId || isCurrentUser}
                     >
-                      {trip.userProfilePicture ? (
-                        <Image source={{ uri: trip.userProfilePicture }} style={styles.avatar} />
+                      {displayProfilePic ? (
+                        <Image source={{ uri: displayProfilePic }} style={styles.avatar} />
                       ) : (
                         <View style={styles.avatarPlaceholder}>
                           <Text style={styles.avatarInitial}>
