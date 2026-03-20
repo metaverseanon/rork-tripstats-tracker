@@ -487,7 +487,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
 
     const duration = (Date.now() - tripData.startTime) / 1000;
     const topSpeed = Math.max(tripData.topSpeed, speed);
-    const avgSpeed = distance > 0 ? (distance / duration) * 3600 : 0;
+    const rawAvgSpeed = distance > 0 ? (distance / duration) * 3600 : 0;
+    const avgSpeed = topSpeed > 0 ? Math.min(rawAvgSpeed, topSpeed) : rawAvgSpeed;
 
     const updated: TripStats = {
       ...tripData,
@@ -560,7 +561,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
 
     const duration = (Date.now() - tripData.startTime) / 1000;
     const topSpeed = Math.max(tripData.topSpeed, speed);
-    const avgSpeed = distance > 0 ? (distance / duration) * 3600 : 0;
+    const rawAvgSpeed = distance > 0 ? (distance / duration) * 3600 : 0;
+    const avgSpeed = topSpeed > 0 ? Math.min(rawAvgSpeed, topSpeed) : rawAvgSpeed;
 
     const allLocs = [...locations, newLocation];
     const updatedLocations = allLocs.length > MAX_LOCATIONS_MEMORY ? downsampleLocations(allLocs, MAX_LOCATIONS_MEMORY) : allLocs;
@@ -944,7 +946,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
             distance,
             duration,
             topSpeed,
-            avgSpeed: distance > 0 ? (distance / duration) * 3600 : 0,
+            avgSpeed: distance > 0 ? Math.min((distance / duration) * 3600, topSpeed) : 0,
             corners,
             acceleration: maxAcceleration.current,
             maxGForce: maxGForce.current,
