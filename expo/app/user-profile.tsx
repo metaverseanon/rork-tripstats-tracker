@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState } from 'react';
+import React, { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,13 @@ import {
   Platform,
   UIManager,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { MapPin, Car, Zap, Navigation, Gauge, Activity, CornerDownRight, Timer, Route, Trophy, Calendar, ChevronDown, UserPlus, UserMinus } from 'lucide-react-native';
+import { MapPin, Car, Zap, Navigation, Gauge, Activity, CornerDownRight, Timer, Route, Trophy, Calendar, ChevronDown, UserPlus, UserMinus, Flame, Flag, Users, Star, Rocket, Moon } from 'lucide-react-native';
+import { useAchievements } from '@/providers/AchievementProvider';
+import { ACHIEVEMENTS, ACHIEVEMENT_CATEGORIES } from '@/constants/achievements';
+import { AchievementCategory, UserAchievement } from '@/types/achievement';
 import { useSettings } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
 import { useTrips } from '@/providers/TripProvider';
@@ -54,16 +58,403 @@ interface ProfileData {
   createdAt: number;
 }
 
+const CATEGORY_COLORS: Record<AchievementCategory, string> = {
+  speed: '#FF3B30',
+  distance: '#007AFF',
+  trips: '#FF9500',
+  streak: '#FF6B00',
+  social: '#AF52DE',
+  performance: '#30D158',
+};
+
+const CATEGORY_ICON_MAP: Record<string, React.ComponentType<{ size: number; color: string }>> = {
+  'gauge': Gauge,
+  'route': Route,
+  'flag': Flag,
+  'flame': Flame,
+  'users': Users,
+  'zap': Zap,
+};
+
+const ACHIEVEMENT_ICON_MAP: Record<string, React.ComponentType<{ size: number; color: string }>> = {
+  'gauge': Gauge,
+  'map-pin': MapPin,
+  'route': Route,
+  'map': Navigation,
+  'globe': Navigation,
+  'flag': Flag,
+  'repeat': Route,
+  'award': Trophy,
+  'infinity': Zap,
+  'flame': Flame,
+  'users': Users,
+  'star': Star,
+  'zap': Zap,
+  'corner-down-right': CornerDownRight,
+  'rocket': Rocket,
+  'moon': Moon,
+};
+
+interface AchievementShowcaseProps {
+  isOwnProfile: boolean;
+  ownUnlockedAchievements: UserAchievement[];
+  ownUnlockedCount: number;
+  ownTotalCount: number;
+  ownStreak: { currentStreak: number; longestStreak: number };
+  remoteAchievements?: { achievementId: string; unlockedAt: number }[];
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+}
+
+function AchievementShowcase({
+  isOwnProfile,
+  ownUnlockedAchievements,
+  ownUnlockedCount,
+  ownTotalCount,
+  ownStreak,
+  remoteAchievements,
+  colors,
+  styles,
+}: AchievementShowcaseProps) {
+  const achievementIds = useMemo(() => {
+    if (isOwnProfile) {
+      return new Set(ownUnlockedAchievements.map(a => a.achievementId));
+    }
+    return new Set((remoteAchievements ?? []).map(a => a.achievementId));
+  }, [isOwnProfile, ownUnlockedAchievements, remoteAchievements]);
+
+  const unlockedCount = isOwnProfile ? ownUnlockedCount : achievementIds.size;
+  const totalAchievements = isOwnProfile ? ownTotalCount : ACHIEVEMENTS.length;
+  const progressPercent = totalAchievements > 0 ? (unlockedCount / totalAchievements) * 100 : 0;
+
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: progressPercent,
+      duration: 800,
+      useNativeDriver: false,
+    }).start();
+  }, [progressPercent, progressAnim]);
+
+  const categoryStats = useMemo(() => {
+    return ACHIEVEMENT_CATEGORIES.map(cat => {
+      const catAchievements = ACHIEVEMENTS.filter(a => a.category === cat.key);
+      const catUnlocked = catAchievements.filter(a => achievementIds.has(a.id)).length;
+      return {
+        ...cat,
+        total: catAchievements.length,
+        unlocked: catUnlocked,
+        color: CATEGORY_COLORS[cat.key as AchievementCategory] ?? colors.accent,
+      };
+    });
+  }, [achievementIds, colors.accent]);
+
+  const recentUnlocks = useMemo(() => {
+    const source = isOwnProfile
+      ? ownUnlockedAchievements.map(a => ({ id: a.achievementId, at: a.unlockedAt }))
+      : (remoteAchievements ?? []).map(a => ({ id: a.achievementId, at: a.unlockedAt }));
+    return source
+      .sort((a, b) => b.at - a.at)
+      .slice(0, 3)
+      .map(item => {
+        const def = ACHIEVEMENTS.find(a => a.id === item.id);
+        return def ? { ...def, unlockedAt: item.at } : null;
+      })
+      .filter(Boolean) as (typeof ACHIEVEMENTS[number] & { unlockedAt: number })[];
+  }, [isOwnProfile, ownUnlockedAchievements, remoteAchievements]);
+
+  if (!isOwnProfile && (!remoteAchievements || remoteAchievements.length === 0)) {
+    return null;
+  }
+
+  return (
+    <>
+      <View style={styles.sectionHeader}>
+        <Trophy size={18} color={colors.text} />
+        <Text style={styles.sectionTitle}>Achievements</Text>
+      </View>
+
+      <View style={achStyles.container}>
+        <View style={[achStyles.summaryCard, { backgroundColor: colors.cardLight, borderColor: colors.border }]}>
+          <View style={achStyles.summaryTop}>
+            <View style={achStyles.trophyCircle}>
+              <Trophy size={22} color="#FFD700" />
+            </View>
+            <View style={achStyles.summaryInfo}>
+              <Text style={[achStyles.summaryCount, { color: colors.text }]}>
+                {unlockedCount}
+                <Text style={[achStyles.summaryTotal, { color: colors.textLight }]}>
+                  /{totalAchievements}
+                </Text>
+              </Text>
+              <Text style={[achStyles.summaryLabel, { color: colors.textLight }]}>Unlocked</Text>
+            </View>
+            {((isOwnProfile && ownStreak.currentStreak > 0) || false) && (
+              <View style={achStyles.streakPill}>
+                <Flame size={14} color="#FF6B00" />
+                <Text style={achStyles.streakPillText}>{ownStreak.currentStreak}d streak</Text>
+              </View>
+            )}
+          </View>
+          <View style={[achStyles.progressTrack, { backgroundColor: colors.background }]}>
+            <Animated.View
+              style={[
+                achStyles.progressFill,
+                {
+                  backgroundColor: colors.accent,
+                  width: progressAnim.interpolate({
+                    inputRange: [0, 100],
+                    outputRange: ['0%', '100%'],
+                  }),
+                },
+              ]}
+            />
+          </View>
+          <Text style={[achStyles.progressLabel, { color: colors.textLight }]}>
+            {Math.round(progressPercent)}% complete
+          </Text>
+        </View>
+
+        <View style={achStyles.categoriesGrid}>
+          {categoryStats.map(cat => {
+            const CatIcon = CATEGORY_ICON_MAP[cat.icon] || Trophy;
+            const catPercent = cat.total > 0 ? (cat.unlocked / cat.total) * 100 : 0;
+            return (
+              <View
+                key={cat.key}
+                style={[
+                  achStyles.categoryChip,
+                  {
+                    backgroundColor: cat.color + '10',
+                    borderColor: cat.unlocked > 0 ? cat.color + '30' : colors.border + '40',
+                  },
+                ]}
+              >
+                <View style={[achStyles.categoryIconWrap, { backgroundColor: cat.color + '18' }]}>
+                  <CatIcon size={14} color={cat.color} />
+                </View>
+                <Text style={[achStyles.categoryName, { color: colors.text }]} numberOfLines={1}>
+                  {cat.label}
+                </Text>
+                <Text style={[achStyles.categoryCount, { color: cat.color }]}>
+                  {cat.unlocked}/{cat.total}
+                </Text>
+                <View style={[achStyles.categoryBar, { backgroundColor: cat.color + '15' }]}>
+                  <View
+                    style={[
+                      achStyles.categoryBarFill,
+                      {
+                        backgroundColor: cat.color,
+                        width: `${catPercent}%` as any,
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
+        {recentUnlocks.length > 0 && (
+          <View style={[achStyles.recentCard, { backgroundColor: colors.cardLight, borderColor: colors.border }]}>
+            <Text style={[achStyles.recentTitle, { color: colors.textLight }]}>RECENT UNLOCKS</Text>
+            {recentUnlocks.map((ach, index) => {
+              const IconComp = ACHIEVEMENT_ICON_MAP[ach.icon] || Trophy;
+              const catColor = CATEGORY_COLORS[ach.category] ?? colors.accent;
+              const dateStr = new Date(ach.unlockedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+              return (
+                <View
+                  key={ach.id}
+                  style={[
+                    achStyles.recentItem,
+                    index < recentUnlocks.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border + '40' },
+                  ]}
+                >
+                  <View style={[achStyles.recentIconWrap, { backgroundColor: catColor + '18' }]}>
+                    <IconComp size={16} color={catColor} />
+                  </View>
+                  <View style={achStyles.recentInfo}>
+                    <Text style={[achStyles.recentAchTitle, { color: colors.text }]}>{ach.title}</Text>
+                    <Text style={[achStyles.recentAchDesc, { color: colors.textLight }]}>{ach.description}</Text>
+                  </View>
+                  <Text style={[achStyles.recentDate, { color: colors.textLight }]}>{dateStr}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </View>
+    </>
+  );
+}
+
+const achStyles = StyleSheet.create({
+  container: {
+    paddingHorizontal: 16,
+    marginBottom: 24,
+  },
+  summaryCard: {
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  summaryTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  trophyCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FFD70018',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  summaryInfo: {
+    flex: 1,
+  },
+  summaryCount: {
+    fontSize: 26,
+    fontFamily: 'Orbitron_700Bold',
+  },
+  summaryTotal: {
+    fontSize: 16,
+    fontFamily: 'Orbitron_400Regular',
+  },
+  summaryLabel: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_400Regular',
+    marginTop: 1,
+  },
+  streakPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF6B0018',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    gap: 4,
+  },
+  streakPillText: {
+    fontSize: 12,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: '#FF6B00',
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: 6,
+    borderRadius: 3,
+  },
+  progressLabel: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_400Regular',
+    marginTop: 6,
+    textAlign: 'right',
+  },
+  categoriesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  categoryChip: {
+    width: '47%' as any,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+  },
+  categoryIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  categoryName: {
+    fontSize: 12,
+    fontFamily: 'Orbitron_600SemiBold',
+    marginBottom: 2,
+  },
+  categoryCount: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_500Medium',
+    marginBottom: 6,
+  },
+  categoryBar: {
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  categoryBarFill: {
+    height: 4,
+    borderRadius: 2,
+  },
+  recentCard: {
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+  },
+  recentTitle: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_600SemiBold',
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
+  recentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 10,
+  },
+  recentIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recentInfo: {
+    flex: 1,
+  },
+  recentAchTitle: {
+    fontSize: 13,
+    fontFamily: 'Orbitron_600SemiBold',
+  },
+  recentAchDesc: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_400Regular',
+    marginTop: 1,
+  },
+  recentDate: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_400Regular',
+  },
+});
+
 export default function UserProfileScreen() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const { user } = useUser();
   const { trips: ownTrips } = useTrips();
   const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, colors } = useSettings();
   const [expandedCarKey, setExpandedCarKey] = useState<string | null>(null);
+  const { unlockedAchievements, unlockedCount, totalCount, streak } = useAchievements();
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const isOwnProfile = !userId || userId === user?.id;
+
+  const remoteAchievementsQuery = trpc.social.getUserAchievements.useQuery(
+    { userId: userId || '' },
+    { enabled: !isOwnProfile && !!userId }
+  );
 
   const isFollowingQuery = trpc.social.isFollowing.useQuery(
     { followerId: user?.id || '', followingId: userId || '' },
@@ -513,6 +904,17 @@ export default function UserProfileScreen() {
             </View>
           </>
         )}
+
+        <AchievementShowcase
+          isOwnProfile={isOwnProfile}
+          ownUnlockedAchievements={unlockedAchievements}
+          ownUnlockedCount={unlockedCount}
+          ownTotalCount={totalCount}
+          ownStreak={streak}
+          remoteAchievements={remoteAchievementsQuery.data}
+          colors={colors}
+          styles={styles}
+        />
 
         {carStats.length === 0 && !isOwnProfile && profileUser.carBrand && (
           <View style={styles.noStatsCard}>
