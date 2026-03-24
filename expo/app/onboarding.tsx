@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { Activity, Crown, Compass, UserCheck, ChevronRight, Flame, Target, Radio } from 'lucide-react-native';
+import { Activity, Crown, Compass, UserCheck, ChevronRight, Flame, Target, Radio, Trophy, Star } from 'lucide-react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ONBOARDING_KEY = 'onboarding_completed';
@@ -38,7 +38,7 @@ const pages: OnboardingPage[] = [
     title: 'Track Your',
     highlight: 'Drives',
     description: 'Real-time speed, distance, acceleration times and route mapping for every drive you take.',
-  gradient: ['#1a0000', '#000000'],
+    gradient: ['#1a0000', '#000000'],
   },
   {
     id: 'compete',
@@ -48,6 +48,15 @@ const pages: OnboardingPage[] = [
     highlight: 'Leaderboard',
     description: 'Compete with drivers worldwide. Top speed, longest distance, best acceleration — claim your rank.',
     gradient: ['#0a0a0a', '#000000'],
+  },
+  {
+    id: 'achievements',
+    icon: <Trophy size={48} color="#FFFFFF" strokeWidth={1.5} />,
+    decorIcon: <Star size={20} color="#CC0000" />,
+    title: 'Unlock',
+    highlight: 'Achievements',
+    description: 'Complete driving challenges across speed, distance, streaks and more. Track your progress and show off your badges.',
+    gradient: ['#0a0a00', '#000000'],
   },
   {
     id: 'ping',

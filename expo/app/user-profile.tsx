@@ -163,8 +163,9 @@ function AchievementShowcase({
       .filter(Boolean) as (typeof ACHIEVEMENTS[number] & { unlockedAt: number })[];
   }, [isOwnProfile, ownUnlockedAchievements, remoteAchievements]);
 
-  if (!isOwnProfile && (!remoteAchievements || remoteAchievements.length === 0)) {
-    return null;
+  const hasNoData = !isOwnProfile && (!remoteAchievements || remoteAchievements.length === 0);
+  if (hasNoData && unlockedCount === 0 && !isOwnProfile) {
+    // Still show the section with 0 progress for other users
   }
 
   return (
