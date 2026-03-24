@@ -549,7 +549,7 @@ export default function AchievementsScreen() {
   useEffect(() => {
     const initial: Record<string, boolean> = {};
     ACHIEVEMENT_CATEGORIES.forEach(cat => {
-      initial[cat.key] = true;
+      initial[cat.key] = false;
     });
     setExpandedCategories(initial);
   }, []);
