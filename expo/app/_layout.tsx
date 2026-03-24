@@ -6,6 +6,7 @@ import { StyleSheet, Platform, View, Text, TouchableOpacity } from "react-native
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { TripProvider } from "@/providers/TripProvider";
+import { AchievementProvider } from "@/providers/AchievementProvider";
 import { SettingsProvider } from "@/providers/SettingsProvider";
 import { UserProvider, useUser } from "@/providers/UserProvider";
 import { NotificationProvider, useNotifications } from "@/providers/NotificationProvider";
@@ -307,6 +308,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'none' }} />
       <Stack.Screen name="profile" options={{ presentation: "card" }} />
       <Stack.Screen name="user-profile" options={{ presentation: "card" }} />
+      <Stack.Screen name="achievements" options={{ presentation: "card" }} />
     </Stack>
   );
 }
@@ -365,6 +367,7 @@ export default function RootLayout() {
               <NotificationProvider>
                 <PushTokenSync />
                 <LocationSync />
+                <AchievementProvider>
                 <TripProvider>
                   <SafeAreaProvider>
                     <GestureHandlerRootView style={styles.container}>
@@ -372,6 +375,7 @@ export default function RootLayout() {
                     </GestureHandlerRootView>
                   </SafeAreaProvider>
                 </TripProvider>
+                </AchievementProvider>
               </NotificationProvider>
             </UserProvider>
           </SettingsProvider>

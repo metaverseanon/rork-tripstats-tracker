@@ -2,11 +2,12 @@ import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Linking, Image, S
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { router } from 'expo-router';
-import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle, Bell, Mail, MessageSquare, X, Send, Share2, Check } from 'lucide-react-native';
+import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle, Bell, Mail, MessageSquare, X, Send, Share2, Check, Trophy } from 'lucide-react-native';
 import { useSettings, SpeedUnit, DistanceUnit, ShareCardFields, ShareCardPage } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
 import { useNotifications } from '@/providers/NotificationProvider';
 import { ThemeType } from '@/constants/colors';
+import { useAchievements } from '@/providers/AchievementProvider';
 import { useState, useEffect } from 'react';
 import { trpc } from '@/lib/trpc';
 
@@ -14,6 +15,7 @@ export default function SettingsScreen() {
   const { settings, colors, setSpeedUnit, setDistanceUnit, setTheme, setShareCardField, setShareCardPage } = useSettings();
   const { user, isAuthenticated, getCarDisplayName } = useUser();
   const { notificationsEnabled, pushToken, registerForPushNotifications, disableNotifications } = useNotifications();
+  const { unlockedCount, totalCount } = useAchievements();
 
   const [isTogglingNotifications, setIsTogglingNotifications] = useState(false);
   const [isTogglingWeeklyRecap, setIsTogglingWeeklyRecap] = useState(false);
@@ -127,6 +129,10 @@ export default function SettingsScreen() {
 
   const openProfile = () => {
     router.push('/profile' as any);
+  };
+
+  const openAchievements = () => {
+    router.push('/achievements' as any);
   };
 
   const handleWeeklyRecapToggle = async (value: boolean) => {
@@ -480,6 +486,21 @@ export default function SettingsScreen() {
               </View>
             </>
           )}
+        </View>
+
+        <View style={styles.settingsCard}>
+          <TouchableOpacity style={styles.linkItem} onPress={openAchievements} activeOpacity={0.7}>
+            <View style={styles.linkContent}>
+              <View style={[styles.settingIconContainer, { backgroundColor: '#FFD700' + '18' }]}>
+                <Trophy size={20} color="#FFD700" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.linkText}>Achievements</Text>
+                <Text style={styles.notificationDescription}>{unlockedCount}/{totalCount} unlocked</Text>
+              </View>
+            </View>
+            <ChevronRight size={20} color={colors.textLight} />
+          </TouchableOpacity>
         </View>
 
         <Text style={styles.sectionTitle}>Preferences</Text>

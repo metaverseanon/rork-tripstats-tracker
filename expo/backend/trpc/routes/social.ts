@@ -441,6 +441,88 @@ export const socialRouter = createTRPCRouter({
       }
     }),
 
+  syncAchievements: publicProcedure
+    .input(z.object({
+      userId: z.string(),
+      achievements: z.array(z.object({
+        achievementId: z.string(),
+        unlockedAt: z.number(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      console.log("[SOCIAL] Syncing achievements for user:", input.userId, "count:", input.achievements.length);
+      if (!isDbConfigured()) return { success: false, error: "Database not configured" };
+
+      try {
+        const deleteUrl = `${getSupabaseRestUrl("user_achievements")}?user_id=eq.${encodeURIComponent(input.userId)}`;
+        await fetch(deleteUrl, { method: "DELETE", headers: getSupabaseHeaders() });
+
+        if (input.achievements.length === 0) {
+          return { success: true };
+        }
+
+        const rows = input.achievements.map(a => ({
+          id: `ach_${input.userId}_${a.achievementId}`,
+          user_id: input.userId,
+          achievement_id: a.achievementId,
+          unlocked_at: a.unlockedAt,
+        }));
+
+        const resp = await fetch(getSupabaseRestUrl("user_achievements"), {
+          method: "POST",
+          headers: getSupabaseHeaders(),
+          body: JSON.stringify(rows),
+        });
+
+        if (!resp.ok) {
+          const err = await resp.text();
+          console.error("[SOCIAL] Achievements sync insert failed:", err);
+          return { success: false, error: "Failed to sync achievements" };
+        }
+
+        console.log("[SOCIAL] Achievements synced:", rows.length);
+        return { success: true };
+      } catch (error) {
+        console.error("[SOCIAL] Achievements sync error:", error);
+        return { success: false, error: "Network error" };
+      }
+    }),
+
+  getUserAchievements: publicProcedure
+    .input(z.object({ userId: z.string() }))
+    .query(async ({ input }) => {
+      if (!isDbConfigured()) return [];
+
+      try {
+        const url = `${getSupabaseRestUrl("user_achievements")}?user_id=eq.${encodeURIComponent(input.userId)}&select=achievement_id,unlocked_at`;
+        const resp = await fetch(url, { method: "GET", headers: getSupabaseHeaders() });
+        if (!resp.ok) return [];
+        const rows: { achievement_id: string; unlocked_at: number }[] = await resp.json();
+        return rows.map(r => ({
+          achievementId: r.achievement_id,
+          unlockedAt: r.unlocked_at,
+        }));
+      } catch {
+        return [];
+      }
+    }),
+
+  getUserAchievementCount: publicProcedure
+    .input(z.object({ userId: z.string() }))
+    .query(async ({ input }) => {
+      if (!isDbConfigured()) return { count: 0 };
+
+      try {
+        const url = `${getSupabaseRestUrl("user_achievements")}?user_id=eq.${encodeURIComponent(input.userId)}&select=id`;
+        const resp = await fetch(url, { method: "GET", headers: getSupabaseHeaders() });
+        if (!resp.ok) return { count: 0 };
+        const rows = await resp.json();
+        return { count: rows.length };
+      } catch {
+        return { count: 0 };
+      }
+    }),
+
   searchUsers: publicProcedure
     .input(z.object({
       query: z.string().min(1),
