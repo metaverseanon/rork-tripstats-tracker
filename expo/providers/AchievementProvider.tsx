@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState, useRef, useMemo } from 'react';
 import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import * as Notifications from 'expo-notifications';
 import { ACHIEVEMENTS } from '@/constants/achievements';
 import { UserAchievement, AchievementProgress } from '@/types/achievement';
 import { TripStats } from '@/types/trip';
@@ -117,6 +118,15 @@ export const [AchievementProvider, useAchievements] = createContextHook(() => {
       console.log('[ACHIEVEMENTS] Unlocked:', def.title);
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        Notifications.scheduleNotificationAsync({
+          content: {
+            title: '🏆 Achievement Unlocked!',
+            body: `${def.title} — ${def.description}`,
+            sound: true,
+            data: { type: 'achievement_unlocked', achievementId: def.id },
+          },
+          trigger: null,
+        }).catch((err) => console.error('[ACHIEVEMENTS] Failed to send notification:', err));
       }
     }
 
