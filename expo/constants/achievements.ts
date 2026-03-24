@@ -166,12 +166,11 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
   },
 ];
 
-export const ACHIEVEMENT_CATEGORIES: { key: string; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'speed', label: 'Speed' },
-  { key: 'distance', label: 'Distance' },
-  { key: 'trips', label: 'Trips' },
-  { key: 'streak', label: 'Streak' },
-  { key: 'social', label: 'Social' },
-  { key: 'performance', label: 'Performance' },
+export const ACHIEVEMENT_CATEGORIES: { key: string; label: string; icon: string }[] = [
+  { key: 'speed', label: 'Speed', icon: 'gauge' },
+  { key: 'distance', label: 'Distance', icon: 'route' },
+  { key: 'trips', label: 'Trips', icon: 'flag' },
+  { key: 'streak', label: 'Streak', icon: 'flame' },
+  { key: 'social', label: 'Social', icon: 'users' },
+  { key: 'performance', label: 'Performance', icon: 'zap' },
 ];
