@@ -109,7 +109,7 @@ export const CAR_BRANDS: CarBrand[] = [
   },
   {
     name: 'Fiat',
-    models: ['500', '500e', '500X', '500L', 'Panda', 'Tipo', 'Punto', 'Doblo', '124 Spider', 'Abarth 595', 'Abarth 695'],
+    models: ['500', '500e', '500X', '500L', 'Bravo', 'Panda', 'Tipo', 'Punto', 'Doblo', '124 Spider', 'Abarth 595', 'Abarth 695'],
   },
   {
     name: 'Ford',
@@ -287,7 +287,7 @@ export const CAR_BRANDS: CarBrand[] = [
   },
   {
     name: 'Toyota',
-    models: ['Yaris', 'Yaris GR', 'Corolla', 'Corolla GR', 'Camry', 'Avalon', 'Prius', 'Mirai', 'Supra', 'GR86', 'C-HR', 'RAV4', 'RAV4 Prime', 'Venza', 'Highlander', 'Sequoia', '4Runner', 'Land Cruiser', 'bZ4X', 'Tacoma', 'Tundra', 'Sienna'],
+    models: ['Yaris', 'Yaris GR', 'Corolla', 'Corolla GR', 'Camry', 'Avensis', 'Avalon', 'Prius', 'Mirai', 'Supra', 'GR86', 'C-HR', 'RAV4', 'RAV4 Prime', 'Venza', 'Highlander', 'Sequoia', '4Runner', 'Land Cruiser', 'bZ4X', 'Tacoma', 'Tundra', 'Sienna'],
   },
   {
     name: 'Vauxhall',
