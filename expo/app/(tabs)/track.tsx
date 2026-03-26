@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Platform, Animated } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Platform, Animated, Alert } from 'react-native';
 import * as ExpoLocation from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Play, Square, Map, Gauge } from 'lucide-react-native';
+import { Play, Square, Map, Gauge, X } from 'lucide-react-native';
 import { useTrips } from '@/providers/TripProvider';
 import { useSettings } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
@@ -27,7 +27,7 @@ if (Platform.OS !== 'web') {
 type ViewMode = 'standard' | 'map';
 
 export default function TrackScreen() {
-  const { isTracking, currentTrip, currentSpeed, currentLocation, startTracking, stopTracking, lastSavedTrip, clearLastSavedTrip } = useTrips();
+  const { isTracking, currentTrip, currentSpeed, currentLocation, startTracking, stopTracking, cancelTracking, lastSavedTrip, clearLastSavedTrip } = useTrips();
   const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, getAccelerationLabel, colors } = useSettings();
   const { user } = useUser();
   const [showShareCard, setShowShareCard] = useState(false);
@@ -164,6 +164,17 @@ export default function TrackScreen() {
     const carModel = getUserCarModel();
     void stopTracking(carModel);
   }, [stopTracking, getUserCarModel]);
+
+  const handleCancelTracking = useCallback(() => {
+    Alert.alert(
+      'Discard Trip',
+      'Are you sure you want to exit without saving this trip?',
+      [
+        { text: 'Keep Tracking', style: 'cancel' },
+        { text: 'Discard', style: 'destructive', onPress: () => void cancelTracking() },
+      ],
+    );
+  }, [cancelTracking]);
 
   const toggleViewMode = useCallback(() => {
     setViewMode(prev => prev === 'standard' ? 'map' : 'standard');
@@ -479,7 +490,21 @@ export default function TrackScreen() {
           </TouchableOpacity>
         )}
         <Text style={[styles.navTitle, { color: colors.text }]}>Track</Text>
-        {canShowMap && <View style={styles.viewTogglePlaceholder} />}
+        {isTracking ? (
+          <TouchableOpacity
+            style={[
+              styles.viewToggle,
+              { backgroundColor: isDark ? '#2A1A1A' : '#FFF0F0', borderColor: isDark ? '#3A2A2A' : '#FFCCCC' },
+            ]}
+            onPress={handleCancelTracking}
+            activeOpacity={0.7}
+            testID="cancel-tracking-button"
+          >
+            <X size={18} color="#CC0000" />
+          </TouchableOpacity>
+        ) : (
+          canShowMap ? <View style={styles.viewTogglePlaceholder} /> : null
+        )}
       </View>
 
       {viewMode === 'map' && canShowMap ? renderMapView() : renderStandardView()}

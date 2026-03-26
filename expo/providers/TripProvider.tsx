@@ -1240,6 +1240,66 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     pendingLocationsRef.current = [];
   }, [currentTrip, trips]);
 
+  const cancelTracking = useCallback(async () => {
+    console.log('[CANCEL_TRACKING] Discarding current trip without saving');
+
+    if (locationSubscription.current) {
+      locationSubscription.current.remove();
+      locationSubscription.current = null;
+    }
+
+    if (isBackgroundEnabled.current && Platform.OS !== 'web') {
+      try {
+        const hasTask = await ExpoLocation.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+        if (hasTask) {
+          await ExpoLocation.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+        }
+      } catch (error) {
+        console.error('Failed to stop background location:', error);
+      }
+      isBackgroundEnabled.current = false;
+      backgroundLocationCallback = null;
+    }
+
+    if (durationInterval.current) {
+      clearInterval(durationInterval.current);
+      durationInterval.current = null;
+    }
+
+    stopStaleSpeedDetection();
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    pendingLocationsRef.current = [];
+
+    setIsTracking(false);
+    isTrackingRef.current = false;
+    setCurrentTrip(null);
+    setCurrentSpeed(0);
+    setCurrentLocation(null);
+    currentTripRef.current = null;
+    await saveTrackingState(false, null);
+    await AsyncStorage.multiRemove([CURRENT_SPEED_KEY, LAST_LOCATION_TIME_KEY]).catch(console.error);
+    previousHeading.current = null;
+    accumulatedHeadingChange.current = 0;
+    lastCornerTime.current = 0;
+    previousSpeed.current = 0;
+    previousSpeedTime.current = 0;
+    maxAcceleration.current = 0;
+    maxGForce.current = 0;
+    accelStartTime.current = null;
+    reached100.current = false;
+    reached200.current = false;
+    reached300.current = false;
+    time0to100.current = null;
+    time0to200.current = null;
+    time0to300.current = null;
+    lastLocationUpdateTime.current = 0;
+    pendingLocationsRef.current = [];
+  }, []);
+
   const clearLastSavedTrip = useCallback(() => {
     setLastSavedTrip(null);
   }, []);
@@ -1299,6 +1359,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     lastSavedTrip,
     startTracking,
     stopTracking,
+    cancelTracking,
     updateTripCarModel,
     getUniqueCountries,
     getUniqueCities,
