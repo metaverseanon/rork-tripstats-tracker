@@ -254,49 +254,51 @@ async function enrichTripsWithUserCars(trips: SyncedTrip[]): Promise<SyncedTrip[
   const uniqueUserIds = [...new Set(trips.map(t => t.userId))];
   const tripsNeedingCar = trips.filter(t => !t.carModel);
   const userIdsNeedingCar = [...new Set(tripsNeedingCar.map(t => t.userId))];
+  const userIdsNeedingPic = [...new Set(trips.filter(t => !t.userProfilePicture).map(t => t.userId))];
+  const allNeededIds = [...new Set([...userIdsNeedingCar, ...userIdsNeedingPic])];
   
-  console.log('[LEADERBOARD] Enriching info for', uniqueUserIds.length, 'users (car:', userIdsNeedingCar.length, ')');
+  console.log('[LEADERBOARD] Enriching info for', uniqueUserIds.length, 'users (car:', userIdsNeedingCar.length, ', pic:', userIdsNeedingPic.length, ')');
+
+  if (allNeededIds.length === 0) return trips;
 
   try {
     const userCarMap = new Map<string, string>();
     const userProfilePicMap = new Map<string, string>();
 
-    for (const userId of uniqueUserIds) {
-      const needsCar = userIdsNeedingCar.includes(userId);
-      const tripHasPic = trips.some(t => t.userId === userId && t.userProfilePicture);
-      if (needsCar || !tripHasPic) {
-        const url = `${getSupabaseRestUrl('users')}?id=eq.${userId}&select=id,car_brand,car_model`;
-        const resp = await fetch(url, { method: 'GET', headers: getSupabaseHeaders() });
-        if (resp.ok) {
-          const rows = await resp.json();
-          if (rows.length > 0) {
-            const u = rows[0];
-            if (u.car_brand && needsCar) {
-              const carFull = u.car_model ? `${u.car_brand} ${u.car_model}` : u.car_brand;
-              userCarMap.set(userId, carFull);
-            }
+    if (allNeededIds.length > 0) {
+      const idsParam = allNeededIds.map(id => `"${id}"`).join(',');
+      const url = `${getSupabaseRestUrl('users')}?id=in.(${idsParam})&select=id,car_brand,car_model,profile_picture`;
+      const resp = await fetch(url, { method: 'GET', headers: getSupabaseHeaders() });
+      if (resp.ok) {
+        const rows: { id: string; car_brand?: string; car_model?: string; profile_picture?: string }[] = await resp.json();
+        for (const u of rows) {
+          if (u.car_brand && userIdsNeedingCar.includes(u.id)) {
+            const carFull = u.car_model ? `${u.car_brand} ${u.car_model}` : u.car_brand;
+            userCarMap.set(u.id, carFull);
+          }
+          if (u.profile_picture && userIdsNeedingPic.includes(u.id)) {
+            userProfilePicMap.set(u.id, u.profile_picture);
           }
         }
       }
     }
 
-    const tripsWithMissingPics = trips.filter(t => !t.userProfilePicture);
-    if (tripsWithMissingPics.length > 0) {
-      const userIdsNeedingPic = [...new Set(tripsWithMissingPics.map(t => t.userId))];
-      for (const userId of userIdsNeedingPic) {
-        const picUrl = `${getSupabaseRestUrl('trips')}?user_id=eq.${userId}&user_profile_picture=neq.null&select=user_profile_picture&order=start_time.desc&limit=1`;
-        const picResp = await fetch(picUrl, { method: 'GET', headers: getSupabaseHeaders() });
-        if (picResp.ok) {
-          const picRows = await picResp.json();
-          if (picRows.length > 0 && picRows[0].user_profile_picture) {
-            userProfilePicMap.set(userId, picRows[0].user_profile_picture);
+    const stillNeedPic = userIdsNeedingPic.filter(id => !userProfilePicMap.has(id));
+    if (stillNeedPic.length > 0) {
+      const idsParam = stillNeedPic.map(id => `"${id}"`).join(',');
+      const picUrl = `${getSupabaseRestUrl('trips')}?user_id=in.(${idsParam})&user_profile_picture=neq.null&select=user_id,user_profile_picture&order=start_time.desc`;
+      const picResp = await fetch(picUrl, { method: 'GET', headers: getSupabaseHeaders() });
+      if (picResp.ok) {
+        const picRows: { user_id: string; user_profile_picture: string }[] = await picResp.json();
+        for (const row of picRows) {
+          if (!userProfilePicMap.has(row.user_id) && row.user_profile_picture) {
+            userProfilePicMap.set(row.user_id, row.user_profile_picture);
           }
         }
       }
-      console.log('[LEADERBOARD] Found profile pics for', userProfilePicMap.size, 'users');
     }
 
-    console.log('[LEADERBOARD] Found car info for', userCarMap.size, 'users');
+    console.log('[LEADERBOARD] Found car info for', userCarMap.size, ', pics for', userProfilePicMap.size, 'users');
 
     return trips.map(trip => {
       const updates: Partial<SyncedTrip> = {};
@@ -326,9 +328,7 @@ function supabaseRowToTrip(row: SupabaseTripRow): SyncedTrip {
       } else if (Array.isArray(row.route_points)) {
         routePoints = row.route_points as unknown as { latitude: number; longitude: number }[];
       }
-      if (routePoints) {
-        console.log('[TRIPS] Parsed route_points for trip:', row.id, 'points:', routePoints.length);
-      }
+
     } catch (e) {
       console.error('[TRIPS] Failed to parse route_points for trip:', row.id, 'type:', typeof row.route_points, e);
     }
@@ -366,7 +366,7 @@ async function getTotalDistanceLeaderboard(input: {
 }): Promise<SyncedTrip[]> {
   try {
     let url = getSupabaseRestUrl("trips");
-    const params: string[] = ["select=*", "distance=gt.0"];
+    const params: string[] = ["select=id,user_id,user_name,user_profile_picture,start_time,end_time,distance,duration,avg_speed,top_speed,corners,car_model,acceleration,max_g_force,country,city,time_0_to_100,time_0_to_200,time_0_to_300", "distance=gt.0"];
 
     if (input.country) {
       params.push(`country=eq.${encodeURIComponent(input.country)}`);
@@ -585,7 +585,7 @@ export const tripsRouter = createTRPCRouter({
         let url = getSupabaseRestUrl("trips");
         const params: string[] = [];
         
-        params.push("select=*");
+        params.push("select=id,user_id,user_name,user_profile_picture,start_time,end_time,distance,duration,avg_speed,top_speed,corners,car_model,acceleration,max_g_force,country,city,time_0_to_100,time_0_to_200,time_0_to_300");
 
         if (input.country) {
           params.push(`country=eq.${encodeURIComponent(input.country)}`);

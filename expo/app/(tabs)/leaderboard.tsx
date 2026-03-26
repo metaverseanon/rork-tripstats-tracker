@@ -819,6 +819,8 @@ export default function LeaderboardScreen() {
     },
     {
       refetchInterval: 30000,
+      staleTime: 15000,
+
     }
   );
 
