@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ONBOARDING_KEY = 'onboarding_completed';
-const WHATS_NEW_VERSION = 'whats_new_v2';
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -14,19 +13,16 @@ export default function WelcomeScreen() {
     const checkOnboarding = async () => {
       try {
         const completed = await AsyncStorage.getItem(ONBOARDING_KEY);
-        const whatsNewSeen = await AsyncStorage.getItem(WHATS_NEW_VERSION);
         const timer = setTimeout(() => {
           Animated.timing(fadeAnim, {
             toValue: 0,
             duration: 400,
             useNativeDriver: true,
           }).start(() => {
-            if (completed !== 'true') {
-              router.replace('/onboarding' as any);
-            } else if (whatsNewSeen !== 'seen') {
-              router.replace('/whats-new' as any);
-            } else {
+            if (completed === 'true') {
               router.replace('/(tabs)/track' as any);
+            } else {
+              router.replace('/onboarding' as any);
             }
           });
         }, 4000);
