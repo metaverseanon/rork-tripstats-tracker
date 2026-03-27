@@ -133,6 +133,20 @@ export default function RecentScreen() {
           <View style={styles.accentCardContent}>
             <View>
               <View style={styles.accentValueRow}>
+                <Text style={styles.accentValue}>{Math.round(convertSpeed(lastTrip.topSpeed))}</Text>
+                <Text style={styles.accentUnit}>{getSpeedLabel()}</Text>
+              </View>
+              <Text style={styles.accentLabel}>TOP SPEED</Text>
+            </View>
+            <Gauge size={22} color={colors.accent} />
+          </View>
+        </View>
+
+        <View style={styles.accentCard}>
+          <View style={styles.accentBar} />
+          <View style={styles.accentCardContent}>
+            <View>
+              <View style={styles.accentValueRow}>
                 <Text style={styles.accentValue}>{convertDistance(lastTrip.distance).toFixed(2)}</Text>
                 <Text style={styles.accentUnit}>{getDistanceLabel()}</Text>
               </View>
@@ -153,17 +167,36 @@ export default function RecentScreen() {
           </View>
         </View>
 
-        <View style={styles.accentCard}>
-          <View style={styles.accentBar} />
-          <View style={styles.accentCardContent}>
-            <View>
-              <View style={styles.accentValueRow}>
-                <Text style={styles.accentValue}>{Math.round(convertSpeed(lastTrip.topSpeed))}</Text>
-                <Text style={styles.accentUnit}>{getSpeedLabel()}</Text>
-              </View>
-              <Text style={styles.accentLabel}>TOP SPEED</Text>
+        <View style={styles.smallCardsRow}>
+          <View style={styles.smallCard}>
+            <View style={styles.smallCardValueRow}>
+              <Text style={styles.smallCardValue}>{time0to100 ?? '--'}</Text>
+              {time0to100 && <Text style={styles.smallCardUnit}>s</Text>}
             </View>
-            <Gauge size={22} color={colors.accent} />
+            <Text style={styles.smallCardLabel}>{getAccelerationShortLabel('0-100').toUpperCase()}</Text>
+          </View>
+          <View style={styles.smallCard}>
+            <View style={styles.smallCardValueRow}>
+              <Text style={styles.smallCardValue}>{time0to200 ?? '--'}</Text>
+              {time0to200 && <Text style={styles.smallCardUnit}>s</Text>}
+            </View>
+            <Text style={styles.smallCardLabel}>{getAccelerationShortLabel('0-200').toUpperCase()}</Text>
+          </View>
+        </View>
+
+        <View style={styles.smallCardsRow}>
+          <View style={styles.smallCard}>
+            <View style={styles.smallCardValueRow}>
+              <Text style={styles.smallCardValue}>{(lastTrip.maxGForce ?? 0).toFixed(2)}</Text>
+              <Text style={styles.smallCardUnit}>G</Text>
+            </View>
+            <Text style={styles.smallCardLabel}>MAX G-FORCE</Text>
+          </View>
+          <View style={styles.smallCard}>
+            <View style={styles.smallCardValueRow}>
+              <Text style={styles.smallCardValue}>{lastTrip.speedCamerasDetected ?? 0}</Text>
+            </View>
+            <Text style={styles.smallCardLabel}>SPEED CAMERAS</Text>
           </View>
         </View>
 
@@ -180,46 +213,6 @@ export default function RecentScreen() {
             <Text style={styles.smallCardLabel}>CORNERS TAKEN</Text>
           </View>
         </View>
-
-        <View style={styles.smallCardsRow}>
-          <View style={styles.smallCard}>
-            <View style={styles.smallCardValueRow}>
-              <Text style={styles.smallCardValue}>{(lastTrip.maxGForce ?? 0).toFixed(2)}</Text>
-              <Text style={styles.smallCardUnit}>G</Text>
-            </View>
-            <Text style={styles.smallCardLabel}>MAX G-FORCE</Text>
-          </View>
-          <View style={styles.smallCard}>
-            <View style={styles.smallCardValueRow}>
-              <Text style={styles.smallCardValue}>{time0to100 ?? '--'}</Text>
-              {time0to100 && <Text style={styles.smallCardUnit}>s</Text>}
-            </View>
-            <Text style={styles.smallCardLabel}>{getAccelerationShortLabel('0-100').toUpperCase()} {getSpeedLabel().toUpperCase()}</Text>
-          </View>
-        </View>
-
-        {time0to200 && (
-          <View style={styles.singleSmallCardRow}>
-            <View style={styles.smallCard}>
-              <View style={styles.smallCardValueRow}>
-                <Text style={styles.smallCardValue}>{time0to200}</Text>
-                <Text style={styles.smallCardUnit}>s</Text>
-              </View>
-              <Text style={styles.smallCardLabel}>{getAccelerationShortLabel('0-200').toUpperCase()} {getSpeedLabel().toUpperCase()}</Text>
-            </View>
-          </View>
-        )}
-
-        {(lastTrip.speedCamerasDetected ?? 0) > 0 && (
-          <View style={styles.singleSmallCardRow}>
-            <View style={styles.smallCard}>
-              <View style={styles.smallCardValueRow}>
-                <Text style={styles.smallCardValue}>{lastTrip.speedCamerasDetected}</Text>
-              </View>
-              <Text style={styles.smallCardLabel}>SPEED CAMERAS</Text>
-            </View>
-          </View>
-        )}
 
         {routeCoordinates.length >= 2 && mapRegion && (
           <>
