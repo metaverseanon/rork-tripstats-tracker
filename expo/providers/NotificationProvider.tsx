@@ -239,7 +239,27 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
       console.log('[PUSH] Notification tapped:', response.notification.request.content.title);
       const data = response.notification.request.content.data as Record<string, unknown> | undefined;
       
-      if (data?.type === 'leaderboard_beat') {
+      if (data?.type === 'new_follower' && data?.fromUserId) {
+        console.log('[PUSH] New follower notification tapped, navigating to user profile:', data.fromUserId);
+        const tryNav = (attempt: number) => {
+          try {
+            router.navigate({ pathname: '/user-profile' as any, params: { userId: data.fromUserId as string } });
+          } catch {
+            if (attempt < 5) setTimeout(() => tryNav(attempt + 1), 500);
+          }
+        };
+        setTimeout(() => tryNav(1), 300);
+      } else if (data?.type === 'post_rev') {
+        console.log('[PUSH] Post rev notification tapped, navigating to feed');
+        const tryNav = (attempt: number) => {
+          try {
+            router.navigate('/(tabs)/feed' as any);
+          } catch {
+            if (attempt < 5) setTimeout(() => tryNav(attempt + 1), 500);
+          }
+        };
+        setTimeout(() => tryNav(1), 300);
+      } else if (data?.type === 'leaderboard_beat') {
         console.log('[PUSH] Leaderboard beat notification tapped');
         const tryNav = (attempt: number) => {
           try {
@@ -284,7 +304,27 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
           const receivedAt = lastResponse.notification.date;
           const isRecent = receivedAt && (Date.now() - receivedAt * 1000) < 30000;
           
-          if (isRecent && (data?.type === 'drive_ping' || data?.type === 'ping_accepted' || data?.type === 'ping_declined' || data?.type === 'location_shared' || data?.type === 'meetup_cancelled')) {
+          if (isRecent && data?.type === 'new_follower' && data?.fromUserId) {
+            console.log('[PUSH] Cold start new follower notification, navigating to user profile:', data.fromUserId);
+            const tryNavigate = (attempt: number) => {
+              try {
+                router.navigate({ pathname: '/user-profile' as any, params: { userId: data.fromUserId as string } });
+              } catch (e) {
+                if (attempt < 10) setTimeout(() => tryNavigate(attempt + 1), 600);
+              }
+            };
+            setTimeout(() => tryNavigate(1), 1500);
+          } else if (isRecent && data?.type === 'post_rev') {
+            console.log('[PUSH] Cold start post rev notification, navigating to feed');
+            const tryNavigate = (attempt: number) => {
+              try {
+                router.navigate('/(tabs)/feed' as any);
+              } catch (e) {
+                if (attempt < 10) setTimeout(() => tryNavigate(attempt + 1), 600);
+              }
+            };
+            setTimeout(() => tryNavigate(1), 1500);
+          } else if (isRecent && (data?.type === 'drive_ping' || data?.type === 'ping_accepted' || data?.type === 'ping_declined' || data?.type === 'location_shared' || data?.type === 'meetup_cancelled')) {
             console.log('[PUSH] Cold start notification detected:', data.type, 'meetupId:', data.meetupId);
             const action: NotificationAction = {
               type: 'open_meetups' as const,
