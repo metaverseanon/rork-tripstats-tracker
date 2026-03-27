@@ -13,7 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { Stack, router } from 'expo-router';
-import { User, Car, ChevronDown, LogOut, Check, Globe, MapPin, Navigation, Search, Camera, Plus, X, Image as ImageIcon, Eye, EyeOff } from 'lucide-react-native';
+import { User, Car, ChevronDown, ChevronRight, LogOut, Check, Navigation, Search, Camera, Plus, X, Image as ImageIcon, Eye, EyeOff, CirclePlus } from 'lucide-react-native';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { useSettings } from '@/providers/SettingsProvider';
@@ -111,7 +111,7 @@ export default function ProfileScreen() {
     if (response?.type === 'success') {
       const accessToken = response.authentication?.accessToken;
       if (accessToken) {
-        (async () => {
+        void (async () => {
           setIsGoogleLoading(true);
           try {
             const userInfoResponse = await fetch(
@@ -128,7 +128,7 @@ export default function ProfileScreen() {
                 googleUser.picture
               );
               console.log('[PROFILE] Google sign-in successful, triggering trip sync...');
-              syncUnsyncedTrips();
+              void syncUnsyncedTrips();
               Alert.alert('Success', 'Signed in with Google successfully');
               router.back();
             } else {
@@ -143,7 +143,7 @@ export default function ProfileScreen() {
         })();
       }
     }
-  }, [response, signInWithGoogle]);
+  }, [response, signInWithGoogle, syncUnsyncedTrips]);
 
   const handleGoogleButtonPress = async () => {
     try {
@@ -207,6 +207,14 @@ export default function ProfileScreen() {
   const allUserCars = useMemo(() => {
     return user?.cars || [];
   }, [user?.cars]);
+
+  const primaryCar = useMemo(() => {
+    return allUserCars.find(c => c.isPrimary);
+  }, [allUserCars]);
+
+  const secondaryCars = useMemo(() => {
+    return allUserCars.filter(c => !c.isPrimary);
+  }, [allUserCars]);
 
   const handleSelectActiveCar = async (carId: string) => {
     await setPrimaryCar(carId);
@@ -289,9 +297,7 @@ export default function ProfileScreen() {
   };
 
   const pickProfilePicture = () => showImagePickerOptions('profile');
-
   const pickCarPicture = () => showImagePickerOptions('car');
-
   const pickNewCarPicture = () => showImagePickerOptions('newCar');
 
   const handleCountrySelect = (countryCode: string) => {
@@ -523,7 +529,7 @@ export default function ProfileScreen() {
         );
         if (result.success) {
           console.log('[PROFILE] Sign-in successful, triggering trip sync...');
-          syncUnsyncedTrips();
+          void syncUnsyncedTrips();
           Alert.alert('Success', 'Signed in successfully');
           router.back();
         } else if (result.error === 'incorrect_password') {
@@ -556,7 +562,7 @@ export default function ProfileScreen() {
           'Account creation'
         );
         console.log('[PROFILE] Sign-up successful, triggering trip sync...');
-        syncUnsyncedTrips();
+        void syncUnsyncedTrips();
         Alert.alert('Success', 'Account created successfully');
         router.back();
       }
@@ -734,529 +740,807 @@ export default function ProfileScreen() {
     setNewModelSearch('');
   };
 
-  return (
+  const renderPickerDropdown = (
+    items: { label: string; value: string }[],
+    selectedValue: string,
+    onSelect: (value: string) => void,
+    searchValue: string,
+    onSearchChange: (text: string) => void,
+    placeholder: string,
+  ) => (
+    <View style={styles.pickerOptions}>
+      <View style={styles.searchContainer}>
+        <Search size={16} color={colors.textLight} />
+        <TextInput
+          style={styles.searchInput}
+          value={searchValue}
+          onChangeText={onSearchChange}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textLight}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
+      <ScrollView style={styles.pickerScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+        {items.length === 0 ? (
+          <View style={styles.noResults}>
+            <Text style={styles.noResultsText}>No results found</Text>
+          </View>
+        ) : (
+          items.map((item, index) => (
+            <TouchableOpacity
+              key={`${item.value}-${index}`}
+              style={[
+                styles.pickerOption,
+                selectedValue === item.value && styles.pickerOptionSelected,
+              ]}
+              onPress={() => onSelect(item.value)}
+            >
+              <Text
+                style={[
+                  styles.pickerOptionText,
+                  selectedValue === item.value && styles.pickerOptionTextSelected,
+                ]}
+              >
+                {item.label}
+              </Text>
+              {selectedValue === item.value && (
+                <Check color={colors.accent} size={18} />
+              )}
+            </TouchableOpacity>
+          ))
+        )}
+      </ScrollView>
+    </View>
+  );
+
+  const renderSectionHeader = (title: string, rightElement?: React.ReactNode) => (
+    <View style={styles.sectionHeaderRow}>
+      <View style={styles.sectionHeaderLeft}>
+        <View style={styles.sectionAccentBar} />
+        <Text style={styles.sectionTitle}>{title}</Text>
+      </View>
+      {rightElement}
+    </View>
+  );
+
+  const renderAuthenticatedProfile = () => (
     <>
-      <Stack.Screen
-        options={{
-          title: isAuthenticated ? 'Edit Profile' : authMode === 'signin' ? 'Sign In' : 'Create Account',
-          headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.text,
-          headerTitleStyle: { fontSize: 16, fontWeight: '600' as const },
-          headerTitleAlign: 'center',
-        }}
-      />
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.avatarSection}>
-            {(isAuthenticated || authMode === 'signup') && (
-              <TouchableOpacity style={styles.avatarContainer} onPress={pickProfilePicture}>
-                {profilePicture && !profilePicLoadFailed ? (
-                  <Image 
-                    source={{ uri: profilePicture }} 
-                    style={styles.avatarImage}
-                    onError={() => {
-                      console.log('[PROFILE] Profile picture failed to load:', profilePicture);
-                      setProfilePicLoadFailed(true);
-                    }}
-                  />
-                ) : (
-                  <View style={styles.avatar}>
-                    <User color={colors.textInverted} size={48} />
-                  </View>
-                )}
-                <View style={styles.cameraOverlay}>
-                  <Camera color={colors.textInverted} size={16} />
-                </View>
-              </TouchableOpacity>
-            )}
-            {!isAuthenticated && authMode === 'signin' && (
-              <View style={styles.avatar}>
+      <View style={styles.avatarSection}>
+        <TouchableOpacity style={styles.avatarContainer} onPress={pickProfilePicture}>
+          <View style={styles.avatarRing}>
+            {profilePicture && !profilePicLoadFailed ? (
+              <Image 
+                source={{ uri: profilePicture }} 
+                style={styles.avatarImage}
+                onError={() => {
+                  console.log('[PROFILE] Profile picture failed to load:', profilePicture);
+                  setProfilePicLoadFailed(true);
+                }}
+              />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
                 <User color={colors.textInverted} size={48} />
               </View>
             )}
-            <Text style={styles.avatarText}>
-              {isAuthenticated ? 'Your Profile' : authMode === 'signin' ? 'Welcome Back' : 'Join RedLine'}
-            </Text>
-            <Text style={styles.avatarSubtext}>
-              {isAuthenticated
-                ? 'Update your profile and car information'
-                : authMode === 'signin'
-                ? 'Sign in with your email to access your trips'
-                : 'Create an account to save your trips and compete on leaderboards'}
-            </Text>
-            {(isAuthenticated || authMode === 'signup') && <Text style={styles.tapToChangeText}>Tap photo to change</Text>}
           </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Account Information</Text>
-            
-            {(isAuthenticated || authMode === 'signup') && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Display Name</Text>
-                <TextInput
-                  style={[styles.input, displayNameError ? styles.inputError : null]}
-                  value={displayName}
-                  onChangeText={(text) => {
-                    setDisplayName(text);
-                    setDisplayNameError('');
-                  }}
-                  placeholder="Enter your name"
-                  placeholderTextColor={colors.textLight}
-                  autoCapitalize="words"
-                />
-                {displayNameError ? (
-                  <Text style={styles.errorText}>{displayNameError}</Text>
-                ) : null}
-              </View>
-            )}
-
-            {(isAuthenticated || authMode === 'signup') && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Bio</Text>
-                <TextInput
-                  style={[styles.input, styles.bioInput]}
-                  value={bio}
-                  onChangeText={(text) => setBio(text.slice(0, 300))}
-                  placeholder="Tell others about yourself..."
-                  placeholderTextColor={colors.textLight}
-                  multiline
-                  numberOfLines={3}
-                  maxLength={300}
-                  textAlignVertical="top"
-                />
-                <Text style={styles.charCount}>{bio.length}/300</Text>
-              </View>
-            )}
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="Enter your email"
-                placeholderTextColor={colors.textLight}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
-
-            {!isAuthenticated && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Password</Text>
-                <View style={styles.passwordContainer}>
-                  <TextInput
-                    style={styles.passwordInput}
-                    value={password}
-                    onChangeText={setPassword}
-                    placeholder={authMode === 'signin' ? 'Enter your password' : 'Create a password'}
-                    placeholderTextColor={colors.textLight}
-                    secureTextEntry={!showPassword}
-                    autoCapitalize="none"
-                  />
-                  <TouchableOpacity
-                    style={styles.passwordToggle}
-                    onPress={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? (
-                      <EyeOff size={20} color={colors.textLight} />
-                    ) : (
-                      <Eye size={20} color={colors.textLight} />
-                    )}
-                  </TouchableOpacity>
-                </View>
-                {authMode === 'signup' && (
-                  <Text style={styles.passwordHint}>Must be at least 6 characters</Text>
-                )}
-                {authMode === 'signin' && (
-                  <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPasswordButton}>
-                    <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
+          <View style={styles.cameraOverlay}>
+            <CirclePlus color={colors.accent} size={28} fill={colors.background} />
           </View>
+        </TouchableOpacity>
+        <Text style={styles.profileName}>{displayName || 'Your Name'}</Text>
+        <Text style={styles.tapToChangeText}>TAP PHOTO TO CHANGE</Text>
+      </View>
 
-          {(isAuthenticated || authMode === 'signup') && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Globe color={colors.text} size={20} />
-              <Text style={styles.sectionTitle}>Location (Optional)</Text>
-            </View>
+      {renderSectionHeader('ACCOUNT INFO')}
+      <View style={styles.sectionContent}>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>DISPLAY NAME</Text>
+          <TextInput
+            style={[styles.input, displayNameError ? styles.inputError : null]}
+            value={displayName}
+            onChangeText={(text) => {
+              setDisplayName(text);
+              setDisplayNameError('');
+            }}
+            placeholder="Enter your name"
+            placeholderTextColor={colors.textLight}
+            autoCapitalize="words"
+          />
+          {displayNameError ? (
+            <Text style={styles.errorText}>{displayNameError}</Text>
+          ) : null}
+        </View>
 
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>EMAIL</Text>
+          <TextInput
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Enter your email"
+            placeholderTextColor={colors.textLight}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>BIO</Text>
+          <TextInput
+            style={[styles.input, styles.bioInput]}
+            value={bio}
+            onChangeText={(text) => setBio(text.slice(0, 300))}
+            placeholder="Tell others about yourself..."
+            placeholderTextColor={colors.textLight}
+            multiline
+            numberOfLines={3}
+            maxLength={300}
+            textAlignVertical="top"
+          />
+          <Text style={styles.charCount}>{bio.length}/300</Text>
+        </View>
+      </View>
+
+      {renderSectionHeader(
+        'LOCATION',
+        <TouchableOpacity
+          style={styles.useLocationPill}
+          onPress={handleUseMyLocation}
+          disabled={isLocating}
+          activeOpacity={0.7}
+        >
+          {isLocating ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Navigation size={14} color="#FFFFFF" />
+          )}
+          <Text style={styles.useLocationPillText}>
+            {isLocating ? 'Detecting...' : 'Use My Location'}
+          </Text>
+        </TouchableOpacity>
+      )}
+      <View style={styles.sectionContent}>
+        <View style={styles.rowPickers}>
+          <View style={styles.halfPicker}>
+            <Text style={styles.label}>COUNTRY</Text>
             <TouchableOpacity
-              style={styles.locationButton}
+              style={styles.picker}
+              onPress={() => {
+                closeAllPickers();
+                setShowCountryPicker(!showCountryPicker);
+              }}
+            >
+              <Text style={[styles.pickerText, !selectedCountry && styles.placeholderText]} numberOfLines={1}>
+                {selectedCountry ? COUNTRIES.find(c => c.code === selectedCountry)?.name || selectedCountry : 'Select'}
+              </Text>
+              <ChevronDown color={colors.textLight} size={18} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.halfPicker}>
+            <Text style={styles.label}>CITY</Text>
+            <TouchableOpacity
+              style={[styles.picker, !selectedCountry && styles.pickerDisabled]}
+              onPress={() => {
+                if (selectedCountry) {
+                  closeAllPickers();
+                  setShowCityPicker(!showCityPicker);
+                }
+              }}
+              disabled={!selectedCountry}
+            >
+              <Text style={[styles.pickerText, !selectedCity && styles.placeholderText]} numberOfLines={1}>
+                {selectedCity || 'Select'}
+              </Text>
+              <ChevronDown color={colors.textLight} size={18} />
+            </TouchableOpacity>
+          </View>
+        </View>
+        {showCountryPicker && renderPickerDropdown(
+          filteredCountries.map(c => ({ label: `${c.flag} ${c.name}`, value: c.code })),
+          selectedCountry,
+          handleCountrySelect,
+          countrySearch,
+          setCountrySearch,
+          'Search country...',
+        )}
+        {showCityPicker && availableCities.length > 0 && (
+          <View style={styles.pickerOptions}>
+            <ScrollView style={styles.pickerScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+              {availableCities.map((city, cityIndex) => (
+                <TouchableOpacity
+                  key={city || `city-${cityIndex}`}
+                  style={[
+                    styles.pickerOption,
+                    selectedCity === city && styles.pickerOptionSelected,
+                  ]}
+                  onPress={() => handleCitySelect(city)}
+                >
+                  <Text
+                    style={[
+                      styles.pickerOptionText,
+                      selectedCity === city && styles.pickerOptionTextSelected,
+                    ]}
+                  >
+                    {city}
+                  </Text>
+                  {selectedCity === city && (
+                    <Check color={colors.accent} size={18} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+      </View>
+
+      {renderSectionHeader('MY GARAGE')}
+      <View style={styles.sectionContent}>
+        {primaryCar && (
+          <View style={styles.primaryCarCard}>
+            {primaryCar.picture ? (
+              <Image source={{ uri: primaryCar.picture }} style={styles.primaryCarImage} />
+            ) : (
+              <TouchableOpacity style={styles.primaryCarImagePlaceholder} onPress={pickCarPicture}>
+                <ImageIcon color="rgba(255,255,255,0.4)" size={40} />
+                <Text style={styles.primaryCarPlaceholderText}>Tap to add photo</Text>
+              </TouchableOpacity>
+            )}
+            <View style={styles.primaryBadge}>
+              <Text style={styles.primaryBadgeText}>PRIMARY</Text>
+            </View>
+          </View>
+        )}
+
+        {!primaryCar && (
+          <TouchableOpacity style={styles.carImagePicker} onPress={pickCarPicture}>
+            {carPicture ? (
+              <Image source={{ uri: carPicture }} style={styles.primaryCarImage} />
+            ) : (
+              <View style={styles.carImagePlaceholder}>
+                <ImageIcon color={colors.textLight} size={32} />
+                <Text style={styles.carImagePlaceholderText}>Tap to add car photo</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
+
+        <View style={styles.rowPickers}>
+          <View style={styles.halfPicker}>
+            <Text style={styles.label}>BRAND</Text>
+            <TouchableOpacity
+              style={styles.picker}
+              onPress={() => {
+                closeAllPickers();
+                setShowBrandPicker(!showBrandPicker);
+              }}
+            >
+              <Text style={[styles.pickerText, !selectedBrand && styles.placeholderText]} numberOfLines={1}>
+                {selectedBrand || 'Select'}
+              </Text>
+              <ChevronDown color={colors.textLight} size={18} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.halfPicker}>
+            <Text style={styles.label}>MODEL</Text>
+            <TouchableOpacity
+              style={[styles.picker, !selectedBrand && styles.pickerDisabled]}
+              onPress={() => {
+                if (selectedBrand) {
+                  closeAllPickers();
+                  setShowModelPicker(!showModelPicker);
+                }
+              }}
+              disabled={!selectedBrand}
+            >
+              <Text style={[styles.pickerText, !selectedModel && styles.placeholderText]} numberOfLines={1}>
+                {selectedModel || 'Select'}
+              </Text>
+              <ChevronDown color={colors.textLight} size={18} />
+            </TouchableOpacity>
+          </View>
+        </View>
+        {showBrandPicker && renderPickerDropdown(
+          filteredBrands.map(b => ({ label: b.name, value: b.name })),
+          selectedBrand,
+          handleBrandSelect,
+          brandSearch,
+          setBrandSearch,
+          'Search brand...',
+        )}
+        {showModelPicker && availableModels.length > 0 && renderPickerDropdown(
+          filteredModels.map(m => ({ label: m, value: m })),
+          selectedModel,
+          handleModelSelect,
+          modelSearch,
+          setModelSearch,
+          'Search model...',
+        )}
+
+        {secondaryCars.map((car, index) => (
+          <TouchableOpacity
+            key={car.id || `sec-car-${index}`}
+            style={styles.secondaryCarRow}
+            onPress={() => handleSelectActiveCar(car.id)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.secondaryCarLeft}>
+              {car.picture ? (
+                <Image source={{ uri: car.picture }} style={styles.secondaryCarThumb} />
+              ) : (
+                <View style={styles.secondaryCarThumbPlaceholder}>
+                  <Car color={colors.textLight} size={20} />
+                </View>
+              )}
+              <View style={styles.secondaryCarInfo}>
+                <Text style={styles.secondaryCarName} numberOfLines={1}>{car.brand} {car.model}</Text>
+              </View>
+            </View>
+            <View style={styles.secondaryCarRight}>
+              <TouchableOpacity
+                onPress={() => handleRemoveExistingCar(car.id)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <X color={colors.textLight} size={16} />
+              </TouchableOpacity>
+              <ChevronRight color={colors.textLight} size={18} />
+            </View>
+          </TouchableOpacity>
+        ))}
+
+        {existingCars.length === 0 && additionalCars.length === 0 && !showAddCarForm && null}
+
+        {additionalCars.map((car, index) => (
+          <View key={car.id || `add-car-${index}`} style={styles.secondaryCarRow}>
+            <View style={styles.secondaryCarLeft}>
+              {car.picture ? (
+                <Image source={{ uri: car.picture }} style={styles.secondaryCarThumb} />
+              ) : (
+                <View style={styles.secondaryCarThumbPlaceholder}>
+                  <Car color={colors.textLight} size={20} />
+                </View>
+              )}
+              <View style={styles.secondaryCarInfo}>
+                <Text style={styles.secondaryCarName} numberOfLines={1}>{car.brand} {car.model}</Text>
+                <Text style={styles.newCarLabel}>New</Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={() => handleRemoveAdditionalCar(car.id)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <X color={colors.danger} size={18} />
+            </TouchableOpacity>
+          </View>
+        ))}
+
+        {showAddCarForm ? (
+          <View style={styles.addCarForm}>
+            <TouchableOpacity style={styles.carImagePickerSmall} onPress={pickNewCarPicture}>
+              {newCarPicture ? (
+                <Image source={{ uri: newCarPicture }} style={styles.carImageSmall} />
+              ) : (
+                <View style={styles.carImagePlaceholderSmall}>
+                  <Camera color={colors.textLight} size={20} />
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.rowPickers}>
+              <View style={styles.halfPicker}>
+                <Text style={styles.label}>BRAND</Text>
+                <TouchableOpacity
+                  style={styles.picker}
+                  onPress={() => {
+                    closeAllPickers();
+                    setShowNewBrandPicker(!showNewBrandPicker);
+                  }}
+                >
+                  <Text style={[styles.pickerText, !newCarBrand && styles.placeholderText]} numberOfLines={1}>
+                    {newCarBrand || 'Select'}
+                  </Text>
+                  <ChevronDown color={colors.textLight} size={18} />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.halfPicker}>
+                <Text style={styles.label}>MODEL</Text>
+                <TouchableOpacity
+                  style={[styles.picker, !newCarBrand && styles.pickerDisabled]}
+                  onPress={() => {
+                    if (newCarBrand) {
+                      closeAllPickers();
+                      setShowNewModelPicker(!showNewModelPicker);
+                    }
+                  }}
+                  disabled={!newCarBrand}
+                >
+                  <Text style={[styles.pickerText, !newCarModel && styles.placeholderText]} numberOfLines={1}>
+                    {newCarModel || 'Select'}
+                  </Text>
+                  <ChevronDown color={colors.textLight} size={18} />
+                </TouchableOpacity>
+              </View>
+            </View>
+            {showNewBrandPicker && renderPickerDropdown(
+              filteredNewBrands.map(b => ({ label: b.name, value: b.name })),
+              newCarBrand,
+              handleNewBrandSelect,
+              newBrandSearch,
+              setNewBrandSearch,
+              'Search brand...',
+            )}
+            {showNewModelPicker && newCarModels.length > 0 && renderPickerDropdown(
+              filteredNewModels.map(m => ({ label: m, value: m })),
+              newCarModel,
+              handleNewModelSelect,
+              newModelSearch,
+              setNewModelSearch,
+              'Search model...',
+            )}
+
+            <View style={styles.addCarFormButtons}>
+              <TouchableOpacity
+                style={styles.cancelCarButton}
+                onPress={() => {
+                  setShowAddCarForm(false);
+                  setNewCarBrand('');
+                  setNewCarModel('');
+                  setNewCarPicture('');
+                }}
+              >
+                <Text style={styles.cancelCarButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmCarButton}
+                onPress={handleAddCar}
+              >
+                <Text style={styles.confirmCarButtonText}>Add Car</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.addCarButton}
+            onPress={() => setShowAddCarForm(true)}
+          >
+            <Plus color={colors.accent} size={20} />
+            <Text style={styles.addCarButtonText}>ADD ANOTHER CAR</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <TouchableOpacity
+        style={[styles.saveButton, (isSubmitting || isCheckingDisplayName) && styles.saveButtonDisabled]}
+        onPress={handleSave}
+        disabled={isSubmitting || isCheckingDisplayName}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.saveButtonText}>
+          {isSubmitting || isCheckingDisplayName ? 'Saving...' : 'Save Changes'}
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+        <LogOut color={colors.accent} size={18} />
+        <Text style={styles.signOutText}>SIGN OUT</Text>
+      </TouchableOpacity>
+    </>
+  );
+
+  const renderAuthForm = () => (
+    <>
+      <View style={styles.avatarSection}>
+        {authMode === 'signup' ? (
+          <TouchableOpacity style={styles.avatarContainer} onPress={pickProfilePicture}>
+            <View style={styles.avatarRing}>
+              {profilePicture && !profilePicLoadFailed ? (
+                <Image 
+                  source={{ uri: profilePicture }} 
+                  style={styles.avatarImage}
+                  onError={() => {
+                    console.log('[PROFILE] Profile picture failed to load:', profilePicture);
+                    setProfilePicLoadFailed(true);
+                  }}
+                />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <User color={colors.textInverted} size={48} />
+                </View>
+              )}
+            </View>
+            <View style={styles.cameraOverlay}>
+              <CirclePlus color={colors.accent} size={28} fill={colors.background} />
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.avatarRing}>
+            <View style={styles.avatarPlaceholder}>
+              <User color={colors.textInverted} size={48} />
+            </View>
+          </View>
+        )}
+        <Text style={styles.profileName}>
+          {authMode === 'signin' ? 'Welcome Back' : 'Join RedLine'}
+        </Text>
+        <Text style={styles.avatarSubtext}>
+          {authMode === 'signin'
+            ? 'Sign in with your email to access your trips'
+            : 'Create an account to save your trips and compete on leaderboards'}
+        </Text>
+        {authMode === 'signup' && <Text style={styles.tapToChangeText}>TAP PHOTO TO CHANGE</Text>}
+      </View>
+
+      {renderSectionHeader('ACCOUNT INFO')}
+      <View style={styles.sectionContent}>
+        {authMode === 'signup' && (
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>DISPLAY NAME</Text>
+            <TextInput
+              style={[styles.input, displayNameError ? styles.inputError : null]}
+              value={displayName}
+              onChangeText={(text) => {
+                setDisplayName(text);
+                setDisplayNameError('');
+              }}
+              placeholder="Enter your name"
+              placeholderTextColor={colors.textLight}
+              autoCapitalize="words"
+            />
+            {displayNameError ? (
+              <Text style={styles.errorText}>{displayNameError}</Text>
+            ) : null}
+          </View>
+        )}
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>EMAIL</Text>
+          <TextInput
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Enter your email"
+            placeholderTextColor={colors.textLight}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>PASSWORD</Text>
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              value={password}
+              onChangeText={setPassword}
+              placeholder={authMode === 'signin' ? 'Enter your password' : 'Create a password'}
+              placeholderTextColor={colors.textLight}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity
+              style={styles.passwordToggle}
+              onPress={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? (
+                <EyeOff size={20} color={colors.textLight} />
+              ) : (
+                <Eye size={20} color={colors.textLight} />
+              )}
+            </TouchableOpacity>
+          </View>
+          {authMode === 'signup' && (
+            <Text style={styles.passwordHint}>Must be at least 6 characters</Text>
+          )}
+          {authMode === 'signin' && (
+            <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPasswordButton}>
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {authMode === 'signup' && (
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>BIO</Text>
+            <TextInput
+              style={[styles.input, styles.bioInput]}
+              value={bio}
+              onChangeText={(text) => setBio(text.slice(0, 300))}
+              placeholder="Tell others about yourself..."
+              placeholderTextColor={colors.textLight}
+              multiline
+              numberOfLines={3}
+              maxLength={300}
+              textAlignVertical="top"
+            />
+            <Text style={styles.charCount}>{bio.length}/300</Text>
+          </View>
+        )}
+      </View>
+
+      {authMode === 'signup' && (
+        <>
+          {renderSectionHeader(
+            'LOCATION',
+            <TouchableOpacity
+              style={styles.useLocationPill}
               onPress={handleUseMyLocation}
               disabled={isLocating}
               activeOpacity={0.7}
             >
               {isLocating ? (
-                <ActivityIndicator size="small" color={colors.textInverted} />
+                <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Navigation size={18} color={colors.textInverted} />
+                <Navigation size={14} color="#FFFFFF" />
               )}
-              <Text style={styles.locationButtonText}>
+              <Text style={styles.useLocationPillText}>
                 {isLocating ? 'Detecting...' : 'Use My Location'}
               </Text>
             </TouchableOpacity>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Country</Text>
-              <TouchableOpacity
-                style={styles.picker}
-                onPress={() => {
-                  closeAllPickers();
-                  setShowCountryPicker(!showCountryPicker);
-                }}
-              >
-                <Text style={[styles.pickerText, !selectedCountry && styles.placeholderText]}>
-                  {selectedCountry ? COUNTRIES.find(c => c.code === selectedCountry)?.flag + ' ' + COUNTRIES.find(c => c.code === selectedCountry)?.name : 'Select country'}
-                </Text>
-                <ChevronDown color={colors.textLight} size={20} />
-              </TouchableOpacity>
-
-              {showCountryPicker && (
-                <View style={styles.pickerOptions}>
-                  <View style={styles.searchContainer}>
-                    <Search size={16} color={colors.textLight} />
-                    <TextInput
-                      style={styles.searchInput}
-                      value={countrySearch}
-                      onChangeText={setCountrySearch}
-                      placeholder="Search country..."
-                      placeholderTextColor={colors.textLight}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                  </View>
-                  <ScrollView style={styles.pickerScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
-                    {filteredCountries.map((country) => (
-                      <TouchableOpacity
-                        key={country.code}
-                        style={[
-                          styles.pickerOption,
-                          selectedCountry === country.code && styles.pickerOptionSelected,
-                        ]}
-                        onPress={() => handleCountrySelect(country.code)}
-                      >
-                        <Text
-                          style={[
-                            styles.pickerOptionText,
-                            selectedCountry === country.code && styles.pickerOptionTextSelected,
-                          ]}
-                        >
-                          {country.flag} {country.name}
-                        </Text>
-                        {selectedCountry === country.code && (
-                          <Check color={colors.accent} size={18} />
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                    {filteredCountries.length === 0 && (
-                      <View style={styles.noResults}>
-                        <Text style={styles.noResultsText}>No countries found</Text>
-                      </View>
-                    )}
-                  </ScrollView>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>City</Text>
-              <TouchableOpacity
-                style={[styles.picker, !selectedCountry && styles.pickerDisabled]}
-                onPress={() => {
-                  if (selectedCountry) {
+          )}
+          <View style={styles.sectionContent}>
+            <View style={styles.rowPickers}>
+              <View style={styles.halfPicker}>
+                <Text style={styles.label}>COUNTRY</Text>
+                <TouchableOpacity
+                  style={styles.picker}
+                  onPress={() => {
                     closeAllPickers();
-                    setShowCityPicker(!showCityPicker);
-                  }
-                }}
-                disabled={!selectedCountry}
-              >
-                <View style={styles.pickerContent}>
-                  <MapPin size={16} color={selectedCity ? colors.text : colors.textLight} />
-                  <Text style={[styles.pickerText, !selectedCity && styles.placeholderText]}>
-                    {selectedCity || (selectedCountry ? 'Select city' : 'Select country first')}
+                    setShowCountryPicker(!showCountryPicker);
+                  }}
+                >
+                  <Text style={[styles.pickerText, !selectedCountry && styles.placeholderText]} numberOfLines={1}>
+                    {selectedCountry ? COUNTRIES.find(c => c.code === selectedCountry)?.name || selectedCountry : 'Select'}
                   </Text>
-                </View>
-                <ChevronDown color={colors.textLight} size={20} />
-              </TouchableOpacity>
-
-              {showCityPicker && availableCities.length > 0 && (
-                <View style={styles.pickerOptions}>
-                  <ScrollView style={styles.pickerScroll} nestedScrollEnabled>
-                    {availableCities.map((city, cityIndex) => (
-                      <TouchableOpacity
-                        key={city || `city-${cityIndex}`}
+                  <ChevronDown color={colors.textLight} size={18} />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.halfPicker}>
+                <Text style={styles.label}>CITY</Text>
+                <TouchableOpacity
+                  style={[styles.picker, !selectedCountry && styles.pickerDisabled]}
+                  onPress={() => {
+                    if (selectedCountry) {
+                      closeAllPickers();
+                      setShowCityPicker(!showCityPicker);
+                    }
+                  }}
+                  disabled={!selectedCountry}
+                >
+                  <Text style={[styles.pickerText, !selectedCity && styles.placeholderText]} numberOfLines={1}>
+                    {selectedCity || 'Select'}
+                  </Text>
+                  <ChevronDown color={colors.textLight} size={18} />
+                </TouchableOpacity>
+              </View>
+            </View>
+            {showCountryPicker && renderPickerDropdown(
+              filteredCountries.map(c => ({ label: `${c.flag} ${c.name}`, value: c.code })),
+              selectedCountry,
+              handleCountrySelect,
+              countrySearch,
+              setCountrySearch,
+              'Search country...',
+            )}
+            {showCityPicker && availableCities.length > 0 && (
+              <View style={styles.pickerOptions}>
+                <ScrollView style={styles.pickerScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                  {availableCities.map((city, cityIndex) => (
+                    <TouchableOpacity
+                      key={city || `city-${cityIndex}`}
+                      style={[
+                        styles.pickerOption,
+                        selectedCity === city && styles.pickerOptionSelected,
+                      ]}
+                      onPress={() => handleCitySelect(city)}
+                    >
+                      <Text
                         style={[
-                          styles.pickerOption,
-                          selectedCity === city && styles.pickerOptionSelected,
+                          styles.pickerOptionText,
+                          selectedCity === city && styles.pickerOptionTextSelected,
                         ]}
-                        onPress={() => handleCitySelect(city)}
                       >
-                        <Text
-                          style={[
-                            styles.pickerOptionText,
-                            selectedCity === city && styles.pickerOptionTextSelected,
-                          ]}
-                        >
-                          {city}
-                        </Text>
-                        {selectedCity === city && (
-                          <Check color={colors.accent} size={18} />
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-            </View>
-          </View>
-          )}
-
-          {isAuthenticated && allUserCars.length > 0 && (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Car color={colors.text} size={20} />
-                <Text style={styles.sectionTitle}>My Garage</Text>
-              </View>
-              <Text style={styles.selectCarHint}>Tap a car to set it as your active car for tracking</Text>
-              <View style={styles.garageGrid}>
-                {allUserCars.map((car, index) => (
-                  <TouchableOpacity
-                    key={car.id || `user-car-${index}`}
-                    style={[
-                      styles.garageCard,
-                      car.isPrimary && styles.garageCardActive,
-                    ]}
-                    onPress={() => handleSelectActiveCar(car.id)}
-                    activeOpacity={0.7}
-                  >
-                    {car.picture ? (
-                      <Image source={{ uri: car.picture }} style={styles.garageCarImage} />
-                    ) : (
-                      <View style={styles.garageCarImagePlaceholder}>
-                        <Car color={colors.textLight} size={32} />
-                      </View>
-                    )}
-                    <View style={styles.garageCardContent}>
-                      <Text style={styles.garageCarBrand} numberOfLines={1}>{car.brand}</Text>
-                      <Text style={styles.garageCarModel} numberOfLines={1}>{car.model}</Text>
-                      {car.isPrimary && (
-                        <View style={styles.activeTag}>
-                          <Check color={colors.textInverted} size={10} />
-                          <Text style={styles.activeTagText}>Active</Text>
-                        </View>
+                        {city}
+                      </Text>
+                      {selectedCity === city && (
+                        <Check color={colors.accent} size={18} />
                       )}
-                    </View>
-                  </TouchableOpacity>
-                ))}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
               </View>
-            </View>
-          )}
+            )}
+          </View>
 
-          {(isAuthenticated || authMode === 'signup') && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Car color={colors.text} size={20} />
-              <Text style={styles.sectionTitle}>Primary Car {authMode === 'signup' && !isAuthenticated ? '(Required)' : '(Optional)'}</Text>
-            </View>
-
+          {renderSectionHeader('PRIMARY CAR')}
+          <View style={styles.sectionContent}>
             <TouchableOpacity style={styles.carImagePicker} onPress={pickCarPicture}>
               {carPicture ? (
-                <Image source={{ uri: carPicture }} style={styles.carImage} />
+                <Image source={{ uri: carPicture }} style={styles.primaryCarImage} />
               ) : (
                 <View style={styles.carImagePlaceholder}>
                   <ImageIcon color={colors.textLight} size={32} />
                   <Text style={styles.carImagePlaceholderText}>Tap to add car photo</Text>
                 </View>
               )}
-              <View style={styles.carCameraOverlay}>
-                <Camera color={colors.textInverted} size={14} />
-              </View>
             </TouchableOpacity>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Brand</Text>
-              <TouchableOpacity
-                style={styles.picker}
-                onPress={() => {
-                  closeAllPickers();
-                  setShowBrandPicker(!showBrandPicker);
-                }}
-              >
-                <Text style={[styles.pickerText, !selectedBrand && styles.placeholderText]}>
-                  {selectedBrand || 'Select brand'}
-                </Text>
-                <ChevronDown color={colors.textLight} size={20} />
-              </TouchableOpacity>
-              
-              {showBrandPicker && (
-                <View style={styles.pickerOptions}>
-                  <View style={styles.searchContainer}>
-                    <Search color={colors.textLight} size={16} />
-                    <TextInput
-                      style={styles.searchInput}
-                      placeholder="Search brand..."
-                      placeholderTextColor={colors.textLight}
-                      value={brandSearch}
-                      onChangeText={setBrandSearch}
-                      autoFocus
-                    />
-                  </View>
-                  <ScrollView style={styles.pickerScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
-                    {filteredBrands.length === 0 ? (
-                      <View style={styles.noResults}>
-                        <Text style={styles.noResultsText}>No brands found</Text>
-                      </View>
-                    ) : (
-                      filteredBrands.map((brand) => (
-                        <TouchableOpacity
-                          key={brand.name}
-                          style={[
-                            styles.pickerOption,
-                            selectedBrand === brand.name && styles.pickerOptionSelected,
-                          ]}
-                          onPress={() => handleBrandSelect(brand.name)}
-                        >
-                          <Text
-                            style={[
-                              styles.pickerOptionText,
-                              selectedBrand === brand.name && styles.pickerOptionTextSelected,
-                            ]}
-                          >
-                            {brand.name}
-                          </Text>
-                          {selectedBrand === brand.name && (
-                            <Check color={colors.accent} size={18} />
-                          )}
-                        </TouchableOpacity>
-                      ))
-                    )}
-                  </ScrollView>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Model</Text>
-              <TouchableOpacity
-                style={[styles.picker, !selectedBrand && styles.pickerDisabled]}
-                onPress={() => {
-                  if (selectedBrand) {
-                    closeAllPickers();
-                    setShowModelPicker(!showModelPicker);
-                  }
-                }}
-                disabled={!selectedBrand}
-              >
-                <Text style={[styles.pickerText, !selectedModel && styles.placeholderText]}>
-                  {selectedModel || (selectedBrand ? 'Select model' : 'Select brand first')}
-                </Text>
-                <ChevronDown color={colors.textLight} size={20} />
-              </TouchableOpacity>
-
-              {showModelPicker && availableModels.length > 0 && (
-                <View style={styles.pickerOptions}>
-                  <View style={styles.searchContainer}>
-                    <Search color={colors.textLight} size={16} />
-                    <TextInput
-                      style={styles.searchInput}
-                      placeholder="Search model..."
-                      placeholderTextColor={colors.textLight}
-                      value={modelSearch}
-                      onChangeText={setModelSearch}
-                      autoFocus
-                    />
-                  </View>
-                  <ScrollView style={styles.pickerScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
-                    {filteredModels.length === 0 ? (
-                      <View style={styles.noResults}>
-                        <Text style={styles.noResultsText}>No models found</Text>
-                      </View>
-                    ) : (
-                      filteredModels.map((model, index) => (
-                        <TouchableOpacity
-                          key={`${model}-${index}`}
-                          style={[
-                            styles.pickerOption,
-                            selectedModel === model && styles.pickerOptionSelected,
-                          ]}
-                          onPress={() => handleModelSelect(model)}
-                        >
-                          <Text
-                            style={[
-                              styles.pickerOptionText,
-                              selectedModel === model && styles.pickerOptionTextSelected,
-                            ]}
-                          >
-                            {model}
-                          </Text>
-                          {selectedModel === model && (
-                            <Check color={colors.accent} size={18} />
-                          )}
-                        </TouchableOpacity>
-                      ))
-                    )}
-                  </ScrollView>
-                </View>
-              )}
-            </View>
-          </View>
-          )}
-
-          {(isAuthenticated || authMode === 'signup') && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Car color={colors.text} size={20} />
-              <Text style={styles.sectionTitle}>Additional Cars</Text>
-            </View>
-
-            {existingCars.map((car, index) => (
-              <View key={car.id || `existing-car-${index}`} style={styles.additionalCarCard}>
-                {car.picture && (
-                  <Image source={{ uri: car.picture }} style={styles.additionalCarImage} />
-                )}
-                <View style={styles.additionalCarInfo}>
-                  <Text style={styles.additionalCarName}>{car.brand} {car.model}</Text>
-                </View>
+            <View style={styles.rowPickers}>
+              <View style={styles.halfPicker}>
+                <Text style={styles.label}>BRAND</Text>
                 <TouchableOpacity
-                  style={styles.removeCarButton}
-                  onPress={() => handleRemoveExistingCar(car.id)}
+                  style={styles.picker}
+                  onPress={() => {
+                    closeAllPickers();
+                    setShowBrandPicker(!showBrandPicker);
+                  }}
                 >
-                  <X color={colors.danger} size={18} />
+                  <Text style={[styles.pickerText, !selectedBrand && styles.placeholderText]} numberOfLines={1}>
+                    {selectedBrand || 'Select'}
+                  </Text>
+                  <ChevronDown color={colors.textLight} size={18} />
                 </TouchableOpacity>
               </View>
-            ))}
+              <View style={styles.halfPicker}>
+                <Text style={styles.label}>MODEL</Text>
+                <TouchableOpacity
+                  style={[styles.picker, !selectedBrand && styles.pickerDisabled]}
+                  onPress={() => {
+                    if (selectedBrand) {
+                      closeAllPickers();
+                      setShowModelPicker(!showModelPicker);
+                    }
+                  }}
+                  disabled={!selectedBrand}
+                >
+                  <Text style={[styles.pickerText, !selectedModel && styles.placeholderText]} numberOfLines={1}>
+                    {selectedModel || 'Select'}
+                  </Text>
+                  <ChevronDown color={colors.textLight} size={18} />
+                </TouchableOpacity>
+              </View>
+            </View>
+            {showBrandPicker && renderPickerDropdown(
+              filteredBrands.map(b => ({ label: b.name, value: b.name })),
+              selectedBrand,
+              handleBrandSelect,
+              brandSearch,
+              setBrandSearch,
+              'Search brand...',
+            )}
+            {showModelPicker && availableModels.length > 0 && renderPickerDropdown(
+              filteredModels.map(m => ({ label: m, value: m })),
+              selectedModel,
+              handleModelSelect,
+              modelSearch,
+              setModelSearch,
+              'Search model...',
+            )}
 
             {additionalCars.map((car, index) => (
-              <View key={car.id || `additional-car-${index}`} style={styles.additionalCarCard}>
-                {car.picture && (
-                  <Image source={{ uri: car.picture }} style={styles.additionalCarImage} />
-                )}
-                <View style={styles.additionalCarInfo}>
-                  <Text style={styles.additionalCarName}>{car.brand} {car.model}</Text>
-                  <Text style={styles.additionalCarLabel}>New</Text>
+              <View key={car.id || `add-car-${index}`} style={styles.secondaryCarRow}>
+                <View style={styles.secondaryCarLeft}>
+                  {car.picture ? (
+                    <Image source={{ uri: car.picture }} style={styles.secondaryCarThumb} />
+                  ) : (
+                    <View style={styles.secondaryCarThumbPlaceholder}>
+                      <Car color={colors.textLight} size={20} />
+                    </View>
+                  )}
+                  <View style={styles.secondaryCarInfo}>
+                    <Text style={styles.secondaryCarName} numberOfLines={1}>{car.brand} {car.model}</Text>
+                    <Text style={styles.newCarLabel}>New</Text>
+                  </View>
                 </View>
                 <TouchableOpacity
-                  style={styles.removeCarButton}
                   onPress={() => handleRemoveAdditionalCar(car.id)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <X color={colors.danger} size={18} />
                 </TouchableOpacity>
               </View>
             ))}
 
-            {(isAuthenticated || authMode === 'signup') && showAddCarForm ? (
+            {showAddCarForm ? (
               <View style={styles.addCarForm}>
                 <TouchableOpacity style={styles.carImagePickerSmall} onPress={pickNewCarPicture}>
                   {newCarPicture ? (
@@ -1267,134 +1551,57 @@ export default function ProfileScreen() {
                     </View>
                   )}
                 </TouchableOpacity>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Brand</Text>
-                  <TouchableOpacity
-                    style={styles.picker}
-                    onPress={() => {
-                      closeAllPickers();
-                      setShowNewBrandPicker(!showNewBrandPicker);
-                    }}
-                  >
-                    <Text style={[styles.pickerText, !newCarBrand && styles.placeholderText]}>
-                      {newCarBrand || 'Select brand'}
-                    </Text>
-                    <ChevronDown color={colors.textLight} size={20} />
-                  </TouchableOpacity>
-                  
-                  {showNewBrandPicker && (
-                    <View style={styles.pickerOptions}>
-                      <View style={styles.searchContainer}>
-                        <Search color={colors.textLight} size={16} />
-                        <TextInput
-                          style={styles.searchInput}
-                          placeholder="Search brand..."
-                          placeholderTextColor={colors.textLight}
-                          value={newBrandSearch}
-                          onChangeText={setNewBrandSearch}
-                          autoFocus
-                        />
-                      </View>
-                      <ScrollView style={styles.pickerScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
-                        {filteredNewBrands.length === 0 ? (
-                          <View style={styles.noResults}>
-                            <Text style={styles.noResultsText}>No brands found</Text>
-                          </View>
-                        ) : (
-                          filteredNewBrands.map((brand) => (
-                            <TouchableOpacity
-                              key={brand.name}
-                              style={[
-                                styles.pickerOption,
-                                newCarBrand === brand.name && styles.pickerOptionSelected,
-                              ]}
-                              onPress={() => handleNewBrandSelect(brand.name)}
-                            >
-                              <Text
-                                style={[
-                                  styles.pickerOptionText,
-                                  newCarBrand === brand.name && styles.pickerOptionTextSelected,
-                                ]}
-                              >
-                                {brand.name}
-                              </Text>
-                              {newCarBrand === brand.name && (
-                                <Check color={colors.accent} size={18} />
-                              )}
-                            </TouchableOpacity>
-                          ))
-                        )}
-                      </ScrollView>
-                    </View>
-                  )}
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Model</Text>
-                  <TouchableOpacity
-                    style={[styles.picker, !newCarBrand && styles.pickerDisabled]}
-                    onPress={() => {
-                      if (newCarBrand) {
+                <View style={styles.rowPickers}>
+                  <View style={styles.halfPicker}>
+                    <Text style={styles.label}>BRAND</Text>
+                    <TouchableOpacity
+                      style={styles.picker}
+                      onPress={() => {
                         closeAllPickers();
-                        setShowNewModelPicker(!showNewModelPicker);
-                      }
-                    }}
-                    disabled={!newCarBrand}
-                  >
-                    <Text style={[styles.pickerText, !newCarModel && styles.placeholderText]}>
-                      {newCarModel || (newCarBrand ? 'Select model' : 'Select brand first')}
-                    </Text>
-                    <ChevronDown color={colors.textLight} size={20} />
-                  </TouchableOpacity>
-
-                  {showNewModelPicker && newCarModels.length > 0 && (
-                    <View style={styles.pickerOptions}>
-                      <View style={styles.searchContainer}>
-                        <Search color={colors.textLight} size={16} />
-                        <TextInput
-                          style={styles.searchInput}
-                          placeholder="Search model..."
-                          placeholderTextColor={colors.textLight}
-                          value={newModelSearch}
-                          onChangeText={setNewModelSearch}
-                          autoFocus
-                        />
-                      </View>
-                      <ScrollView style={styles.pickerScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
-                        {filteredNewModels.length === 0 ? (
-                          <View style={styles.noResults}>
-                            <Text style={styles.noResultsText}>No models found</Text>
-                          </View>
-                        ) : (
-                          filteredNewModels.map((model, index) => (
-                            <TouchableOpacity
-                              key={`${model}-${index}`}
-                              style={[
-                                styles.pickerOption,
-                                newCarModel === model && styles.pickerOptionSelected,
-                              ]}
-                              onPress={() => handleNewModelSelect(model)}
-                            >
-                              <Text
-                                style={[
-                                  styles.pickerOptionText,
-                                  newCarModel === model && styles.pickerOptionTextSelected,
-                                ]}
-                              >
-                                {model}
-                              </Text>
-                              {newCarModel === model && (
-                                <Check color={colors.accent} size={18} />
-                              )}
-                            </TouchableOpacity>
-                          ))
-                        )}
-                      </ScrollView>
-                    </View>
-                  )}
+                        setShowNewBrandPicker(!showNewBrandPicker);
+                      }}
+                    >
+                      <Text style={[styles.pickerText, !newCarBrand && styles.placeholderText]} numberOfLines={1}>
+                        {newCarBrand || 'Select'}
+                      </Text>
+                      <ChevronDown color={colors.textLight} size={18} />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.halfPicker}>
+                    <Text style={styles.label}>MODEL</Text>
+                    <TouchableOpacity
+                      style={[styles.picker, !newCarBrand && styles.pickerDisabled]}
+                      onPress={() => {
+                        if (newCarBrand) {
+                          closeAllPickers();
+                          setShowNewModelPicker(!showNewModelPicker);
+                        }
+                      }}
+                      disabled={!newCarBrand}
+                    >
+                      <Text style={[styles.pickerText, !newCarModel && styles.placeholderText]} numberOfLines={1}>
+                        {newCarModel || 'Select'}
+                      </Text>
+                      <ChevronDown color={colors.textLight} size={18} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-
+                {showNewBrandPicker && renderPickerDropdown(
+                  filteredNewBrands.map(b => ({ label: b.name, value: b.name })),
+                  newCarBrand,
+                  handleNewBrandSelect,
+                  newBrandSearch,
+                  setNewBrandSearch,
+                  'Search brand...',
+                )}
+                {showNewModelPicker && newCarModels.length > 0 && renderPickerDropdown(
+                  filteredNewModels.map(m => ({ label: m, value: m })),
+                  newCarModel,
+                  handleNewModelSelect,
+                  newModelSearch,
+                  setNewModelSearch,
+                  'Search model...',
+                )}
                 <View style={styles.addCarFormButtons}>
                   <TouchableOpacity
                     style={styles.cancelCarButton}
@@ -1421,68 +1628,84 @@ export default function ProfileScreen() {
                 onPress={() => setShowAddCarForm(true)}
               >
                 <Plus color={colors.accent} size={20} />
-                <Text style={styles.addCarButtonText}>Add Another Car</Text>
+                <Text style={styles.addCarButtonText}>ADD ANOTHER CAR</Text>
               </TouchableOpacity>
             )}
           </View>
-          )}
+        </>
+      )}
 
-          <TouchableOpacity
-            style={[styles.saveButton, (isSubmitting || isCheckingDisplayName) && styles.saveButtonDisabled]}
-            onPress={handleSave}
-            disabled={isSubmitting || isCheckingDisplayName}
-          >
-            <Text style={styles.saveButtonText}>
-              {isSubmitting || isCheckingDisplayName ? 'Saving...' : isAuthenticated ? 'Save Changes' : authMode === 'signin' ? 'Sign In' : 'Create Account'}
-            </Text>
-          </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.saveButton, (isSubmitting || isCheckingDisplayName) && styles.saveButtonDisabled]}
+        onPress={handleSave}
+        disabled={isSubmitting || isCheckingDisplayName}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.saveButtonText}>
+          {isSubmitting || isCheckingDisplayName ? 'Saving...' : authMode === 'signin' ? 'Sign In' : 'Create Account'}
+        </Text>
+      </TouchableOpacity>
 
-          {!isAuthenticated && (
-            <>
-              <View style={styles.dividerContainer}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or</Text>
-                <View style={styles.dividerLine} />
-              </View>
+      <View style={styles.dividerContainer}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>or</Text>
+        <View style={styles.dividerLine} />
+      </View>
 
-              <TouchableOpacity
-                style={[styles.googleButton, (isGoogleLoading || !request) && styles.googleButtonDisabled]}
-                onPress={handleGoogleButtonPress}
-                disabled={isGoogleLoading || !request}
-                activeOpacity={0.7}
-              >
-                {isGoogleLoading ? (
-                  <ActivityIndicator size="small" color="#4285F4" />
-                ) : (
-                  <>
-                    <View style={styles.googleIconContainer}>
-                      <Text style={styles.googleIcon}>G</Text>
-                    </View>
-                    <Text style={styles.googleButtonText}>Continue with Google</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.googleButton, (isGoogleLoading || !request) && styles.googleButtonDisabled]}
+        onPress={handleGoogleButtonPress}
+        disabled={isGoogleLoading || !request}
+        activeOpacity={0.7}
+      >
+        {isGoogleLoading ? (
+          <ActivityIndicator size="small" color="#4285F4" />
+        ) : (
+          <>
+            <View style={styles.googleIconContainer}>
+              <Text style={styles.googleIcon}>G</Text>
+            </View>
+            <Text style={styles.googleButtonText}>Continue with Google</Text>
+          </>
+        )}
+      </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.switchAuthButton}
-                onPress={() => setAuthMode(authMode === 'signin' ? 'signup' : 'signin')}
-              >
-                <Text style={styles.switchAuthText}>
-                  {authMode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
-                  <Text style={styles.switchAuthLink}>
-                    {authMode === 'signin' ? 'Sign Up' : 'Sign In'}
-                  </Text>
-                </Text>
-              </TouchableOpacity>
-            </>
-          )}
+      <TouchableOpacity
+        style={styles.switchAuthButton}
+        onPress={() => setAuthMode(authMode === 'signin' ? 'signup' : 'signin')}
+      >
+        <Text style={styles.switchAuthText}>
+          {authMode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
+          <Text style={styles.switchAuthLink}>
+            {authMode === 'signin' ? 'Sign Up' : 'Sign In'}
+          </Text>
+        </Text>
+      </TouchableOpacity>
+    </>
+  );
 
-          {isAuthenticated && (
-            <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-              <LogOut color={colors.danger} size={20} />
-              <Text style={styles.signOutText}>Sign Out</Text>
-            </TouchableOpacity>
-          )}
+  return (
+    <>
+      <Stack.Screen
+        options={{
+          title: isAuthenticated ? 'Edit Profile' : authMode === 'signin' ? 'Sign In' : 'Create Account',
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.text,
+          headerTitleStyle: { fontSize: 16, fontWeight: '600' as const },
+          headerTitleAlign: 'center',
+        }}
+      />
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {isAuthenticated ? renderAuthenticatedProfile() : renderAuthForm()}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -1508,7 +1731,7 @@ export default function ProfileScreen() {
                   Enter your email address and we will send you a code to reset your password.
                 </Text>
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Email</Text>
+                  <Text style={styles.label}>EMAIL</Text>
                   <TextInput
                     style={styles.input}
                     value={resetEmail}
@@ -1537,7 +1760,7 @@ export default function ProfileScreen() {
                   Enter the 6-digit code sent to {resetEmail}
                 </Text>
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Reset Code</Text>
+                  <Text style={styles.label}>RESET CODE</Text>
                   <TextInput
                     style={styles.input}
                     value={resetCode}
@@ -1569,7 +1792,7 @@ export default function ProfileScreen() {
                   Enter your new password.
                 </Text>
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>New Password</Text>
+                  <Text style={styles.label}>NEW PASSWORD</Text>
                   <View style={styles.passwordContainer}>
                     <TextInput
                       style={styles.passwordInput}
@@ -1594,7 +1817,7 @@ export default function ProfileScreen() {
                   <Text style={styles.passwordHint}>Must be at least 6 characters</Text>
                 </View>
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Confirm Password</Text>
+                  <Text style={styles.label}>CONFIRM PASSWORD</Text>
                   <View style={styles.passwordContainer}>
                     <TextInput
                       style={styles.passwordInput}
@@ -1644,91 +1867,124 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 50,
   },
   avatarSection: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 28,
+    marginTop: 8,
   },
   avatarContainer: {
     position: 'relative',
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+  avatarRing: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: `${colors.accent}40`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 4,
+  },
+  avatarImage: {
+    width: 108,
+    height: 108,
+    borderRadius: 54,
+  },
+  avatarPlaceholder: {
+    width: 108,
+    height: 108,
+    borderRadius: 54,
     backgroundColor: colors.cardBackground,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-  },
   cameraOverlay: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.accent,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.background,
+    bottom: 2,
+    right: 2,
   },
-  avatarText: {
-    fontSize: 24,
+  profileName: {
+    fontSize: 20,
     fontFamily: 'Orbitron_700Bold',
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   avatarSubtext: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Orbitron_400Regular',
     color: colors.textLight,
     textAlign: 'center',
     paddingHorizontal: 20,
+    lineHeight: 18,
   },
   tapToChangeText: {
-    fontSize: 12,
-    fontFamily: 'Orbitron_400Regular',
-    color: colors.accent,
-    marginTop: 8,
+    fontSize: 11,
+    fontFamily: 'Orbitron_500Medium',
+    color: colors.textLight,
+    marginTop: 6,
+    letterSpacing: 1.5,
   },
-  section: {
-    marginBottom: 24,
-  },
-  sectionHeader: {
+  sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  sectionAccentBar: {
+    width: 4,
+    height: 18,
+    borderRadius: 2,
+    backgroundColor: colors.accent,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontFamily: 'Orbitron_600SemiBold',
+    fontSize: 13,
+    fontFamily: 'Orbitron_700Bold',
     color: colors.text,
-    marginBottom: 16,
+    letterSpacing: 1,
+  },
+  sectionContent: {
+    marginBottom: 24,
+  },
+  useLocationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.accent,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  useLocationPillText: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: '#FFFFFF',
   },
   inputGroup: {
     marginBottom: 16,
   },
   label: {
-    fontSize: 14,
-    fontFamily: 'Orbitron_500Medium',
+    fontSize: 11,
+    fontFamily: 'Orbitron_600SemiBold',
     color: colors.textLight,
     marginBottom: 8,
+    letterSpacing: 1,
   },
   input: {
     backgroundColor: colors.cardLight,
     borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
+    padding: 14,
+    fontSize: 15,
     fontFamily: 'Orbitron_400Regular',
     color: colors.text,
     borderWidth: 1,
@@ -1764,58 +2020,48 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   passwordInput: {
     flex: 1,
-    padding: 16,
-    fontSize: 16,
+    padding: 14,
+    fontSize: 15,
     fontFamily: 'Orbitron_400Regular',
     color: colors.text,
   },
   passwordToggle: {
-    padding: 16,
+    padding: 14,
   },
   passwordHint: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: 'Orbitron_400Regular',
     color: colors.textLight,
     marginTop: 6,
   },
-  locationButton: {
+  rowPickers: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 16,
+    gap: 12,
+    marginBottom: 4,
   },
-  locationButtonText: {
-    fontSize: 14,
-    fontFamily: 'Orbitron_600SemiBold',
-    color: colors.textInverted,
+  halfPicker: {
+    flex: 1,
+    marginBottom: 12,
   },
   picker: {
     backgroundColor: colors.cardLight,
     borderRadius: 12,
-    padding: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
   },
-  pickerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-  },
   pickerDisabled: {
     opacity: 0.5,
   },
   pickerText: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: 'Orbitron_400Regular',
     color: colors.text,
+    flex: 1,
   },
   placeholderText: {
     color: colors.textLight,
@@ -1823,7 +2069,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   pickerOptions: {
     backgroundColor: colors.cardLight,
     borderRadius: 12,
-    marginTop: 8,
+    marginTop: 4,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: colors.border,
     maxHeight: 250,
@@ -1869,7 +2116,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: `${colors.accent}10`,
   },
   pickerOptionText: {
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: 'Orbitron_400Regular',
     color: colors.text,
   },
@@ -1877,17 +2124,51 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.accent,
     fontFamily: 'Orbitron_500Medium',
   },
-  carImagePicker: {
-    width: '100%',
-    height: 160,
-    borderRadius: 12,
+  primaryCarCard: {
+    borderRadius: 16,
     overflow: 'hidden',
     marginBottom: 16,
     position: 'relative',
+    backgroundColor: colors.cardBackground,
   },
-  carImage: {
+  primaryCarImage: {
     width: '100%',
-    height: '100%',
+    height: 180,
+  },
+  primaryCarImagePlaceholder: {
+    width: '100%',
+    height: 180,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  primaryCarPlaceholderText: {
+    fontSize: 13,
+    fontFamily: 'Orbitron_400Regular',
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 8,
+  },
+  primaryBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: colors.accent,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  primaryBadgeText: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_700Bold',
+    color: '#FFFFFF',
+    letterSpacing: 1,
+  },
+  carImagePicker: {
+    width: '100%',
+    height: 180,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+    backgroundColor: colors.cardBackground,
   },
   carImagePlaceholder: {
     width: '100%',
@@ -1898,57 +2179,62 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderStyle: 'dashed',
-    borderRadius: 12,
+    borderRadius: 16,
   },
   carImagePlaceholderText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Orbitron_400Regular',
     color: colors.textLight,
     marginTop: 8,
   },
-  carCameraOverlay: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.accent,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  additionalCarCard: {
+  secondaryCarRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: colors.cardLight,
     borderRadius: 12,
     padding: 12,
-    marginBottom: 12,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  additionalCarImage: {
-    width: 60,
-    height: 40,
-    borderRadius: 8,
-    marginRight: 12,
+  secondaryCarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
   },
-  additionalCarInfo: {
+  secondaryCarThumb: {
+    width: 56,
+    height: 38,
+    borderRadius: 8,
+  },
+  secondaryCarThumbPlaceholder: {
+    width: 56,
+    height: 38,
+    borderRadius: 8,
+    backgroundColor: colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  secondaryCarInfo: {
     flex: 1,
   },
-  additionalCarName: {
-    fontSize: 15,
-    fontFamily: 'Orbitron_500Medium',
+  secondaryCarName: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_600SemiBold',
     color: colors.text,
   },
-  additionalCarLabel: {
-    fontSize: 12,
+  secondaryCarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  newCarLabel: {
+    fontSize: 11,
     fontFamily: 'Orbitron_400Regular',
     color: colors.accent,
     marginTop: 2,
-  },
-  removeCarButton: {
-    padding: 8,
   },
   addCarButton: {
     flexDirection: 'row',
@@ -1957,15 +2243,16 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 8,
     backgroundColor: colors.cardLight,
     borderRadius: 12,
-    padding: 14,
+    paddingVertical: 16,
     borderWidth: 1,
-    borderColor: colors.accent,
-    borderStyle: 'dashed',
+    borderColor: colors.border,
+    marginTop: 4,
   },
   addCarButtonText: {
-    fontSize: 14,
-    fontFamily: 'Orbitron_500Medium',
+    fontSize: 12,
+    fontFamily: 'Orbitron_600SemiBold',
     color: colors.accent,
+    letterSpacing: 1,
   },
   addCarForm: {
     backgroundColor: colors.cardLight,
@@ -1973,6 +2260,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: colors.border,
+    marginTop: 4,
   },
   carImagePickerSmall: {
     width: 80,
@@ -2005,54 +2293,56 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   cancelCarButton: {
     flex: 1,
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: colors.background,
     alignItems: 'center',
   },
   cancelCarButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Orbitron_500Medium',
     color: colors.textLight,
   },
   confirmCarButton: {
     flex: 1,
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: colors.accent,
     alignItems: 'center',
   },
   confirmCarButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Orbitron_600SemiBold',
-    color: colors.textInverted,
+    color: '#FFFFFF',
   },
   saveButton: {
     backgroundColor: colors.accent,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 14,
+    paddingVertical: 18,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 16,
   },
   saveButtonDisabled: {
     opacity: 0.6,
   },
   saveButtonText: {
-    color: colors.textInverted,
+    color: '#FFFFFF',
     fontSize: 16,
-    fontFamily: 'Orbitron_600SemiBold',
+    fontFamily: 'Orbitron_700Bold',
+    letterSpacing: 0.5,
   },
   signOutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginTop: 24,
-    padding: 16,
+    marginTop: 20,
+    paddingVertical: 16,
   },
   signOutText: {
-    color: colors.danger,
-    fontSize: 16,
-    fontFamily: 'Orbitron_500Medium',
+    color: colors.accent,
+    fontSize: 13,
+    fontFamily: 'Orbitron_600SemiBold',
+    letterSpacing: 1,
   },
   switchAuthButton: {
     alignItems: 'center',
@@ -2060,7 +2350,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     padding: 12,
   },
   switchAuthText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Orbitron_400Regular',
     color: colors.textLight,
   },
@@ -2079,7 +2369,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.border,
   },
   dividerText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Orbitron_400Regular',
     color: colors.textLight,
     marginHorizontal: 16,
@@ -2112,7 +2402,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: '#4285F4',
   },
   googleButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'Orbitron_500Medium',
     color: colors.text,
   },
@@ -2121,7 +2411,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignSelf: 'flex-end',
   },
   forgotPasswordText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Orbitron_500Medium',
     color: colors.accent,
   },
@@ -2151,7 +2441,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: 'Orbitron_600SemiBold',
     color: colors.text,
   },
@@ -2159,7 +2449,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     padding: 4,
   },
   modalDescription: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Orbitron_400Regular',
     color: colors.textLight,
     marginBottom: 20,
@@ -2171,83 +2461,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     padding: 8,
   },
   resendCodeText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Orbitron_500Medium',
     color: colors.accent,
-  },
-  selectCarHint: {
-    fontSize: 13,
-    fontFamily: 'Orbitron_400Regular',
-    color: colors.textLight,
-    marginBottom: 12,
-    marginTop: -8,
-  },
-  garageGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -6,
-  },
-  garageCard: {
-    width: '50%',
-    paddingHorizontal: 6,
-    marginBottom: 12,
-  },
-  garageCardActive: {},
-  garageCarImage: {
-    width: '100%',
-    height: 100,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-  },
-  garageCarImagePlaceholder: {
-    width: '100%',
-    height: 100,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    backgroundColor: colors.cardLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderBottomWidth: 0,
-  },
-  garageCardContent: {
-    backgroundColor: colors.cardLight,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderTopWidth: 0,
-  },
-  garageCarBrand: {
-    fontSize: 11,
-    fontFamily: 'Orbitron_400Regular',
-    color: colors.textLight,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  garageCarModel: {
-    fontSize: 14,
-    fontFamily: 'Orbitron_600SemiBold',
-    color: colors.text,
-    marginTop: 2,
-  },
-  activeTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.accent,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    gap: 4,
-  },
-  activeTagText: {
-    fontSize: 10,
-    fontFamily: 'Orbitron_600SemiBold',
-    color: colors.textInverted,
-    textTransform: 'uppercase',
   },
 });
