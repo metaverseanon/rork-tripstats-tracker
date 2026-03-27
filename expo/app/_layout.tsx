@@ -305,6 +305,7 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerBackTitle: "Back", contentStyle: { backgroundColor: '#000000' } }}>
       <Stack.Screen name="index" options={{ headerShown: false, animation: 'none' }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false, animation: 'none' }} />
+      <Stack.Screen name="whats-new" options={{ headerShown: false, animation: 'none' }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'none' }} />
       <Stack.Screen name="profile" options={{ presentation: "card" }} />
       <Stack.Screen name="user-profile" options={{ presentation: "card" }} />

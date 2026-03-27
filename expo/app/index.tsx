@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { StyleSheet, Animated, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { WHATS_NEW_VERSION } from './whats-new';
 
 const ONBOARDING_KEY = 'onboarding_completed';
 
@@ -13,16 +14,19 @@ export default function WelcomeScreen() {
     const checkOnboarding = async () => {
       try {
         const completed = await AsyncStorage.getItem(ONBOARDING_KEY);
+        const seenWhatsNew = await AsyncStorage.getItem(WHATS_NEW_VERSION);
         const timer = setTimeout(() => {
           Animated.timing(fadeAnim, {
             toValue: 0,
             duration: 400,
             useNativeDriver: true,
           }).start(() => {
-            if (completed === 'true') {
-              router.replace('/(tabs)/track' as any);
-            } else {
+            if (completed !== 'true') {
               router.replace('/onboarding' as any);
+            } else if (seenWhatsNew !== 'true') {
+              router.replace('/whats-new' as any);
+            } else {
+              router.replace('/(tabs)/track' as any);
             }
           });
         }, 4000);
