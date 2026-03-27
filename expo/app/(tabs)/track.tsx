@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Platform, Animated, Alert } from 'react-native';
 import * as ExpoLocation from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Play, Square, Map, Gauge, X, Timer, Share2 } from 'lucide-react-native';
+import { Play, Square, Map, Gauge, X, Timer } from 'lucide-react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useTrips } from '@/providers/TripProvider';
 import { useSettings } from '@/providers/SettingsProvider';
@@ -272,22 +272,26 @@ export default function TrackScreen() {
             </View>
           </View>
 
-          <View style={[sStyles.accelCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <Text style={[sStyles.statLabel, { color: colors.textLight }]}>{getAccelerationLabel('0-100').toUpperCase()}</Text>
-            <View style={sStyles.accelRow}>
-              <View style={sStyles.statValueRow}>
-                <Text style={[sStyles.accelValue, { color: colors.text }]}>
-                  {currentTrip?.time0to100 ? currentTrip.time0to100.toFixed(2) : '--'}
-                </Text>
-                <Text style={[sStyles.accelUnit, { color: colors.textLight }]}>s</Text>
-              </View>
-              <View style={[sStyles.shareIconBtn, { backgroundColor: isDark ? '#2A2A2A' : '#F0F0F0' }]}>
-                <Share2 size={16} color={colors.textLight} />
-              </View>
+          <View style={[sStyles.durationCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <View style={sStyles.durationHeader}>
+              <Timer size={18} color={colors.textLight} />
+              <Text style={[sStyles.durationLabel, { color: colors.textLight }]}>DURATION</Text>
             </View>
+            <Text style={[sStyles.durationValue, { color: colors.text }]}>
+              {currentTrip ? formatDurationLong(currentTrip.duration) : '00:00:00'}
+            </Text>
           </View>
 
           <View style={sStyles.row}>
+            <View style={[sStyles.statCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+              <Text style={[sStyles.statLabel, { color: colors.textLight }]}>{getAccelerationLabel('0-100').toUpperCase()}</Text>
+              <View style={sStyles.statValueRow}>
+                <Text style={[sStyles.statValue, { color: colors.text }]}>
+                  {currentTrip?.time0to100 ? currentTrip.time0to100.toFixed(2) : '--'}
+                </Text>
+                <Text style={[sStyles.statSuffixSmall, { color: colors.textLight }]}>SEC</Text>
+              </View>
+            </View>
             <View style={[sStyles.statCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
               <Text style={[sStyles.statLabel, { color: colors.textLight }]}>{getAccelerationLabel('0-200').toUpperCase()}</Text>
               <View style={sStyles.statValueRow}>
@@ -297,6 +301,9 @@ export default function TrackScreen() {
                 <Text style={[sStyles.statSuffixSmall, { color: colors.textLight }]}>SEC</Text>
               </View>
             </View>
+          </View>
+
+          <View style={sStyles.row}>
             <View style={[sStyles.statCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
               <Text style={[sStyles.statLabel, { color: colors.textLight }]}>G-FORCE</Text>
               <View style={sStyles.statValueRow}>
@@ -306,28 +313,16 @@ export default function TrackScreen() {
                 <Text style={[sStyles.statSuffixSmall, { color: colors.textLight }]}>LAT</Text>
               </View>
             </View>
-          </View>
-
-          {!speedCameraBlocked && (
-            <View style={[sStyles.accelCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-              <Text style={[sStyles.statLabel, { color: colors.textLight }]}>SPEED CAMERAS</Text>
-              <View style={sStyles.statValueRow}>
-                <Text style={[sStyles.accelValue, { color: colors.text }]}>
-                  {currentTrip?.speedCamerasDetected ?? 0}
-                </Text>
-                <Text style={[sStyles.accelUnit, { color: colors.textLight }]}>detected</Text>
+            {!speedCameraBlocked && (
+              <View style={[sStyles.statCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+                <Text style={[sStyles.statLabel, { color: colors.textLight }]}>SPEED CAMERAS</Text>
+                <View style={sStyles.statValueRow}>
+                  <Text style={[sStyles.statValue, { color: colors.text }]}>
+                    {currentTrip?.speedCamerasDetected ?? 0}
+                  </Text>
+                </View>
               </View>
-            </View>
-          )}
-
-          <View style={[sStyles.durationCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <View style={sStyles.durationHeader}>
-              <Timer size={18} color={colors.textLight} />
-              <Text style={[sStyles.durationLabel, { color: colors.textLight }]}>DURATION</Text>
-            </View>
-            <Text style={[sStyles.durationValue, { color: colors.text }]}>
-              {currentTrip ? formatDurationLong(currentTrip.duration) : '00:00:00'}
-            </Text>
+            )}
           </View>
         </View>
       </ScrollView>
