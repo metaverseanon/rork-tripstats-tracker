@@ -135,6 +135,19 @@ export default function LeaderboardScreen() {
   const pendingNavRef = useRef<{ latitude: number; longitude: number; name: string } | null>(null);
   const [followingUsers, setFollowingUsers] = useState<Record<string, boolean>>({});
   const [followLoadingUserId, setFollowLoadingUserId] = useState<string | null>(null);
+  const [failedAvatars, setFailedAvatars] = useState<Set<string>>(new Set());
+
+  const handleAvatarError = useCallback((uri: string) => {
+    setFailedAvatars(prev => {
+      const next = new Set(prev);
+      next.add(uri);
+      return next;
+    });
+  }, []);
+
+  const isValidAvatar = useCallback((uri?: string): uri is string => {
+    return !!uri && uri.trim().length > 0 && !failedAvatars.has(uri);
+  }, [failedAvatars]);
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -1466,8 +1479,8 @@ export default function LeaderboardScreen() {
                   >
                     <View style={styles.podiumAvatarWrap}>
                       <View style={[styles.podiumAvatarRing, { width: ringSize, height: ringSize, borderRadius: ringSize / 2, borderColor: ringColor }]}>
-                        {pic ? (
-                          <Image source={{ uri: pic }} style={{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }} />
+                        {isValidAvatar(pic) ? (
+                          <Image source={{ uri: pic }} style={{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }} onError={() => handleAvatarError(pic)} />
                         ) : (
                           <View style={[styles.podiumAvatarPlaceholder, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }]}>
                             <Text style={[styles.podiumAvatarInitial, isFirst && { fontSize: 28 }]}>
@@ -1568,8 +1581,8 @@ export default function LeaderboardScreen() {
                     }}
                     disabled={!trip.userId || isCurrentUser}
                   >
-                    {displayProfilePic ? (
-                      <Image source={{ uri: displayProfilePic }} style={styles.competitorAvatar} />
+                    {isValidAvatar(displayProfilePic) ? (
+                      <Image source={{ uri: displayProfilePic }} style={styles.competitorAvatar} onError={() => handleAvatarError(displayProfilePic)} />
                     ) : (
                       <View style={styles.competitorAvatarPlaceholder}>
                         <Text style={styles.competitorAvatarInitial}>
