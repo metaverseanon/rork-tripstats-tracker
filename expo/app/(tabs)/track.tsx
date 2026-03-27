@@ -205,9 +205,9 @@ export default function TrackScreen() {
       backgroundColor: isDark ? '#000000' : colors.background,
     },
     speedometerCircle: {
-      width: 240,
-      height: 240,
-      borderRadius: 120,
+      width: 200,
+      height: 200,
+      borderRadius: 100,
       backgroundColor: isDark ? '#1A1A1A' : colors.cardLight,
       borderWidth: 4,
       borderColor: speedColor,
@@ -215,12 +215,12 @@ export default function TrackScreen() {
       justifyContent: 'center',
     },
     speedValue: {
-      fontSize: 67,
+      fontSize: 56,
       fontFamily: 'Orbitron_700Bold',
       color: colors.text,
     },
     speedUnit: {
-      fontSize: 19,
+      fontSize: 16,
       fontFamily: 'Orbitron_600SemiBold',
       color: colors.textLight,
       textTransform: 'uppercase' as const,
@@ -229,7 +229,7 @@ export default function TrackScreen() {
     statCard: {
       backgroundColor: isDark ? '#1A1A1A' : colors.cardLight,
       borderRadius: 12,
-      padding: 14,
+      padding: 10,
       flex: 1,
       minWidth: '30%',
       alignItems: 'center',
@@ -237,13 +237,13 @@ export default function TrackScreen() {
       borderColor: isDark ? '#2A2A2A' : colors.border,
     },
     statValue: {
-      fontSize: 22,
+      fontSize: 18,
       fontFamily: 'Orbitron_600SemiBold',
       color: colors.text,
-      marginBottom: 4,
+      marginBottom: 2,
     },
     statLabel: {
-      fontSize: 11,
+      fontSize: 10,
       fontFamily: 'Orbitron_500Medium',
       color: colors.textLight,
       textTransform: 'uppercase' as const,
@@ -441,18 +441,15 @@ export default function TrackScreen() {
               </Text>
               <Text style={dynamicStyles.statLabel}>Duration</Text>
             </View>
-          </View>
-
-          {!speedCameraBlocked && (
-            <View style={styles.statsRow}>
+            {!speedCameraBlocked && (
               <View style={dynamicStyles.statCard}>
                 <Text style={dynamicStyles.statValue}>
                   {currentTrip?.speedCamerasDetected ?? 0}
                 </Text>
-                <Text style={dynamicStyles.statLabel}>Speed Cameras</Text>
+                <Text style={dynamicStyles.statLabel}>Cameras</Text>
               </View>
-            </View>
-          )}
+            )}
+          </View>
         </View>
       </ScrollView>
 
@@ -580,15 +577,15 @@ const styles = StyleSheet.create({
   },
   speedometerSection: {
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: 14,
   },
   statsGrid: {
-    gap: 10,
-    marginTop: 32,
+    gap: 8,
+    marginTop: 16,
   },
   statsRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   button: {
     flexDirection: 'row',
