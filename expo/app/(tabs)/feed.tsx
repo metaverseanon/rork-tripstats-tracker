@@ -372,11 +372,7 @@ export default function FeedScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Feed</Text>
         <View style={styles.headerRight}>
-          <View style={styles.headerStats}>
-            <Text style={styles.headerStatValue}>{followCountsQuery.data?.following ?? 0}</Text>
-            <Text style={styles.headerStatLabel}>Following</Text>
-          </View>
-          <TouchableOpacity
+<TouchableOpacity
             style={styles.bellButton}
             onPress={() => router.push('/notifications' as any)}
             activeOpacity={0.7}
