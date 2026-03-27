@@ -10,15 +10,6 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     threshold: 100,
     unit: 'km/h',
   },
-  {
-    id: 'speed_150',
-    title: 'Highway Flyer',
-    description: 'Hit 150 km/h on a trip',
-    category: 'speed',
-    icon: 'gauge',
-    threshold: 150,
-    unit: 'km/h',
-  },
 
   {
     id: 'distance_first',
@@ -53,6 +44,15 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     category: 'distance',
     icon: 'globe',
     threshold: 10000,
+    unit: 'km',
+  },
+  {
+    id: 'distance_single_200',
+    title: 'Long Hauler',
+    description: 'Drive 200+ km in a single trip',
+    category: 'distance',
+    icon: 'route',
+    threshold: 200,
     unit: 'km',
   },
 
@@ -123,12 +123,28 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     threshold: 5,
   },
   {
+    id: 'social_follow_25',
+    title: 'Social Butterfly',
+    description: 'Follow 25 drivers',
+    category: 'social',
+    icon: 'users',
+    threshold: 25,
+  },
+  {
     id: 'social_followers_10',
     title: 'Popular',
     description: 'Get 10 followers',
     category: 'social',
     icon: 'star',
     threshold: 10,
+  },
+  {
+    id: 'social_followers_50',
+    title: 'Influencer',
+    description: 'Get 50 followers',
+    category: 'social',
+    icon: 'star',
+    threshold: 50,
   },
 
   {
@@ -149,6 +165,14 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     threshold: 50,
   },
   {
+    id: 'perf_corners_100',
+    title: 'Apex Hunter',
+    description: 'Take 100 corners in a single trip',
+    category: 'performance',
+    icon: 'corner-down-right',
+    threshold: 100,
+  },
+  {
     id: 'perf_quick_launch',
     title: 'Quick Launch',
     description: '0-100 km/h in under 6 seconds',
@@ -163,6 +187,15 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     category: 'performance',
     icon: 'moon',
     threshold: 1,
+  },
+  {
+    id: 'perf_marathon',
+    title: 'Marathon Driver',
+    description: 'Drive for 2+ hours in a single trip',
+    category: 'performance',
+    icon: 'clock',
+    threshold: 7200,
+    unit: 'sec',
   },
 ];
 

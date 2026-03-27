@@ -709,6 +709,7 @@ export default function LeaderboardScreen() {
     { key: 'gForce' as LeaderboardCategory, label: 'Max G-Force', icon: <Activity size={16} color={colors.danger} /> },
     { key: 'zeroToHundred' as LeaderboardCategory, label: getAccelerationLabel('0-100'), icon: <Timer size={16} color={colors.primary} /> },
     { key: 'zeroToTwoHundred' as LeaderboardCategory, label: getAccelerationLabel('0-200'), icon: <Timer size={16} color={colors.accent} /> },
+    { key: 'challengesCompleted' as LeaderboardCategory, label: 'Challenges %', icon: <Trophy size={16} color="#FFD700" /> },
   ], [colors, getAccelerationLabel]);
 
   const activeCategory_data = useMemo(() => {
@@ -822,7 +823,7 @@ export default function LeaderboardScreen() {
 
   const leaderboardTripsQuery = trpc.trips.getLeaderboardTrips.useQuery(
     {
-      category: activeCategory,
+      category: activeCategory === 'challengesCompleted' ? 'topSpeed' : activeCategory,
       country: filters.country,
       city: filters.city,
       carBrand: filters.carBrand,
@@ -833,7 +834,16 @@ export default function LeaderboardScreen() {
     {
       refetchInterval: 30000,
       staleTime: 15000,
+      enabled: activeCategory !== 'challengesCompleted',
+    }
+  );
 
+  const challengesLeaderboardQuery = trpc.social.getChallengesLeaderboard.useQuery(
+    { limit: 10 },
+    {
+      enabled: activeCategory === 'challengesCompleted',
+      refetchInterval: 30000,
+      staleTime: 15000,
     }
   );
 
@@ -859,7 +869,20 @@ export default function LeaderboardScreen() {
     })) as LeaderboardTrip[];
   }, [trips, filters, timePeriod, getTimePeriodStart, matchesCountryFilter, user]);
 
+  const challengesLeaderboardData = useMemo(() => {
+    if (activeCategory !== 'challengesCompleted') return [];
+    return (challengesLeaderboardQuery.data || []) as Array<{
+      userId: string;
+      userName: string;
+      userProfilePicture?: string;
+      achievementCount: number;
+      totalAchievements: number;
+      completionPercent: number;
+    }>;
+  }, [activeCategory, challengesLeaderboardQuery.data]);
+
   const leaderboardData = useMemo(() => {
+    if (activeCategory === 'challengesCompleted') return [];
     const backendTrips: LeaderboardTrip[] = (leaderboardTripsQuery.data || []).map(t => {
       const raw = t as Record<string, unknown>;
       let routePoints: RoutePoint[] | undefined;
@@ -1040,6 +1063,8 @@ export default function LeaderboardScreen() {
         return `${(trip.time0to100 ?? 0).toFixed(2)}s`;
       case 'zeroToTwoHundred':
         return `${(trip.time0to200 ?? 0).toFixed(2)}s`;
+      case 'challengesCompleted':
+        return '';
     }
   };
 
@@ -1444,7 +1469,70 @@ export default function LeaderboardScreen() {
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {leaderboardData.length === 0 ? (
+        {activeCategory === 'challengesCompleted' ? (
+          challengesLeaderboardData.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Trophy size={48} color={colors.textLight} />
+              <Text style={styles.emptyText}>No challenge data yet</Text>
+              <Text style={styles.emptySubtext}>Complete challenges to appear on this leaderboard</Text>
+            </View>
+          ) : (
+            <View style={styles.list}>
+              {challengesLeaderboardData.map((entry, index) => {
+                const rank = index + 1;
+                const isCurrentUser = entry.userId === user?.id;
+                const ringColor = rank === 1 ? colors.accent : rank === 2 ? '#C0C0C0' : rank === 3 ? '#CD7F32' : colors.textLight;
+
+                return (
+                  <TouchableOpacity
+                    key={entry.userId}
+                    style={[styles.competitorCard, isCurrentUser && styles.competitorCardActive]}
+                    onPress={() => {
+                      if (entry.userId && !isCurrentUser) {
+                        router.push({ pathname: '/user-profile', params: { userId: entry.userId } } as any);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    {isCurrentUser && <View style={styles.competitorActiveBar} />}
+                    <Text style={[styles.competitorRank, isCurrentUser && styles.competitorRankActive]}>
+                      {rank < 10 ? `0${rank}` : rank}
+                    </Text>
+                    <View style={styles.competitorAvatarWrap}>
+                      {isValidAvatar(entry.userProfilePicture) ? (
+                        <Image source={{ uri: entry.userProfilePicture }} style={styles.competitorAvatar} onError={() => handleAvatarError(entry.userProfilePicture!)} />
+                      ) : (
+                        <View style={styles.competitorAvatarPlaceholder}>
+                          <Text style={styles.competitorAvatarInitial}>
+                            {(entry.userName || 'D')[0].toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.competitorInfo}>
+                      <View style={styles.competitorNameRow}>
+                        <Text style={styles.competitorName} numberOfLines={1}>
+                          {isCurrentUser ? 'You' : (entry.userName || 'Driver')}
+                        </Text>
+                        {isCurrentUser && (
+                          <View style={styles.activeBadge}>
+                            <Text style={styles.activeBadgeText}>YOU</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.competitorStatText} numberOfLines={1}>
+                        {entry.achievementCount}/{entry.totalAchievements} challenges
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' as const }}>
+                      <Text style={[styles.competitorValue, { color: ringColor }]}>{entry.completionPercent}%</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )
+        ) : leaderboardData.length === 0 ? (
           <View style={styles.emptyState}>
             <Filter size={48} color={colors.textLight} />
             <Text style={styles.emptyText}>No records found</Text>

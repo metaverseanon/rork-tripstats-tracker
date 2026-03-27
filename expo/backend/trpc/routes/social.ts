@@ -525,6 +525,58 @@ export const socialRouter = createTRPCRouter({
       }
     }),
 
+  getChallengesLeaderboard: publicProcedure
+    .input(z.object({
+      limit: z.number().optional().default(10),
+    }))
+    .query(async ({ input }) => {
+      console.log("[SOCIAL] Fetching challenges leaderboard");
+      if (!isDbConfigured()) return [];
+
+      try {
+        const achUrl = `${getSupabaseRestUrl("user_achievements")}?select=user_id,achievement_id`;
+        const achResp = await fetch(achUrl, { method: "GET", headers: getSupabaseHeaders() });
+        if (!achResp.ok) return [];
+
+        const achRows: { user_id: string; achievement_id: string }[] = await achResp.json();
+
+        const userCounts = new Map<string, number>();
+        for (const row of achRows) {
+          userCounts.set(row.user_id, (userCounts.get(row.user_id) || 0) + 1);
+        }
+
+        const sorted = [...userCounts.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, input.limit);
+
+        if (sorted.length === 0) return [];
+
+        const userIds = sorted.map(([uid]) => uid);
+        const idsParam = userIds.map(id => `"${id}"`).join(',');
+        const usersUrl = `${getSupabaseRestUrl("users")}?id=in.(${idsParam})&select=id,display_name,profile_picture`;
+        const usersResp = await fetch(usersUrl, { method: "GET", headers: getSupabaseHeaders() });
+        const allUsers: { id: string; display_name: string; profile_picture?: string }[] = usersResp.ok ? await usersResp.json() : [];
+
+        const userMap = new Map(allUsers.map(u => [u.id, u]));
+        const totalAchievements = 22;
+
+        return sorted.map(([userId, count]) => {
+          const u = userMap.get(userId);
+          return {
+            userId,
+            userName: u?.display_name ?? "Unknown",
+            userProfilePicture: u?.profile_picture,
+            achievementCount: count,
+            totalAchievements,
+            completionPercent: Math.round((count / totalAchievements) * 100),
+          };
+        });
+      } catch (error) {
+        console.error("[SOCIAL] Challenges leaderboard error:", error);
+        return [];
+      }
+    }),
+
   searchUsers: publicProcedure
     .input(z.object({
       query: z.string().min(1),

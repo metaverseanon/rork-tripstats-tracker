@@ -10,7 +10,7 @@ import {
   LayoutAnimation,
   UIManager,
 } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import {
   Gauge,
   MapPin,
@@ -32,6 +32,7 @@ import {
   Lock,
   ChevronDown,
   Check,
+  Clock,
 } from 'lucide-react-native';
 import { useSettings } from '@/providers/SettingsProvider';
 import { useAchievements } from '@/providers/AchievementProvider';
@@ -60,6 +61,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ size: number; color: string
   'corner-down-right': CornerDownRight,
   'rocket': Rocket,
   'moon': Moon,
+  'clock': Clock,
 };
 
 const CATEGORY_COLORS: Record<AchievementCategory, string> = {
@@ -543,7 +545,7 @@ const secS = StyleSheet.create({
 
 export default function AchievementsScreen() {
   const { colors } = useSettings();
-  const { getAchievementProgress, unlockedCount, totalCount, newlyUnlocked, clearNewlyUnlocked, streak } = useAchievements();
+  const { getAchievementProgress, unlockedCount, totalCount, newlyUnlocked, clearNewlyUnlocked, streak, pendingCongrats, clearPendingCongrats } = useAchievements();
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -559,6 +561,13 @@ export default function AchievementsScreen() {
       clearNewlyUnlocked();
     };
   }, [clearNewlyUnlocked]);
+
+  useEffect(() => {
+    if (pendingCongrats) {
+      clearPendingCongrats();
+      router.push({ pathname: '/challenge-complete', params: { achievementId: pendingCongrats } });
+    }
+  }, [pendingCongrats, clearPendingCongrats]);
 
   const achievements = useMemo(() => getAchievementProgress(), [getAchievementProgress]);
 

@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
 import { ACHIEVEMENTS } from '@/constants/achievements';
+import { getEarnedBadges, getHighestBadge, getNextBadge } from '@/constants/badges';
 import { UserAchievement, AchievementProgress } from '@/types/achievement';
 import { TripStats } from '@/types/trip';
 import { trpcClient } from '@/lib/trpc';
@@ -27,6 +28,7 @@ export const [AchievementProvider, useAchievements] = createContextHook(() => {
   const [unlockedAchievements, setUnlockedAchievements] = useState<UserAchievement[]>([]);
   const [streak, setStreak] = useState<StreakData>({ currentStreak: 0, lastDriveDate: '', longestStreak: 0 });
   const [newlyUnlocked, setNewlyUnlocked] = useState<string[]>([]);
+  const [pendingCongrats, setPendingCongrats] = useState<string | null>(null);
   const unlockedRef = useRef<UserAchievement[]>([]);
 
   useEffect(() => {
@@ -112,6 +114,7 @@ export const [AchievementProvider, useAchievements] = createContextHook(() => {
     const updated = [...current, newAchievement];
     await saveAchievements(updated);
     setNewlyUnlocked(prev => [...prev, achievementId]);
+    setPendingCongrats(achievementId);
 
     const def = ACHIEVEMENTS.find(a => a.id === achievementId);
     if (def) {
@@ -173,11 +176,6 @@ export const [AchievementProvider, useAchievements] = createContextHook(() => {
         newUnlocks.push('speed_100');
       }
     }
-    if (trip.topSpeed >= 150) {
-      if (await unlockAchievement('speed_150', trip.topSpeed)) {
-        newUnlocks.push('speed_150');
-      }
-    }
 
     const totalTrips = allTrips.length;
     if (totalTrips >= 1) {
@@ -200,6 +198,12 @@ export const [AchievementProvider, useAchievements] = createContextHook(() => {
     if (totalDistance >= 10000) {
       if (await unlockAchievement('distance_10000', totalDistance)) {
         newUnlocks.push('distance_10000');
+      }
+    }
+
+    if (trip.distance >= 200) {
+      if (await unlockAchievement('distance_single_200', trip.distance)) {
+        newUnlocks.push('distance_single_200');
       }
     }
 
@@ -251,6 +255,11 @@ export const [AchievementProvider, useAchievements] = createContextHook(() => {
         newUnlocks.push('perf_corners_50');
       }
     }
+    if (trip.corners >= 100) {
+      if (await unlockAchievement('perf_corners_100', trip.corners)) {
+        newUnlocks.push('perf_corners_100');
+      }
+    }
     if (trip.time0to100 && trip.time0to100 > 0 && trip.time0to100 < 6) {
       if (await unlockAchievement('perf_quick_launch', trip.time0to100)) {
         newUnlocks.push('perf_quick_launch');
@@ -261,6 +270,12 @@ export const [AchievementProvider, useAchievements] = createContextHook(() => {
     if (tripEndHour >= 0 && tripEndHour < 5) {
       if (await unlockAchievement('perf_night_owl', 1)) {
         newUnlocks.push('perf_night_owl');
+      }
+    }
+
+    if (trip.duration >= 7200) {
+      if (await unlockAchievement('perf_marathon', trip.duration)) {
+        newUnlocks.push('perf_marathon');
       }
     }
 
@@ -286,9 +301,19 @@ export const [AchievementProvider, useAchievements] = createContextHook(() => {
         newUnlocks.push('social_follow_5');
       }
     }
+    if (followingCount >= 25) {
+      if (await unlockAchievement('social_follow_25', followingCount)) {
+        newUnlocks.push('social_follow_25');
+      }
+    }
     if (followersCount >= 10) {
       if (await unlockAchievement('social_followers_10', followersCount)) {
         newUnlocks.push('social_followers_10');
+      }
+    }
+    if (followersCount >= 50) {
+      if (await unlockAchievement('social_followers_50', followersCount)) {
+        newUnlocks.push('social_followers_50');
       }
     }
 
@@ -315,30 +340,51 @@ export const [AchievementProvider, useAchievements] = createContextHook(() => {
     setNewlyUnlocked([]);
   }, []);
 
+  const clearPendingCongrats = useCallback(() => {
+    setPendingCongrats(null);
+  }, []);
+
   const unlockedCount = unlockedAchievements.length;
   const totalCount = ACHIEVEMENTS.length;
+
+  const earnedBadges = useMemo(() => getEarnedBadges(unlockedCount, totalCount), [unlockedCount, totalCount]);
+  const highestBadge = useMemo(() => getHighestBadge(unlockedCount, totalCount), [unlockedCount, totalCount]);
+  const nextBadge = useMemo(() => getNextBadge(unlockedCount, totalCount), [unlockedCount, totalCount]);
+  const completionPercent = useMemo(() => totalCount > 0 ? Math.round((unlockedCount / totalCount) * 100) : 0, [unlockedCount, totalCount]);
 
   return useMemo(() => ({
     unlockedAchievements,
     streak,
     newlyUnlocked,
+    pendingCongrats,
     unlockedCount,
     totalCount,
+    earnedBadges,
+    highestBadge,
+    nextBadge,
+    completionPercent,
     checkTripAchievements,
     checkSocialAchievements,
     getAchievementProgress,
     clearNewlyUnlocked,
+    clearPendingCongrats,
     syncAchievementsToBackend,
   }), [
     unlockedAchievements,
     streak,
     newlyUnlocked,
+    pendingCongrats,
     unlockedCount,
     totalCount,
+    earnedBadges,
+    highestBadge,
+    nextBadge,
+    completionPercent,
     checkTripAchievements,
     checkSocialAchievements,
     getAchievementProgress,
     clearNewlyUnlocked,
+    clearPendingCongrats,
     syncAchievementsToBackend,
   ]);
 });

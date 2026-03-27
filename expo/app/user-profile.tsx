@@ -13,10 +13,11 @@ import {
   Animated,
 } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { MapPin, Car, Zap, Navigation, Gauge, Activity, CornerDownRight, Timer, Route, Trophy, Calendar, ChevronDown, UserPlus, UserMinus, Flame, Flag, Users, Star, Rocket, Moon } from 'lucide-react-native';
+import { MapPin, Car, Zap, Navigation, Gauge, Activity, CornerDownRight, Timer, Route, Trophy, Calendar, ChevronDown, UserPlus, UserMinus, Flame, Flag, Users, Star, Rocket, Moon, Shield, Clock } from 'lucide-react-native';
 import { useAchievements } from '@/providers/AchievementProvider';
 import { ACHIEVEMENTS, ACHIEVEMENT_CATEGORIES } from '@/constants/achievements';
 import { AchievementCategory, UserAchievement } from '@/types/achievement';
+import { getEarnedBadges, BADGE_TIERS } from '@/constants/badges';
 import { useSettings } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
 import { useTrips } from '@/providers/TripProvider';
@@ -94,6 +95,7 @@ const ACHIEVEMENT_ICON_MAP: Record<string, React.ComponentType<{ size: number; c
   'corner-down-right': CornerDownRight,
   'rocket': Rocket,
   'moon': Moon,
+  'clock': Clock,
 };
 
 interface AchievementShowcaseProps {
@@ -169,6 +171,8 @@ function AchievementShowcase({
     // Still show the section with 0 progress for other users
   }
 
+  const earnedBadges = useMemo(() => getEarnedBadges(unlockedCount, totalAchievements), [unlockedCount, totalAchievements]);
+
   return (
     <>
       <View style={styles.sectionHeader}>
@@ -177,6 +181,27 @@ function AchievementShowcase({
       </View>
 
       <View style={achStyles.container}>
+        {BADGE_TIERS.length > 0 && (
+          <View style={achStyles.badgeRow}>
+            {BADGE_TIERS.map((tier) => {
+              const isEarned = earnedBadges.some(b => b.id === tier.id);
+              return (
+                <View key={tier.id} style={[achStyles.badgeItem, !isEarned && achStyles.badgeItemLocked]}>
+                  <View style={[
+                    achStyles.badgeIconCircle,
+                    { backgroundColor: isEarned ? tier.bgColor : colors.cardLight, borderColor: isEarned ? tier.borderColor : colors.border + '40' },
+                  ]}>
+                    <Shield size={20} color={isEarned ? tier.color : colors.textLight + '40'} fill={isEarned ? tier.color + '30' : 'transparent'} />
+                  </View>
+                  <Text style={[achStyles.badgeLabel, { color: isEarned ? tier.color : colors.textLight + '60' }]}>
+                    {tier.name}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         <View style={[achStyles.summaryCard, { backgroundColor: colors.cardLight, borderColor: colors.border }]}>
           <View style={achStyles.summaryTop}>
             <View style={achStyles.trophyCircle}>
@@ -434,6 +459,32 @@ const achStyles = StyleSheet.create({
     fontSize: 10,
     fontFamily: 'Orbitron_400Regular',
     marginTop: 1,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 14,
+    paddingHorizontal: 4,
+  },
+  badgeItem: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  badgeItemLocked: {
+    opacity: 0.5,
+  },
+  badgeIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+  },
+  badgeLabel: {
+    fontSize: 9,
+    fontFamily: 'Orbitron_600SemiBold',
+    letterSpacing: 0.5,
   },
   recentDate: {
     fontSize: 10,
