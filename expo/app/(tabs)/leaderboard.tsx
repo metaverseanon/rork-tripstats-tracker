@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect, useRef, ReactNode, memo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Pressable, TextInput, Image, Platform, Alert, ActivityIndicator, Linking, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Trophy, Zap, Navigation, Gauge, ChevronDown, X, MapPin, Car, Filter, Activity, Route, Search, Clock, Calendar, CornerDownRight, ChevronRight, Timer, Users, Send, Bell, Check, XCircle, Share2, Navigation2, MessageCircle, AlertCircle, UserPlus, UserCheck } from 'lucide-react-native';
@@ -1003,18 +1003,6 @@ export default function LeaderboardScreen() {
     }
   }, [user?.id, followingUsers, followLoadingUserId, followMutation, unfollowMutation]);
 
-  const getMedalColor = (rank: number) => {
-    switch (rank) {
-      case 1:
-        return '#FFD700';
-      case 2:
-        return '#C0C0C0';
-      case 3:
-        return '#CD7F32';
-      default:
-        return colors.textLight;
-    }
-  };
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString('en-US', {
@@ -1453,126 +1441,178 @@ export default function LeaderboardScreen() {
           </View>
         ) : (
           <View style={styles.list}>
-            {leaderboardData.map((trip, index) => {
-              const carInfo = getCarInfo(trip);
-              const secondaryStats = getSecondaryStats(trip);
-              const isCurrentUser = trip.userId === user?.id || trip.userName === user?.displayName;
-              const displayProfilePic = isCurrentUser ? (user?.profilePicture || trip.userProfilePicture) : trip.userProfilePicture;
-              
-              return (
-                <TouchableOpacity 
-                  key={trip.id || `trip-${index}`} 
-                  style={styles.listItem}
-                  onPress={() => openTripDetail(trip)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.rankAndAvatarContainer}>
-                    <View style={styles.rankContainer}>
-                      {index < 3 ? (
-                        <Trophy size={24} color={getMedalColor(index + 1)} fill={getMedalColor(index + 1)} />
-                      ) : (
-                        <View style={styles.rankCircle}>
-                          <Text style={styles.rankText}>{index + 1}</Text>
-                        </View>
-                      )}
-                    </View>
-                    <TouchableOpacity 
-                      style={styles.avatarContainer}
-                      onPress={() => {
-                        if (trip.userId && !isCurrentUser) {
-                          router.push({ pathname: '/user-profile', params: { userId: trip.userId } } as any);
-                        }
-                      }}
-                      disabled={!trip.userId || isCurrentUser}
-                    >
-                      {displayProfilePic ? (
-                        <Image source={{ uri: displayProfilePic }} style={styles.avatar} />
-                      ) : (
-                        <View style={styles.avatarPlaceholder}>
-                          <Text style={styles.avatarInitial}>
-                            {(trip.userName || 'D')[0].toUpperCase()}
-                          </Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  </View>
+            {leaderboardData.length >= 1 && (() => {
+              const top3 = leaderboardData.slice(0, Math.min(3, leaderboardData.length));
+              const first = top3[0];
+              const second = top3.length > 1 ? top3[1] : null;
+              const third = top3.length > 2 ? top3[2] : null;
+              const firstStats = getSecondaryStats(first);
 
-                  <View style={styles.itemContent}>
-                    <View style={styles.itemHeader}>
-                      <TouchableOpacity
-                        onPress={() => {
-                          if (trip.userId && trip.userId !== user?.id && trip.userName !== user?.displayName) {
-                            router.push({ pathname: '/user-profile', params: { userId: trip.userId } } as any);
-                          }
-                        }}
-                        disabled={!trip.userId || trip.userId === user?.id || trip.userName === user?.displayName}
-                      >
-                        <Text style={[styles.userName, trip.userId && trip.userId !== user?.id && trip.userName !== user?.displayName && styles.userNameClickable]}>
-                          {trip.userName || 'Driver'}
-                          {(trip.userId === user?.id || trip.userName === user?.displayName) && ' (You)'}
-                        </Text>
-                      </TouchableOpacity>
-                      <Text style={styles.itemDate}>{formatDate(trip.startTime)}</Text>
+              const renderPodiumUser = (trip: LeaderboardTrip, rank: number) => {
+                const isMe = trip.userId === user?.id || trip.userName === user?.displayName;
+                const pic = isMe ? (user?.profilePicture || trip.userProfilePicture) : trip.userProfilePicture;
+                const car = getCarInfo(trip);
+                const isFirst = rank === 1;
+                const avatarSize = isFirst ? 80 : 56;
+                const ringSize = avatarSize + 8;
+                const ringColor = rank === 1 ? colors.accent : rank === 2 ? '#C0C0C0' : '#CD7F32';
+
+                return (
+                  <TouchableOpacity
+                    style={[styles.podiumUser, isFirst && styles.podiumUserFirst]}
+                    onPress={() => openTripDetail(trip)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.podiumAvatarWrap}>
+                      <View style={[styles.podiumAvatarRing, { width: ringSize, height: ringSize, borderRadius: ringSize / 2, borderColor: ringColor }]}>
+                        {pic ? (
+                          <Image source={{ uri: pic }} style={{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }} />
+                        ) : (
+                          <View style={[styles.podiumAvatarPlaceholder, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }]}>
+                            <Text style={[styles.podiumAvatarInitial, isFirst && { fontSize: 28 }]}>
+                              {(trip.userName || 'D')[0].toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      {isFirst && (
+                        <View style={styles.podiumTrophyBadge}>
+                          <Trophy size={16} color="#FFD700" fill="#FFD700" />
+                        </View>
+                      )}
+                      <View style={[styles.podiumRankBadge, { backgroundColor: ringColor }]}>
+                        <Text style={styles.podiumRankBadgeText}>{rank}</Text>
+                      </View>
                     </View>
-                    
-                    <Text style={styles.mainValue}>{formatValue(trip)}</Text>
-                    
-                    {secondaryStats.length > 0 && (
-                      <View style={styles.secondaryStatsRow}>
-                        {secondaryStats.map((stat, statIndex) => (
-                          <View key={statIndex} style={styles.secondaryStat}>
+                    <Text style={[styles.podiumName, isFirst && styles.podiumNameFirst]} numberOfLines={1}>
+                      {isMe ? 'You' : (trip.userName || 'Driver')}
+                    </Text>
+                    <Text style={[styles.podiumValue, isFirst && styles.podiumValueFirst]}>{formatValue(trip)}</Text>
+                    {car && (
+                      <Text style={styles.podiumCarText} numberOfLines={1}>{car.full}</Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              };
+
+              return (
+                <>
+                  <View style={styles.podiumContainer}>
+                    <View style={styles.podiumRow}>
+                      {second && (
+                        <View style={styles.podiumSide}>
+                          {renderPodiumUser(second, 2)}
+                        </View>
+                      )}
+                      <View style={styles.podiumCenter}>
+                        {renderPodiumUser(first, 1)}
+                      </View>
+                      {third && (
+                        <View style={styles.podiumSide}>
+                          {renderPodiumUser(third, 3)}
+                        </View>
+                      )}
+                    </View>
+
+                    {firstStats.length > 0 && (
+                      <View style={styles.podiumStatsCard}>
+                        {firstStats.slice(0, 2).map((stat, si) => (
+                          <View key={si} style={styles.podiumStatItem}>
                             {statIconMap[stat.iconType]}
-                            <Text style={styles.secondaryStatValue}>{stat.value}</Text>
+                            <Text style={styles.podiumStatLabel}>{stat.label}</Text>
+                            <Text style={styles.podiumStatValue}>{stat.value}</Text>
                           </View>
                         ))}
                       </View>
                     )}
-
-                    {trip.location?.city && trip.location.city !== 'Unknown' && (
-                      <View style={styles.locationBadge}>
-                        <MapPin size={10} color={colors.textLight} />
-                        <Text style={styles.locationText}>
-                          {trip.location.city}{trip.location.country && trip.location.country !== 'Unknown' ? `, ${trip.location.country}` : ''}
-                        </Text>
-                      </View>
-                    )}
-
-                    {carInfo && (
-                      <View style={styles.carInfoContainer}>
-                        <Car size={14} color={colors.primary} />
-                        <Text style={styles.carBrandModelText}>
-                          <Text style={styles.carBrandHighlight}>{carInfo.brand}</Text>
-                          {carInfo.model ? <Text>{` ${carInfo.model}`}</Text> : null}
-                        </Text>
-                      </View>
-                    )}
                   </View>
 
-                  <View style={styles.entryRightCol}>
-                    {trip.userId && trip.userId !== user?.id && trip.userName !== user?.displayName && (
-                      <TouchableOpacity
-                        style={[
-                          styles.followButton,
-                          followingUsers[trip.userId] && styles.followButtonActive,
-                        ]}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleFollowToggle(trip.userId!, trip.userName);
-                        }}
-                        activeOpacity={0.7}
-                        disabled={followLoadingUserId === trip.userId}
-                        testID={`follow-btn-${trip.userId}`}
-                      >
-                        {followLoadingUserId === trip.userId ? (
-                          <ActivityIndicator size="small" color={colors.accent} />
-                        ) : followingUsers[trip.userId] ? (
-                          <UserCheck size={16} color={colors.accent} />
-                        ) : (
-                          <UserPlus size={16} color={colors.textLight} />
-                        )}
-                      </TouchableOpacity>
+                  {leaderboardData.length > 3 && (
+                    <View style={styles.risingHeader}>
+                      <Text style={styles.risingTitle}>Rising Competitors</Text>
+                      <Text style={styles.risingSubtitle}>GLOBAL TOP 10</Text>
+                    </View>
+                  )}
+                </>
+              );
+            })()}
+
+            {leaderboardData.slice(3).map((trip, index) => {
+              const rank = index + 4;
+              const carInfo = getCarInfo(trip);
+              const isCurrentUser = trip.userId === user?.id || trip.userName === user?.displayName;
+              const displayProfilePic = isCurrentUser ? (user?.profilePicture || trip.userProfilePicture) : trip.userProfilePicture;
+
+              return (
+                <TouchableOpacity
+                  key={trip.id || `trip-${rank}`}
+                  style={[styles.competitorCard, isCurrentUser && styles.competitorCardActive]}
+                  onPress={() => openTripDetail(trip)}
+                  activeOpacity={0.7}
+                >
+                  {isCurrentUser && <View style={styles.competitorActiveBar} />}
+                  <Text style={[styles.competitorRank, isCurrentUser && styles.competitorRankActive]}>
+                    {rank < 10 ? `0${rank}` : rank}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.competitorAvatarWrap}
+                    onPress={() => {
+                      if (trip.userId && !isCurrentUser) {
+                        router.push({ pathname: '/user-profile', params: { userId: trip.userId } } as any);
+                      }
+                    }}
+                    disabled={!trip.userId || isCurrentUser}
+                  >
+                    {displayProfilePic ? (
+                      <Image source={{ uri: displayProfilePic }} style={styles.competitorAvatar} />
+                    ) : (
+                      <View style={styles.competitorAvatarPlaceholder}>
+                        <Text style={styles.competitorAvatarInitial}>
+                          {(trip.userName || 'D')[0].toUpperCase()}
+                        </Text>
+                      </View>
                     )}
-                    <ChevronRight size={18} color={colors.textLight} />
+                  </TouchableOpacity>
+                  <View style={styles.competitorInfo}>
+                    <View style={styles.competitorNameRow}>
+                      <Text style={styles.competitorName} numberOfLines={1}>
+                        {isCurrentUser ? 'You' : (trip.userName || 'Driver')}
+                      </Text>
+                      {isCurrentUser && (
+                        <View style={styles.activeBadge}>
+                          <Text style={styles.activeBadgeText}>ACTIVE</Text>
+                        </View>
+                      )}
+                      {!isCurrentUser && trip.userId && trip.userId !== user?.id && (
+                        <TouchableOpacity
+                          style={[
+                            styles.followButton,
+                            followingUsers[trip.userId] && styles.followButtonActive,
+                          ]}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleFollowToggle(trip.userId!, trip.userName);
+                          }}
+                          activeOpacity={0.7}
+                          disabled={followLoadingUserId === trip.userId}
+                          testID={`follow-btn-${trip.userId}`}
+                        >
+                          {followLoadingUserId === trip.userId ? (
+                            <ActivityIndicator size="small" color={colors.accent} />
+                          ) : followingUsers[trip.userId] ? (
+                            <UserCheck size={14} color={colors.accent} />
+                          ) : (
+                            <UserPlus size={14} color={colors.textLight} />
+                          )}
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    <Text style={styles.competitorCar} numberOfLines={1}>
+                      {carInfo ? carInfo.full : (trip.location?.city && trip.location.city !== 'Unknown' ? trip.location.city : '')}
+                    </Text>
+                  </View>
+                  <View style={styles.competitorValueCol}>
+                    <Text style={styles.competitorValue}>{formatValue(trip)}</Text>
                   </View>
                 </TouchableOpacity>
               );
@@ -2492,6 +2532,250 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
+  },
+  podiumContainer: {
+    paddingTop: 8,
+    paddingBottom: 16,
+    alignItems: 'center' as const,
+  },
+  podiumRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-end' as const,
+    justifyContent: 'center' as const,
+    width: '100%',
+    paddingHorizontal: 8,
+  },
+  podiumSide: {
+    flex: 1,
+    alignItems: 'center' as const,
+    paddingTop: 24,
+  },
+  podiumCenter: {
+    flex: 1.2,
+    alignItems: 'center' as const,
+  },
+  podiumUser: {
+    alignItems: 'center' as const,
+    gap: 4,
+  },
+  podiumUserFirst: {
+    gap: 6,
+  },
+  podiumAvatarWrap: {
+    position: 'relative' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    marginBottom: 4,
+  },
+  podiumAvatarRing: {
+    borderWidth: 3,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    overflow: 'hidden' as const,
+  },
+  podiumAvatarPlaceholder: {
+    backgroundColor: colors.accent,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  podiumAvatarInitial: {
+    fontSize: 20,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.textInverted,
+  },
+  podiumTrophyBadge: {
+    position: 'absolute' as const,
+    top: -14,
+    alignSelf: 'center' as const,
+  },
+  podiumRankBadge: {
+    position: 'absolute' as const,
+    bottom: -4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    borderWidth: 2,
+    borderColor: colors.background,
+  },
+  podiumRankBadgeText: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_700Bold',
+    color: '#FFFFFF',
+  },
+  podiumName: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.text,
+    textAlign: 'center' as const,
+    maxWidth: 90,
+  },
+  podiumNameFirst: {
+    fontSize: 13,
+    maxWidth: 110,
+  },
+  podiumValue: {
+    fontSize: 13,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.accent,
+    textAlign: 'center' as const,
+  },
+  podiumValueFirst: {
+    fontSize: 16,
+  },
+  podiumCarText: {
+    fontSize: 9,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    textAlign: 'center' as const,
+    maxWidth: 90,
+  },
+  podiumStatsCard: {
+    flexDirection: 'row' as const,
+    backgroundColor: colors.accent,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginTop: 16,
+    gap: 24,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  podiumStatItem: {
+    alignItems: 'center' as const,
+    gap: 4,
+  },
+  podiumStatLabel: {
+    fontSize: 9,
+    fontFamily: 'Orbitron_500Medium',
+    color: 'rgba(255,255,255,0.7)',
+    textTransform: 'uppercase' as const,
+  },
+  podiumStatValue: {
+    fontSize: 13,
+    fontFamily: 'Orbitron_700Bold',
+    color: '#FFFFFF',
+  },
+  risingHeader: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    paddingTop: 8,
+    paddingBottom: 12,
+  },
+  risingTitle: {
+    fontSize: 16,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.text,
+  },
+  risingSubtitle: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.accent,
+    letterSpacing: 1,
+  },
+  competitorCard: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: colors.cardLight,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    gap: 12,
+    overflow: 'hidden' as const,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  competitorCardActive: {
+    borderColor: colors.accent,
+    borderLeftWidth: 4,
+  },
+  competitorActiveBar: {
+    position: 'absolute' as const,
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    backgroundColor: colors.accent,
+    borderTopLeftRadius: 14,
+    borderBottomLeftRadius: 14,
+  },
+  competitorRank: {
+    fontSize: 16,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.textLight,
+    width: 30,
+    textAlign: 'center' as const,
+  },
+  competitorRankActive: {
+    color: colors.accent,
+  },
+  competitorAvatarWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    overflow: 'hidden' as const,
+  },
+  competitorAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+  },
+  competitorAvatarPlaceholder: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: colors.accent,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  competitorAvatarInitial: {
+    fontSize: 16,
+    fontFamily: 'Orbitron_700Bold',
+    color: '#FFFFFF',
+  },
+  competitorInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  competitorNameRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+  },
+  competitorName: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.text,
+    flexShrink: 1,
+  },
+  activeBadge: {
+    backgroundColor: colors.accent,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  activeBadgeText: {
+    fontSize: 8,
+    fontFamily: 'Orbitron_700Bold',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  competitorCar: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+  },
+  competitorValueCol: {
+    alignItems: 'flex-end' as const,
+    gap: 2,
+  },
+  competitorValue: {
+    fontSize: 15,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.text,
   },
   activeMeetupBannerButton: {
     flexDirection: 'row' as const,
