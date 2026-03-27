@@ -4,6 +4,13 @@ import { isDbConfigured, getSupabaseHeaders, getSupabaseRestUrl } from "../db";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
+function convertSpeedForUnit(speedKmh: number, unit?: string): { value: number; label: string } {
+  if (unit === 'mph') {
+    return { value: Math.round(speedKmh * 0.621371), label: 'mph' };
+  }
+  return { value: Math.round(speedKmh), label: 'km/h' };
+}
+
 async function createActivityFeedEntry(input: {
   id: string;
   userId: string;
@@ -102,14 +109,14 @@ async function sendLeaderboardBeatNotifications(input: {
 
     console.log("[LEADERBOARD_NOTIFY] Beaten user IDs:", beatenUserIds.length);
 
-    const usersUrl = `${getSupabaseRestUrl("users")}?select=id,display_name,push_token`;
+    const usersUrl = `${getSupabaseRestUrl("users")}?select=id,display_name,push_token,speed_unit`;
     const usersResp = await fetch(usersUrl, { method: "GET", headers: getSupabaseHeaders() });
     if (!usersResp.ok) {
       console.error("[LEADERBOARD_NOTIFY] Failed to fetch users");
       return;
     }
 
-    const allUsers: { id: string; display_name: string; push_token?: string }[] = await usersResp.json();
+    const allUsers: { id: string; display_name: string; push_token?: string; speed_unit?: string }[] = await usersResp.json();
     const usersToNotify = allUsers.filter(
       u => u.id !== input.userId && beatenUserIds.includes(u.id) && u.push_token
     );
@@ -121,17 +128,19 @@ async function sendLeaderboardBeatNotifications(input: {
 
     const driverName = input.userName || "Someone";
     const carInfo = input.carModel ? ` in a ${input.carModel}` : "";
-    const speedKmh = Math.round(input.topSpeed);
 
-    const messages = usersToNotify.map(u => ({
-      to: u.push_token!,
-      title: "🏁 You've been overtaken!",
-      body: `${driverName} just beat you${carInfo} hitting ${speedKmh} km/h!`,
-      sound: "default" as const,
-      data: { type: "leaderboard_beat", fromUserId: input.userId, topSpeed: input.topSpeed },
-      channelId: "default",
-      priority: "high" as const,
-    }));
+    const messages = usersToNotify.map(u => {
+      const speed = convertSpeedForUnit(input.topSpeed, u.speed_unit);
+      return {
+        to: u.push_token!,
+        title: "🏁 You've been overtaken!",
+        body: `${driverName} just beat you${carInfo} hitting ${speed.value} ${speed.label}!`,
+        sound: "default" as const,
+        data: { type: "leaderboard_beat", fromUserId: input.userId, topSpeed: input.topSpeed },
+        channelId: "default",
+        priority: "high" as const,
+      };
+    });
 
     console.log("[LEADERBOARD_NOTIFY] Sending notifications to", messages.length, "users");
 

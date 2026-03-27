@@ -15,6 +15,42 @@ const TRACKING_STATE_KEY = 'tracking_state';
 const RECORDS_KEY = 'personal_records';
 const TOTAL_DISTANCE_KEY = 'total_distance';
 const SYNCED_TRIP_IDS_KEY = 'synced_trip_ids';
+const SETTINGS_KEY = 'app_settings';
+
+interface UnitPrefs {
+  speedUnit: 'kmh' | 'mph';
+  distanceUnit: 'km' | 'mi';
+}
+
+const getUnitPrefs = async (): Promise<UnitPrefs> => {
+  try {
+    const stored = await AsyncStorage.getItem(SETTINGS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return {
+        speedUnit: parsed.speedUnit || 'kmh',
+        distanceUnit: parsed.distanceUnit || 'km',
+      };
+    }
+  } catch (e) {
+    console.error('Failed to read unit preferences:', e);
+  }
+  return { speedUnit: 'kmh', distanceUnit: 'km' };
+};
+
+const formatSpeedWithUnit = (speedKmh: number, prefs: UnitPrefs): string => {
+  if (prefs.speedUnit === 'mph') {
+    return `${Math.round(speedKmh * 0.621371)} mph`;
+  }
+  return `${Math.round(speedKmh)} km/h`;
+};
+
+const formatDistanceWithUnit = (distanceKm: number, prefs: UnitPrefs): string => {
+  if (prefs.distanceUnit === 'mi') {
+    return `${(distanceKm * 0.621371).toFixed(1)} mi`;
+  }
+  return `${distanceKm.toFixed(1)} km`;
+};
 
 interface PersonalRecords {
   topSpeed: number;
@@ -1142,6 +1178,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     const newRecords: string[] = [];
     
     try {
+      const prefs = await getUnitPrefs();
       const storedRecords = await AsyncStorage.getItem(RECORDS_KEY);
       const records: PersonalRecords = storedRecords 
         ? JSON.parse(storedRecords) 
@@ -1149,12 +1186,12 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       
       if (trip.topSpeed > records.topSpeed) {
         records.topSpeed = trip.topSpeed;
-        newRecords.push(`🏎️ New top speed: ${Math.round(trip.topSpeed)} km/h!`);
+        newRecords.push(`🏎️ New top speed: ${formatSpeedWithUnit(trip.topSpeed, prefs)}!`);
       }
       
       if (trip.distance > records.longestTrip) {
         records.longestTrip = trip.distance;
-        newRecords.push(`🛣️ Longest trip: ${trip.distance.toFixed(1)} km!`);
+        newRecords.push(`🛣️ Longest trip: ${formatDistanceWithUnit(trip.distance, prefs)}!`);
       }
       
       if (trip.corners > records.mostCorners) {
@@ -1180,13 +1217,15 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     const tripMilestones = [1, 5, 10, 25, 50, 100, 250, 500];
     
     try {
+      const prefs = await getUnitPrefs();
       const storedDistance = await AsyncStorage.getItem(TOTAL_DISTANCE_KEY);
       const previousDistance = storedDistance ? parseFloat(storedDistance) : 0;
       
       for (const milestone of distanceMilestones) {
         if (previousDistance < milestone && totalDistance >= milestone) {
           await AsyncStorage.setItem(TOTAL_DISTANCE_KEY, totalDistance.toString());
-          return `🎉 You've driven ${milestone}+ km total!`;
+          const milestoneStr = formatDistanceWithUnit(milestone, prefs);
+          return `🎉 You've driven ${milestoneStr}+ total!`;
         }
       }
       
@@ -1279,11 +1318,13 @@ export const [TripProvider, useTrips] = createContextHook(() => {
         }
 
         try {
+          const prefs = await getUnitPrefs();
           const durationMins = Math.round(finalTrip.duration / 60);
-          const distanceKm = finalTrip.distance.toFixed(1);
+          const distanceStr = formatDistanceWithUnit(finalTrip.distance, prefs);
+          const speedStr = formatSpeedWithUnit(finalTrip.topSpeed, prefs);
           sendLocalNotification(
             '🏁 Trip Complete!',
-            `${distanceKm} km in ${durationMins} min • Top speed: ${Math.round(finalTrip.topSpeed)} km/h`,
+            `${distanceStr} in ${durationMins} min • Top speed: ${speedStr}`,
             { type: 'trip_complete', tripId: finalTrip.id }
           ).catch(console.error);
 

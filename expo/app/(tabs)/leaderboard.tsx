@@ -1950,7 +1950,7 @@ export default function LeaderboardScreen() {
             </View>
             
             <Text style={styles.nearbyDriversSubtitle}>
-              Drivers within 100 km of you
+              {`Drivers within ${Math.round(convertDistance(100))} ${getDistanceLabel()} of you`}
             </Text>
 
             <ScrollView style={styles.nearbyDriversList} showsVerticalScrollIndicator={false}>
@@ -1978,7 +1978,7 @@ export default function LeaderboardScreen() {
                       <View style={styles.nearbyDriverLocationRow}>
                         <MapPin size={10} color={colors.textLight} />
                         <Text style={styles.nearbyDriverLocation}>
-                          {driver.distanceKm != null ? `${driver.distanceKm} km away` : driver.city ? `${driver.city}${driver.country ? `, ${driver.country}` : ''}` : ''}
+                          {driver.distanceKm != null ? `${Math.round(convertDistance(driver.distanceKm))} ${getDistanceLabel()} away` : driver.city ? `${driver.city}${driver.country ? `, ${driver.country}` : ''}` : ''}
                         </Text>
                       </View>
                       {driver.carBrand && (

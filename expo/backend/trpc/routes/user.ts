@@ -36,6 +36,8 @@ interface StoredUser {
   latitude?: number | null;
   longitude?: number | null;
   locationUpdatedAt?: number | null;
+  speedUnit?: string;
+  distanceUnit?: string;
 }
 
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -374,6 +376,8 @@ async function updateUserInDb(userId: string, updates: Partial<StoredUser>): Pro
     if (updates.latitude !== undefined) dbUpdates.latitude = updates.latitude;
     if (updates.longitude !== undefined) dbUpdates.longitude = updates.longitude;
     if (updates.locationUpdatedAt !== undefined) dbUpdates.location_updated_at = updates.locationUpdatedAt;
+    if (updates.speedUnit !== undefined) dbUpdates.speed_unit = updates.speedUnit;
+    if (updates.distanceUnit !== undefined) dbUpdates.distance_unit = updates.distanceUnit;
 
     const url = `${getSupabaseRestUrl("users")}?id=eq.${encodeURIComponent(userId)}`;
     const response = await fetch(url, {
@@ -440,6 +444,8 @@ async function getAllUsers(): Promise<StoredUser[]> {
       latitude: row.latitude as number | null | undefined,
       longitude: row.longitude as number | null | undefined,
       locationUpdatedAt: row.location_updated_at as number | null | undefined,
+      speedUnit: row.speed_unit as string | undefined,
+      distanceUnit: row.distance_unit as string | undefined,
     }));
   } catch (error) {
     console.error("Error fetching users:", error);
@@ -490,6 +496,8 @@ async function getUserByEmail(email: string): Promise<StoredUser | null> {
       latitude: row.latitude as number | null | undefined,
       longitude: row.longitude as number | null | undefined,
       locationUpdatedAt: row.location_updated_at as number | null | undefined,
+      speedUnit: row.speed_unit as string | undefined,
+      distanceUnit: row.distance_unit as string | undefined,
     };
   } catch (error) {
     console.error("Error fetching user by email:", error);
@@ -1014,6 +1022,21 @@ export const userRouter = createTRPCRouter({
       }
       
       return { success: true, timezone: input.timezone };
+    }),
+
+  updateUnitPreferences: publicProcedure
+    .input(z.object({
+      userId: z.string(),
+      speedUnit: z.enum(['kmh', 'mph']),
+      distanceUnit: z.enum(['km', 'mi']),
+    }))
+    .mutation(async ({ input }) => {
+      console.log("Updating unit preferences for user:", input.userId, "speed:", input.speedUnit, "distance:", input.distanceUnit);
+      const success = await updateUserInDb(input.userId, {
+        speedUnit: input.speedUnit,
+        distanceUnit: input.distanceUnit,
+      });
+      return { success };
     }),
 
   updateWeeklyRecapEnabled: publicProcedure

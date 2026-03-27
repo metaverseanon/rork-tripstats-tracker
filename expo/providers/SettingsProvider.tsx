@@ -1,7 +1,8 @@
 import createContextHook from '@nkzw/create-context-hook';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemeType, ThemeColors, getThemeColors } from '@/constants/colors';
+import { trpcClient } from '@/lib/trpc';
 
 export type SpeedUnit = 'kmh' | 'mph';
 export type DistanceUnit = 'km' | 'mi';
@@ -60,7 +61,7 @@ export const [SettingsProvider, useSettings] = createContextHook(() => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadSettings();
+    void loadSettings();
   }, []);
 
   const loadSettings = async () => {
@@ -86,25 +87,45 @@ export const [SettingsProvider, useSettings] = createContextHook(() => {
     }
   };
 
+  const syncUnitsToBackend = useCallback(async (speedUnit: SpeedUnit, distanceUnit: DistanceUnit) => {
+    try {
+      const storedUser = await AsyncStorage.getItem('user_profile');
+      if (!storedUser) return;
+      const userData = JSON.parse(storedUser);
+      if (!userData.id) return;
+      console.log('[SETTINGS] Syncing unit preferences to backend:', speedUnit, distanceUnit);
+      await trpcClient.user.updateUnitPreferences.mutate({
+        userId: userData.id,
+        speedUnit,
+        distanceUnit,
+      });
+      console.log('[SETTINGS] Unit preferences synced successfully');
+    } catch (error) {
+      console.error('[SETTINGS] Failed to sync unit preferences:', error);
+    }
+  }, []);
+
   const setSpeedUnit = useCallback((unit: SpeedUnit) => {
     const newSettings = { ...settings, speedUnit: unit };
-    saveSettings(newSettings);
-  }, [settings]);
+    void saveSettings(newSettings);
+    void syncUnitsToBackend(unit, settings.distanceUnit);
+  }, [settings, syncUnitsToBackend]);
 
   const setDistanceUnit = useCallback((unit: DistanceUnit) => {
     const newSettings = { ...settings, distanceUnit: unit };
-    saveSettings(newSettings);
-  }, [settings]);
+    void saveSettings(newSettings);
+    void syncUnitsToBackend(settings.speedUnit, unit);
+  }, [settings, syncUnitsToBackend]);
 
   const setTheme = useCallback((theme: ThemeType) => {
     const newSettings = { ...settings, theme };
-    saveSettings(newSettings);
+    void saveSettings(newSettings);
   }, [settings]);
 
   const setShareCardField = useCallback((field: keyof ShareCardFields, value: boolean) => {
     const newFields = { ...settings.shareCardFields, [field]: value };
     const newSettings = { ...settings, shareCardFields: newFields };
-    saveSettings(newSettings);
+    void saveSettings(newSettings);
   }, [settings]);
 
   const setShareCardPage = useCallback((page: ShareCardPage, value: boolean) => {
@@ -112,7 +133,7 @@ export const [SettingsProvider, useSettings] = createContextHook(() => {
     if (!value && !settings.shareCardPages[otherPage]) return;
     const newPages = { ...settings.shareCardPages, [page]: value };
     const newSettings = { ...settings, shareCardPages: newPages };
-    saveSettings(newSettings);
+    void saveSettings(newSettings);
   }, [settings]);
 
   const colors: ThemeColors = getThemeColors(settings.theme);
@@ -153,7 +174,7 @@ export const [SettingsProvider, useSettings] = createContextHook(() => {
     return type === '0-100' ? '0-100' : '0-200';
   }, [settings.speedUnit]);
 
-  return {
+  return useMemo(() => ({
     settings,
     isLoading,
     colors,
@@ -168,5 +189,5 @@ export const [SettingsProvider, useSettings] = createContextHook(() => {
     getDistanceLabel,
     getAccelerationLabel,
     getAccelerationShortLabel,
-  };
+  }), [settings, isLoading, colors, setSpeedUnit, setDistanceUnit, setTheme, setShareCardField, setShareCardPage, convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, getAccelerationLabel, getAccelerationShortLabel]);
 });
