@@ -277,31 +277,29 @@ export default function FeedScreen() {
         </View>
       )}
 
-      {!isSearching && (
-        feedQuery.isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.accent} />
-          </View>
-        ) : (
-          <FlatList
-            data={feedData}
-            renderItem={renderFeedItem}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={[
-              styles.feedList,
-              feedData.length === 0 && styles.feedListEmpty,
-            ]}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={feedQuery.isRefetching}
-                onRefresh={handleRefresh}
-                tintColor={colors.accent}
-              />
-            }
-            ListEmptyComponent={emptyFeed}
-          />
-        )
+      {feedQuery.isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.accent} />
+        </View>
+      ) : (
+        <FlatList
+          data={feedData}
+          renderItem={renderFeedItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={[
+            styles.feedList,
+            feedData.length === 0 && styles.feedListEmpty,
+          ]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={feedQuery.isRefetching}
+              onRefresh={handleRefresh}
+              tintColor={colors.accent}
+            />
+          }
+          ListEmptyComponent={emptyFeed}
+        />
       )}
     </View>
   );
@@ -359,9 +357,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: colors.accent,
   },
   searchContainer: {
-    flex: 1,
     paddingHorizontal: 16,
     paddingTop: 12,
+    maxHeight: 350,
   },
   searchInputWrapper: {
     flexDirection: 'row',
