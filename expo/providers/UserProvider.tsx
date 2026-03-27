@@ -424,6 +424,14 @@ export const [UserProvider, useUser] = createContextHook(() => {
     }
   }, []);
 
+  const updateSocialAccounts = useCallback(async (instagramUsername?: string, tiktokUsername?: string) => {
+    const currentUser = userRef.current;
+    if (!currentUser) return;
+    const updatedUser = { ...currentUser, instagramUsername, tiktokUsername };
+    await saveUser(updatedUser);
+    console.log('[USER] Social accounts updated:', { instagramUsername, tiktokUsername });
+  }, []);
+
   const updateCountry = useCallback(async (country: string) => {
     const currentUser = userRef.current;
     if (!currentUser) return;
@@ -514,5 +522,6 @@ export const [UserProvider, useUser] = createContextHook(() => {
     updateLocation,
     getCarDisplayName,
     syncImagesToBackend,
-  }), [user, isLoading, signUp, signIn, signOut, signInWithGoogle, updateProfile, updateCar, addCar, removeCar, setPrimaryCar, updateProfilePicture, updateCountry, updateCity, updateLocation, getCarDisplayName, syncImagesToBackend]);
+    updateSocialAccounts,
+  }), [user, isLoading, signUp, signIn, signOut, signInWithGoogle, updateProfile, updateCar, addCar, removeCar, setPrimaryCar, updateProfilePicture, updateCountry, updateCity, updateLocation, getCarDisplayName, syncImagesToBackend, updateSocialAccounts]);
 });

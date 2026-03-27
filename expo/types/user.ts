@@ -19,6 +19,8 @@ export interface UserProfile {
   carPicture?: string;
   cars?: UserCar[];
   bio?: string;
+  instagramUsername?: string;
+  tiktokUsername?: string;
   createdAt: number;
   pushToken?: string;
   notificationsEnabled?: boolean;

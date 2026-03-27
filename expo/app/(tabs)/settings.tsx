@@ -2,7 +2,7 @@ import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Linking, Image, S
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { router } from 'expo-router';
-import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle, Bell, Mail, MessageSquare, X, Send, Share2, Check, Trophy } from 'lucide-react-native';
+import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle, Bell, Mail, MessageSquare, X, Send, Share2, Check, Trophy, Instagram, Link2, Unlink } from 'lucide-react-native';
 import { useSettings, SpeedUnit, DistanceUnit, ShareCardFields, ShareCardPage } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
 import { useNotifications } from '@/providers/NotificationProvider';
@@ -13,7 +13,7 @@ import { trpc } from '@/lib/trpc';
 
 export default function SettingsScreen() {
   const { settings, colors, setSpeedUnit, setDistanceUnit, setTheme, setShareCardField, setShareCardPage } = useSettings();
-  const { user, isAuthenticated, getCarDisplayName } = useUser();
+  const { user, isAuthenticated, getCarDisplayName, updateSocialAccounts } = useUser();
   const { notificationsEnabled, pushToken, registerForPushNotifications, disableNotifications } = useNotifications();
   const { unlockedCount, totalCount } = useAchievements();
 
@@ -22,6 +22,9 @@ export default function SettingsScreen() {
   const [weeklyRecapEnabled, setWeeklyRecapEnabled] = useState(true);
   const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
+  const [socialModalVisible, setSocialModalVisible] = useState(false);
+  const [socialPlatform, setSocialPlatform] = useState<'instagram' | 'tiktok'>('instagram');
+  const [socialUsername, setSocialUsername] = useState('');
 
 
   const weeklyRecapQuery = trpc.user.getWeeklyRecapEnabled.useQuery(
@@ -53,15 +56,15 @@ export default function SettingsScreen() {
   ];
 
   const openPrivacyPolicy = () => {
-    Linking.openURL('https://redlineapp.io/privacy.html');
+    void Linking.openURL('https://redlineapp.io/privacy.html');
   };
 
   const openTermsOfUse = () => {
-    Linking.openURL('https://redlineapp.io/terms.html');
+    void Linking.openURL('https://redlineapp.io/terms.html');
   };
 
   const openHelpCenter = () => {
-    Linking.openURL('https://redlineapp.io/help.html');
+    void Linking.openURL('https://redlineapp.io/help.html');
   };
 
   const sendFeedbackMutation = trpc.user.sendFeedback.useMutation({
@@ -133,6 +136,35 @@ export default function SettingsScreen() {
 
   const openAchievements = () => {
     router.push('/achievements' as any);
+  };
+
+  const openSocialModal = (platform: 'instagram' | 'tiktok') => {
+    setSocialPlatform(platform);
+    setSocialUsername(
+      platform === 'instagram'
+        ? (user?.instagramUsername || '')
+        : (user?.tiktokUsername || '')
+    );
+    setSocialModalVisible(true);
+  };
+
+  const handleSaveSocial = async () => {
+    const trimmed = socialUsername.trim().replace(/^@/, '');
+    if (socialPlatform === 'instagram') {
+      void updateSocialAccounts(trimmed || undefined, user?.tiktokUsername);
+    } else {
+      void updateSocialAccounts(user?.instagramUsername, trimmed || undefined);
+    }
+    setSocialModalVisible(false);
+    setSocialUsername('');
+  };
+
+  const handleDisconnectSocial = (platform: 'instagram' | 'tiktok') => {
+    if (platform === 'instagram') {
+      void updateSocialAccounts(undefined, user?.tiktokUsername);
+    } else {
+      void updateSocialAccounts(user?.instagramUsername, undefined);
+    }
   };
 
   const handleWeeklyRecapToggle = async (value: boolean) => {
@@ -417,6 +449,38 @@ export default function SettingsScreen() {
       fontWeight: '600' as const,
       color: '#FFFFFF',
     },
+    connectBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: colors.accent + '14',
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 8,
+    },
+    connectBadgeText: {
+      fontSize: 12,
+      fontWeight: '600' as const,
+      color: colors.accent,
+    },
+    disconnectButton: {
+      padding: 8,
+    },
+    socialInput: {
+      backgroundColor: colors.background === '#000000' ? '#1C1C1E' : colors.background,
+      borderRadius: 12,
+      padding: 16,
+      fontSize: 16,
+      color: colors.text,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 16,
+    },
+    socialInputPrefix: {
+      fontSize: 14,
+      color: colors.textLight,
+      marginBottom: 8,
+    },
     checkboxList: {
       gap: 4,
     },
@@ -512,6 +576,83 @@ export default function SettingsScreen() {
             <ChevronRight size={20} color={colors.textLight} />
           </TouchableOpacity>
         </View>
+
+        {isAuthenticated && (
+          <>
+            <Text style={styles.sectionTitle}>Social Accounts</Text>
+            <View style={styles.settingsCard}>
+              <TouchableOpacity
+                style={styles.linkItem}
+                onPress={() => openSocialModal('instagram')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.linkContent}>
+                  <View style={[styles.settingIconContainer, { backgroundColor: '#E1306C18' }]}>
+                    <Instagram size={20} color="#E1306C" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.linkText}>Instagram</Text>
+                    {user?.instagramUsername ? (
+                      <Text style={styles.notificationDescription}>@{user.instagramUsername}</Text>
+                    ) : (
+                      <Text style={styles.notificationDescription}>Not connected</Text>
+                    )}
+                  </View>
+                </View>
+                {user?.instagramUsername ? (
+                  <TouchableOpacity
+                    onPress={() => handleDisconnectSocial('instagram')}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.disconnectButton}
+                  >
+                    <Unlink size={16} color={colors.danger} />
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.connectBadge}>
+                    <Link2 size={14} color={colors.accent} />
+                    <Text style={styles.connectBadgeText}>Connect</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <View style={styles.divider} />
+
+              <TouchableOpacity
+                style={styles.linkItem}
+                onPress={() => openSocialModal('tiktok')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.linkContent}>
+                  <View style={[styles.settingIconContainer, { backgroundColor: '#00000018' }]}>
+                    <Text style={{ fontSize: 16, fontWeight: '900' as const }}>T</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.linkText}>TikTok</Text>
+                    {user?.tiktokUsername ? (
+                      <Text style={styles.notificationDescription}>@{user.tiktokUsername}</Text>
+                    ) : (
+                      <Text style={styles.notificationDescription}>Not connected</Text>
+                    )}
+                  </View>
+                </View>
+                {user?.tiktokUsername ? (
+                  <TouchableOpacity
+                    onPress={() => handleDisconnectSocial('tiktok')}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.disconnectButton}
+                  >
+                    <Unlink size={16} color={colors.danger} />
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.connectBadge}>
+                    <Link2 size={14} color={colors.accent} />
+                    <Text style={styles.connectBadgeText}>Connect</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
 
         <Text style={styles.sectionTitle}>Preferences</Text>
         
@@ -784,6 +925,50 @@ export default function SettingsScreen() {
                   <Text style={styles.sendButtonText}>Send Feedback</Text>
                 </>
               )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+      <Modal
+        visible={socialModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSocialModalVisible(false)}
+      >
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {socialPlatform === 'instagram' ? 'Instagram' : 'TikTok'}
+              </Text>
+              <TouchableOpacity onPress={() => setSocialModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <X size={22} color={colors.textLight} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>
+              Enter your {socialPlatform === 'instagram' ? 'Instagram' : 'TikTok'} username to display it on your shared trip cards.
+            </Text>
+            <Text style={styles.socialInputPrefix}>
+              @
+            </Text>
+            <TextInput
+              style={styles.socialInput}
+              placeholder={socialPlatform === 'instagram' ? 'username' : 'username'}
+              placeholderTextColor={colors.textLight}
+              value={socialUsername}
+              onChangeText={(t) => setSocialUsername(t.replace(/\s/g, ''))}
+              autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={30}
+            />
+            <TouchableOpacity
+              style={[styles.sendButton, !socialUsername.trim() && styles.sendButtonDisabled]}
+              onPress={handleSaveSocial}
+              disabled={!socialUsername.trim()}
+              activeOpacity={0.7}
+            >
+              <Check size={18} color="#FFFFFF" />
+              <Text style={styles.sendButtonText}>Save</Text>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>

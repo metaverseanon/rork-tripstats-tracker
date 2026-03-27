@@ -21,6 +21,7 @@ import * as Sharing from 'expo-sharing';
 import { TripStats } from '@/types/trip';
 import { useTrips } from '@/providers/TripProvider';
 import { useSettings } from '@/providers/SettingsProvider';
+import { useUser } from '@/providers/UserProvider';
 import { isSpeedCameraRestricted } from '@/constants/speedCameras';
 
 type TimePeriod = 'today' | 'week' | 'month' | 'year' | 'all';
@@ -49,6 +50,7 @@ export default function TripShareCard({ trip, visible, onClose, timePeriod = 'to
   const viewShotRef2 = useRef<ViewShot>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const { trips } = useTrips();
+  const { user } = useUser();
   const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, getAccelerationLabel, settings } = useSettings();
   const shareFields = settings.shareCardFields;
   const tripInRestrictedCountry = isSpeedCameraRestricted(trip.location?.country);
@@ -375,6 +377,24 @@ export default function TripShareCard({ trip, visible, onClose, timePeriod = 'to
                     </View>
                   )}
 
+                  {(user?.instagramUsername || user?.tiktokUsername) && (
+                    <View style={styles.socialHandlesRow}>
+                      {user?.instagramUsername && (
+                        <Text style={[styles.socialHandleText, isLight && styles.socialHandleTextLight]}>
+                          IG @{user.instagramUsername}
+                        </Text>
+                      )}
+                      {user?.instagramUsername && user?.tiktokUsername && (
+                        <Text style={[styles.socialHandleDot, isLight && styles.socialHandleTextLight]}> · </Text>
+                      )}
+                      {user?.tiktokUsername && (
+                        <Text style={[styles.socialHandleText, isLight && styles.socialHandleTextLight]}>
+                          TT @{user.tiktokUsername}
+                        </Text>
+                      )}
+                    </View>
+                  )}
+
                   <Text style={[styles.dateLocation, isLight && styles.dateLocationLight]}>
                     {formatDate(trip.startTime)} - {getLocationString()}
                   </Text>
@@ -441,6 +461,24 @@ export default function TripShareCard({ trip, visible, onClose, timePeriod = 'to
                         </Svg>
                       ) : (
                         <Text style={[styles.noRouteText, isLight && styles.noRouteTextLight]}>No route data</Text>
+                      )}
+                    </View>
+                  )}
+
+                  {(user?.instagramUsername || user?.tiktokUsername) && (
+                    <View style={styles.socialHandlesRow}>
+                      {user?.instagramUsername && (
+                        <Text style={[styles.socialHandleText, isLight && styles.socialHandleTextLight]}>
+                          IG @{user.instagramUsername}
+                        </Text>
+                      )}
+                      {user?.instagramUsername && user?.tiktokUsername && (
+                        <Text style={[styles.socialHandleDot, isLight && styles.socialHandleTextLight]}> · </Text>
+                      )}
+                      {user?.tiktokUsername && (
+                        <Text style={[styles.socialHandleText, isLight && styles.socialHandleTextLight]}>
+                          TT @{user.tiktokUsername}
+                        </Text>
                       )}
                     </View>
                   )}
@@ -731,5 +769,24 @@ const styles = StyleSheet.create({
     fontFamily: 'Orbitron_600SemiBold',
     fontSize: 14,
     color: '#FFFFFF',
+  },
+  socialHandlesRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  socialHandleText: {
+    fontFamily: 'Orbitron_400Regular',
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  socialHandleTextLight: {
+    color: 'rgba(0, 0, 0, 0.5)',
+  },
+  socialHandleDot: {
+    fontFamily: 'Orbitron_400Regular',
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.4)',
   },
 });
