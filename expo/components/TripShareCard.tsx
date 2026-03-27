@@ -287,6 +287,7 @@ export default function TripShareCard({ trip, visible, onClose, timePeriod = 'to
     if (shareFields.corners) items.push({ value: `${trip.corners} time${trip.corners !== 1 ? 's' : ''}`, label: 'Corners taken' });
     if (shareFields.avgSpeed) items.push({ value: `${Math.round(convertSpeed(trip.avgSpeed))} ${speedLabel}`, label: 'Avg speed' });
     if (shareFields.acceleration) items.push({ value: trip.time0to100 ? `${trip.time0to100.toFixed(1)}s` : '--', label: getAccelerationLabel('0-100') });
+    if (shareFields.speedCameras && (trip.speedCamerasDetected ?? 0) > 0) items.push({ value: `${trip.speedCamerasDetected}`, label: 'Speed cameras' });
     return items;
   }, [shareFields, distanceValue, distanceLabel, trip, speedLabel, convertSpeed, getAccelerationLabel]);
 
@@ -296,6 +297,7 @@ export default function TripShareCard({ trip, visible, onClose, timePeriod = 'to
     if (shareFields.duration) items.push({ value: formatDuration(trip.duration), label: 'Time' });
     if (shareFields.avgSpeed) items.push({ value: `${Math.round(convertSpeed(trip.avgSpeed))} ${speedLabel}`, label: 'Avg Speed' });
     if (shareFields.corners) items.push({ value: `${trip.corners}`, label: 'Corners' });
+    if (shareFields.speedCameras && (trip.speedCamerasDetected ?? 0) > 0) items.push({ value: `${trip.speedCamerasDetected}`, label: 'Cameras' });
     return items;
   }, [shareFields, distanceValue, distanceLabel, trip, speedLabel, convertSpeed]);
 

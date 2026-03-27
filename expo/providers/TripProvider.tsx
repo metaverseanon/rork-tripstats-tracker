@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Alert, AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TripStats, Location as LocationType, TripLocation } from '@/types/trip';
+import { getNearbyCameras } from '@/constants/speedCameras';
 import { trpcClient } from '@/lib/trpc';
 
 const TRIPS_KEY = 'trips';
@@ -134,6 +135,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
   const time0to100 = useRef<number | null>(null);
   const time0to200 = useRef<number | null>(null);
   const time0to300 = useRef<number | null>(null);
+  const detectedCameraIds = useRef<Set<string>>(new Set());
+  const speedCamerasCount = useRef<number>(0);
   const currentSpeedRef = useRef<number>(0);
   const lastLocationUpdateTime = useRef<number>(0);
   const staleSpeedInterval = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -467,6 +470,15 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     let distance = tripData.distance;
     let corners = tripData.corners;
 
+    const nearbyCameras = getNearbyCameras(newLocation.latitude, newLocation.longitude);
+    for (const camera of nearbyCameras) {
+      if (!detectedCameraIds.current.has(camera.id)) {
+        detectedCameraIds.current.add(camera.id);
+        speedCamerasCount.current++;
+        console.log('[SPEED_CAMERA] Detected camera:', camera.id, camera.description);
+      }
+    }
+
     const allLocations = [...tripData.locations, ...pendingLocationsRef.current];
     if (allLocations.length > 1) {
       const lastLoc = allLocations[allLocations.length - 2];
@@ -503,6 +515,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       time0to100: time0to100.current ?? undefined,
       time0to200: time0to200.current ?? undefined,
       time0to300: time0to300.current ?? undefined,
+      speedCamerasDetected: speedCamerasCount.current,
     };
     
     currentTripRef.current = updated;
@@ -542,6 +555,15 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     let distance = tripData.distance;
     let corners = tripData.corners;
 
+    const nearbyCameras = getNearbyCameras(newLocation.latitude, newLocation.longitude);
+    for (const camera of nearbyCameras) {
+      if (!detectedCameraIds.current.has(camera.id)) {
+        detectedCameraIds.current.add(camera.id);
+        speedCamerasCount.current++;
+        console.log('[SPEED_CAMERA] Detected camera:', camera.id, camera.description);
+      }
+    }
+
     if (locations.length > 0) {
       const lastLoc = locations[locations.length - 1];
       const dist = calculateDistance(
@@ -580,6 +602,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       time0to100: time0to100.current ?? undefined,
       time0to200: time0to200.current ?? undefined,
       time0to300: time0to300.current ?? undefined,
+      speedCamerasDetected: speedCamerasCount.current,
     };
     
     currentTripRef.current = updated;
@@ -1026,6 +1049,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
         corners: 0,
         acceleration: 0,
         maxGForce: 0,
+        speedCamerasDetected: 0,
         locations: [],
       };
 
@@ -1048,6 +1072,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       time0to100.current = null;
       time0to200.current = null;
       time0to300.current = null;
+      detectedCameraIds.current = new Set();
+      speedCamerasCount.current = 0;
 
       await startLocationUpdates(newTrip.startTime);
     } catch (error) {
@@ -1236,6 +1262,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     time0to100.current = null;
     time0to200.current = null;
     time0to300.current = null;
+    detectedCameraIds.current = new Set();
+    speedCamerasCount.current = 0;
     lastLocationUpdateTime.current = 0;
     pendingLocationsRef.current = [];
   }, [currentTrip, trips]);
@@ -1296,6 +1324,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     time0to100.current = null;
     time0to200.current = null;
     time0to300.current = null;
+    detectedCameraIds.current = new Set();
+    speedCamerasCount.current = 0;
     lastLocationUpdateTime.current = 0;
     pendingLocationsRef.current = [];
   }, []);

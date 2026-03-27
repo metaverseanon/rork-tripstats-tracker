@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View, ScrollView, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Clock, Gauge, TrendingUp, Navigation, Calendar, Route, Activity, Timer } from 'lucide-react-native';
+import { Clock, Gauge, TrendingUp, Navigation, Calendar, Route, Activity, Timer, Camera } from 'lucide-react-native';
 import MapView, { Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useMemo } from 'react';
 import { useTrips } from '@/providers/TripProvider';
@@ -258,6 +258,16 @@ export default function RecentScreen() {
             <Text style={dynamicStyles.statValue}>{formatAccelTime(lastTrip.time0to200)}</Text>
             <Text style={dynamicStyles.statLabel}>{getAccelerationLabel('0-200')}</Text>
           </View>
+
+          {(lastTrip.speedCamerasDetected ?? 0) > 0 && (
+            <View style={dynamicStyles.statCard}>
+              <View style={dynamicStyles.statIconWrapper}>
+                <Camera size={20} color={colors.accent} />
+              </View>
+              <Text style={dynamicStyles.statValue}>{lastTrip.speedCamerasDetected}</Text>
+              <Text style={dynamicStyles.statLabel}>Speed Cameras</Text>
+            </View>
+          )}
         </View>
 
         {routeCoordinates.length >= 2 && mapRegion && (

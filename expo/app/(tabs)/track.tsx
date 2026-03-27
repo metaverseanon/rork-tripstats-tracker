@@ -442,6 +442,15 @@ export default function TrackScreen() {
               <Text style={dynamicStyles.statLabel}>Duration</Text>
             </View>
           </View>
+
+          <View style={styles.statsRow}>
+            <View style={dynamicStyles.statCard}>
+              <Text style={dynamicStyles.statValue}>
+                {currentTrip?.speedCamerasDetected ?? 0}
+              </Text>
+              <Text style={dynamicStyles.statLabel}>Speed Cameras</Text>
+            </View>
+          </View>
         </View>
       </ScrollView>
 

@@ -15,6 +15,7 @@ export interface ShareCardFields {
   topSpeed: boolean;
   ranking: boolean;
   routeMap: boolean;
+  speedCameras: boolean;
 }
 
 export type ShareCardPage = 'stats' | 'route';
@@ -38,6 +39,7 @@ const DEFAULT_SHARE_CARD_FIELDS: ShareCardFields = {
   topSpeed: true,
   ranking: true,
   routeMap: true,
+  speedCameras: true,
 };
 
 const DEFAULT_SHARE_CARD_PAGES: Record<ShareCardPage, boolean> = {
