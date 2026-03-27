@@ -25,13 +25,13 @@ const darkColors: ThemeColors = {
   textLight: '#999999',
   textMuted: '#666666',
   border: '#2A2A2A',
-  accent: '#E53935',
+  accent: '#CC0000',
   success: '#00C853',
   danger: '#CC0000',
   warning: '#FF9500',
-  tint: '#E53935',
+  tint: '#CC0000',
   tabIconDefault: '#666666',
-  tabIconSelected: '#E53935',
+  tabIconSelected: '#CC0000',
 };
 
 const lightColors: ThemeColors = {
@@ -42,13 +42,13 @@ const lightColors: ThemeColors = {
   textLight: '#8E8E93',
   textMuted: '#AEAEB2',
   border: '#E5E5EA',
-  accent: '#E53935',
+  accent: '#CC0000',
   success: '#00C853',
   danger: '#CC0000',
   warning: '#FF9500',
-  tint: '#E53935',
+  tint: '#CC0000',
   tabIconDefault: '#AEAEB2',
-  tabIconSelected: '#E53935',
+  tabIconSelected: '#CC0000',
 };
 
 export const getThemeColors = (theme: ThemeType): ThemeColors => {
