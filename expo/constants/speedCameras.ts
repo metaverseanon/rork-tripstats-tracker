@@ -8,6 +8,7 @@ export interface SpeedCamera {
 }
 
 export const SPEED_CAMERA_DETECTION_RADIUS_KM = 0.08;
+export const SPEED_CAMERA_WARNING_RADIUS_KM = 0.5;
 
 export const SPEED_CAMERA_RESTRICTED_COUNTRIES = [
   'Germany',

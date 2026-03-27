@@ -436,12 +436,6 @@ export default function TrackScreen() {
               </Text>
               <Text style={dynamicStyles.statLabel}>{getAccelerationLabel('0-100')}</Text>
             </View>
-            <View style={dynamicStyles.statCardNarrow}>
-              <Text style={dynamicStyles.statValueSmall}>
-                {currentTrip?.time0to200 ? currentTrip.time0to200.toFixed(1) + 's' : '--'}
-              </Text>
-              <Text style={dynamicStyles.statLabel}>{getAccelerationLabel('0-200')}</Text>
-            </View>
             {!speedCameraBlocked && (
               <View style={dynamicStyles.statCardNarrow}>
                 <Text style={dynamicStyles.statValueSmall}>
@@ -450,6 +444,12 @@ export default function TrackScreen() {
                 <Text style={dynamicStyles.statLabel}>Cameras</Text>
               </View>
             )}
+            <View style={dynamicStyles.statCardNarrow}>
+              <Text style={dynamicStyles.statValueSmall}>
+                {currentTrip?.time0to200 ? currentTrip.time0to200.toFixed(1) + 's' : '--'}
+              </Text>
+              <Text style={dynamicStyles.statLabel}>{getAccelerationLabel('0-200')}</Text>
+            </View>
           </View>
 
           <View style={styles.statsRow}>

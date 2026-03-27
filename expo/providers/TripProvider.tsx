@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Alert, AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TripStats, Location as LocationType, TripLocation } from '@/types/trip';
-import { getNearbyCameras, isSpeedCameraRestricted } from '@/constants/speedCameras';
+import { getNearbyCameras, isSpeedCameraRestricted, SPEED_CAMERA_WARNING_RADIUS_KM } from '@/constants/speedCameras';
 import { trpcClient } from '@/lib/trpc';
 
 const TRIPS_KEY = 'trips';
@@ -136,6 +136,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
   const time0to200 = useRef<number | null>(null);
   const time0to300 = useRef<number | null>(null);
   const detectedCameraIds = useRef<Set<string>>(new Set());
+  const warnedCameraIds = useRef<Set<string>>(new Set());
   const speedCamerasCount = useRef<number>(0);
   const currentCountry = useRef<string | null>(null);
   const [speedCameraBlocked, setSpeedCameraBlocked] = useState(false);
@@ -473,6 +474,20 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     let corners = tripData.corners;
 
     if (!isSpeedCameraRestricted(currentCountry.current)) {
+      const warningCameras = getNearbyCameras(newLocation.latitude, newLocation.longitude, SPEED_CAMERA_WARNING_RADIUS_KM);
+      for (const camera of warningCameras) {
+        if (!warnedCameraIds.current.has(camera.id)) {
+          warnedCameraIds.current.add(camera.id);
+          const limitText = camera.speedLimit ? ` (${camera.speedLimit} km/h limit)` : '';
+          console.log('[SPEED_CAMERA_WARNING] Approaching camera:', camera.id, camera.description);
+          sendLocalNotification(
+            '⚠️ Speed Camera Ahead',
+            `${camera.description || 'Speed camera'} nearby${limitText}`,
+            { type: 'speed_camera_warning', cameraId: camera.id }
+          ).catch(console.error);
+        }
+      }
+
       const nearbyCameras = getNearbyCameras(newLocation.latitude, newLocation.longitude);
       for (const camera of nearbyCameras) {
         if (!detectedCameraIds.current.has(camera.id)) {
@@ -560,6 +575,20 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     let corners = tripData.corners;
 
     if (!isSpeedCameraRestricted(currentCountry.current)) {
+      const warningCameras = getNearbyCameras(newLocation.latitude, newLocation.longitude, SPEED_CAMERA_WARNING_RADIUS_KM);
+      for (const camera of warningCameras) {
+        if (!warnedCameraIds.current.has(camera.id)) {
+          warnedCameraIds.current.add(camera.id);
+          const limitText = camera.speedLimit ? ` (${camera.speedLimit} km/h limit)` : '';
+          console.log('[SPEED_CAMERA_WARNING] Approaching camera:', camera.id, camera.description);
+          sendLocalNotification(
+            '⚠️ Speed Camera Ahead',
+            `${camera.description || 'Speed camera'} nearby${limitText}`,
+            { type: 'speed_camera_warning', cameraId: camera.id }
+          ).catch(console.error);
+        }
+      }
+
       const nearbyCameras = getNearbyCameras(newLocation.latitude, newLocation.longitude);
       for (const camera of nearbyCameras) {
         if (!detectedCameraIds.current.has(camera.id)) {
@@ -1079,6 +1108,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       time0to200.current = null;
       time0to300.current = null;
       detectedCameraIds.current = new Set();
+      warnedCameraIds.current = new Set();
       speedCamerasCount.current = 0;
       currentCountry.current = null;
       setSpeedCameraBlocked(false);
@@ -1289,6 +1319,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     time0to200.current = null;
     time0to300.current = null;
     detectedCameraIds.current = new Set();
+    warnedCameraIds.current = new Set();
     speedCamerasCount.current = 0;
     currentCountry.current = null;
     setSpeedCameraBlocked(false);
@@ -1353,6 +1384,7 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     time0to200.current = null;
     time0to300.current = null;
     detectedCameraIds.current = new Set();
+    warnedCameraIds.current = new Set();
     speedCamerasCount.current = 0;
     currentCountry.current = null;
     setSpeedCameraBlocked(false);
