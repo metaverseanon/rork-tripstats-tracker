@@ -198,7 +198,8 @@ export default function TrackScreen() {
           strokeDashoffset={0}
           strokeLinecap="round"
           rotation={START_ANGLE}
-          origin={`${CENTER}, ${CENTER}`}
+          originX={CENTER}
+          originY={CENTER}
         />
         <Circle
           cx={CENTER}
@@ -211,7 +212,8 @@ export default function TrackScreen() {
           strokeDashoffset={dashOffset}
           strokeLinecap="round"
           rotation={START_ANGLE}
-          origin={`${CENTER}, ${CENTER}`}
+          originX={CENTER}
+          originY={CENTER}
         />
       </Svg>
       <View style={s.speedTextWrap}>
