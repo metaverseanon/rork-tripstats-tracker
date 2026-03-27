@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Animated, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -9,46 +9,47 @@ const ONBOARDING_KEY = 'onboarding_completed';
 export default function WelcomeScreen() {
   const router = useRouter();
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  const [destination, setDestination] = useState<string | null>(null);
 
   useEffect(() => {
     const checkOnboarding = async () => {
       try {
         const completed = await AsyncStorage.getItem(ONBOARDING_KEY);
         const seenWhatsNew = await AsyncStorage.getItem(WHATS_NEW_VERSION);
-        const timer = setTimeout(() => {
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 400,
-            useNativeDriver: true,
-          }).start(() => {
-            if (completed !== 'true') {
-              router.replace('/onboarding' as any);
-            } else if (seenWhatsNew !== 'true') {
-              router.replace('/whats-new' as any);
-            } else {
-              router.replace('/(tabs)/track' as any);
-            }
-          });
-        }, 4000);
+        console.log('[WELCOME] onboarding_completed:', completed, 'seenWhatsNew:', seenWhatsNew);
 
-        return () => clearTimeout(timer);
+        if (completed !== 'true') {
+          setDestination('/onboarding');
+        } else if (seenWhatsNew !== 'true') {
+          setDestination('/whats-new');
+        } else {
+          setDestination('/(tabs)/track');
+        }
       } catch (e) {
         console.warn('[WELCOME] Error checking onboarding:', e);
-        const timer = setTimeout(() => {
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 400,
-            useNativeDriver: true,
-          }).start(() => {
-            router.replace('/onboarding' as any);
-          });
-        }, 4000);
-        return () => clearTimeout(timer);
+        setDestination('/onboarding');
       }
     };
 
     void checkOnboarding();
-  }, [fadeAnim, router]);
+  }, []);
+
+  useEffect(() => {
+    if (!destination) return;
+
+    const timer = setTimeout(() => {
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }).start(() => {
+        console.log('[WELCOME] Navigating to:', destination);
+        router.replace(destination as any);
+      });
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [destination, fadeAnim, router]);
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
