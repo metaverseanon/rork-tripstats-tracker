@@ -13,7 +13,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { ImagePlus, X, Send } from 'lucide-react-native';
+import { ImagePlus, X, Send, ArrowLeft } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { useSettings } from '@/providers/SettingsProvider';
@@ -117,6 +117,16 @@ export default function CreatePostScreen() {
           title: 'New Post',
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+              activeOpacity={0.7}
+              testID="back-button"
+            >
+              <ArrowLeft size={22} color={colors.text} />
+            </TouchableOpacity>
+          ),
           headerRight: () => (
             <TouchableOpacity
               onPress={handleSubmit}
@@ -217,6 +227,10 @@ const createStyles = (colors: ThemeColors) =>
     },
     scrollContent: {
       padding: 20,
+    },
+    backButton: {
+      padding: 4,
+      marginRight: 8,
     },
     postButton: {
       flexDirection: 'row',
