@@ -1,8 +1,11 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState, useRef } from 'react';
+import { Platform } from 'react-native';
+import * as Location from 'expo-location';
 import { UserProfile, UserCar } from '@/types/user';
 import { trpcClient } from '@/lib/trpc';
+import { COUNTRIES } from '@/constants/countries';
 
 const USER_KEY = 'user_profile';
 
@@ -12,8 +15,85 @@ export const [UserProvider, useUser] = createContextHook(() => {
   const userRef = useRef<UserProfile | null>(null);
 
   useEffect(() => {
-    loadUser();
+    void loadUser();
   }, []);
+
+  const locationSyncedRef = useRef(false);
+
+  useEffect(() => {
+    const autoDetectLocation = async () => {
+      if (locationSyncedRef.current) return;
+      locationSyncedRef.current = true;
+
+      const currentUser = userRef.current;
+      if (!currentUser) return;
+
+      if (Platform.OS === 'web') return;
+
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('[LOCATION] No location permission, skipping auto-detect');
+          return;
+        }
+
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+
+        const [geocode] = await Location.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+
+        if (!geocode) return;
+
+        const countryName = geocode.country || '';
+        const cityName = geocode.city || geocode.subregion || geocode.region || '';
+
+        const matchedCountry = COUNTRIES.find(
+          c => c.name.toLowerCase() === countryName.toLowerCase() ||
+               c.code.toLowerCase() === (geocode.isoCountryCode || '').toLowerCase()
+        );
+
+        if (!matchedCountry) {
+          console.log('[LOCATION] Could not match country:', countryName);
+          return;
+        }
+
+        const newCountry = matchedCountry.code;
+        const matchedCity = matchedCountry.cities.find(
+          c => c.toLowerCase() === cityName.toLowerCase()
+        ) || cityName;
+
+        if (newCountry === currentUser.country && matchedCity === currentUser.city) {
+          console.log('[LOCATION] Location unchanged, skipping update');
+          return;
+        }
+
+        console.log('[LOCATION] Auto-updating location:', matchedCountry.name, matchedCity);
+        const updatedUser = { ...currentUser, country: newCountry, city: matchedCity };
+        await saveUser(updatedUser);
+
+        try {
+          await trpcClient.user.updateUserLocation.mutate({
+            userId: currentUser.id,
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          });
+          console.log('[LOCATION] Location synced to backend');
+        } catch (backendError) {
+          console.error('[LOCATION] Failed to sync location to backend:', backendError);
+        }
+      } catch (error) {
+        console.error('[LOCATION] Auto-detect location failed:', error);
+      }
+    };
+
+    if (user && !isLoading) {
+      void autoDetectLocation();
+    }
+  }, [user, isLoading]);
 
   useEffect(() => {
     const syncTimezone = async () => {
@@ -39,7 +119,7 @@ export const [UserProvider, useUser] = createContextHook(() => {
     };
     
     if (user && !isLoading) {
-      syncTimezone();
+      void syncTimezone();
     }
   }, [user, isLoading]);
 
