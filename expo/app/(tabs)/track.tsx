@@ -125,9 +125,9 @@ export default function TrackScreen() {
   const getSpeedColor = useCallback((speed: number) => {
     const maxSpeed = 200;
     const ratio = Math.min(Math.max(speed, 0), maxSpeed) / maxSpeed;
-    const r = Math.round(229 + (255 - 229) * ratio);
-    const g = Math.round(57 + (30 - 57) * ratio);
-    const b = Math.round(53 + (30 - 53) * ratio);
+    const r = Math.round(34 + (204 - 34) * ratio);
+    const g = Math.round(197 + (0 - 197) * ratio);
+    const b = Math.round(94 + (0 - 94) * ratio);
     return `rgb(${r}, ${g}, ${b})`;
   }, []);
 
@@ -225,7 +225,7 @@ export default function TrackScreen() {
 
   const renderStatusBadge = () => (
     <View style={[s.statusBadge, { backgroundColor: isDark ? '#1A1A1A' : '#FFFFFF', borderColor: cardBorder }]}>
-      <View style={[s.statusDot, { backgroundColor: isTracking ? '#E53935' : '#E53935' }]} />
+      <View style={[s.statusDot, { backgroundColor: isTracking ? '#E53935' : '#22C55E' }]} />
       <Text style={[s.statusText, { color: labelColor }]}>
         {isTracking ? 'TRACKING • GPS ACTIVE' : 'SYSTEM READY • GPS LOCKED'}
       </Text>
