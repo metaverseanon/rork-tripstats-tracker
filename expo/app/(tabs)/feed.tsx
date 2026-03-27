@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Navigation, Clock, MapPin, Search, X, UserPlus, Car, Zap, Users } from 'lucide-react-native';
+import { Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useSettings } from '@/providers/SettingsProvider';
@@ -23,6 +24,7 @@ interface FeedItem {
   id: string;
   userId: string;
   userName: string;
+  userProfilePicture?: string;
   type: string;
   tripId?: string;
   carModel?: string;
@@ -116,7 +118,11 @@ export default function FeedScreen() {
       >
         <View style={styles.feedCardHeader}>
           <View style={styles.feedAvatar}>
-            <Text style={styles.feedAvatarText}>{initial}</Text>
+            {item.userProfilePicture ? (
+              <Image source={{ uri: item.userProfilePicture }} style={styles.feedAvatarImage} />
+            ) : (
+              <Text style={styles.feedAvatarText}>{initial}</Text>
+            )}
           </View>
           <View style={styles.feedHeaderInfo}>
             <Text style={styles.feedUserName} numberOfLines={1}>{item.userName}</Text>
@@ -470,6 +476,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: colors.accent + '40',
+  },
+  feedAvatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   feedAvatarText: {
     fontSize: 15,

@@ -303,6 +303,12 @@ export default function SettingsScreen() {
       alignItems: 'center',
       justifyContent: 'center',
       marginRight: 12,
+      overflow: 'hidden' as const,
+    },
+    avatarImage: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
     },
     profileInfo: {
       flex: 1,
@@ -454,7 +460,11 @@ export default function SettingsScreen() {
           <TouchableOpacity style={styles.profileItem} onPress={openProfile} activeOpacity={0.7}>
             <View style={styles.profileContent}>
               <View style={styles.avatarContainer}>
-                <User size={24} color={colors.textInverted} />
+                {user?.profilePicture ? (
+                  <Image source={{ uri: user.profilePicture }} style={styles.avatarImage} />
+                ) : (
+                  <User size={24} color={colors.textInverted} />
+                )}
               </View>
               <View style={styles.profileInfo}>
                 {isAuthenticated ? (

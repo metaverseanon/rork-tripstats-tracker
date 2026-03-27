@@ -379,16 +379,17 @@ export const socialRouter = createTRPCRouter({
         const feedRows: ActivityFeedRow[] = await feedResp.json();
         console.log("[SOCIAL] Feed rows fetched:", feedRows.length);
 
-        const usersUrl = `${getSupabaseRestUrl("users")}?select=id,display_name,car_brand,car_model,country,city`;
+        const usersUrl = `${getSupabaseRestUrl("users")}?select=id,display_name,car_brand,car_model,country,city,profile_picture`;
         const usersResp = await fetch(usersUrl, { method: "GET", headers: getSupabaseHeaders() });
         const allUsers: Record<string, any>[] = usersResp.ok ? await usersResp.json() : [];
 
-        const userMap = new Map<string, { displayName: string; carBrand?: string; carModel?: string }>();
+        const userMap = new Map<string, { displayName: string; carBrand?: string; carModel?: string; profilePicture?: string }>();
         for (const u of allUsers) {
           userMap.set(u.id, {
             displayName: u.display_name,
             carBrand: u.car_brand,
             carModel: u.car_model,
+            profilePicture: u.profile_picture,
           });
         }
 
@@ -396,6 +397,7 @@ export const socialRouter = createTRPCRouter({
           id: row.id,
           userId: row.user_id,
           userName: userMap.get(row.user_id)?.displayName ?? "Unknown",
+          userProfilePicture: userMap.get(row.user_id)?.profilePicture,
           type: row.type,
           tripId: row.trip_id,
           carModel: row.car_model,
