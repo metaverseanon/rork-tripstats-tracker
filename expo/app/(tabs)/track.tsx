@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, TouchableOpacity, Platform, Alert, Dimensions }
 import * as ExpoLocation from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Play, Square, Map, Gauge, X, Camera } from 'lucide-react-native';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, G } from 'react-native-svg';
 import { useTrips } from '@/providers/TripProvider';
 import { useSettings } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
@@ -187,34 +187,30 @@ export default function TrackScreen() {
   const renderSpeedometer = () => (
     <View style={[s.speedometerWrap, { width: SPEEDOMETER_SIZE, height: SPEEDOMETER_SIZE }]}>
       <Svg width={SPEEDOMETER_SIZE} height={SPEEDOMETER_SIZE}>
-        <Circle
-          cx={CENTER}
-          cy={CENTER}
-          r={RADIUS}
-          stroke={isDark ? '#1A1A1A' : '#E4EBE4'}
-          strokeWidth={STROKE_WIDTH}
-          fill={speedometerBg}
-          strokeDasharray={`${ARC_LENGTH} ${CIRCUMFERENCE}`}
-          strokeDashoffset={0}
-          strokeLinecap="round"
-          rotation={START_ANGLE}
-          originX={CENTER}
-          originY={CENTER}
-        />
-        <Circle
-          cx={CENTER}
-          cy={CENTER}
-          r={RADIUS}
-          stroke={speedColor}
-          strokeWidth={STROKE_WIDTH}
-          fill="none"
-          strokeDasharray={`${ARC_LENGTH} ${CIRCUMFERENCE}`}
-          strokeDashoffset={dashOffset}
-          strokeLinecap="round"
-          rotation={START_ANGLE}
-          originX={CENTER}
-          originY={CENTER}
-        />
+        <G rotation={START_ANGLE} origin={`${CENTER}, ${CENTER}`}>
+          <Circle
+            cx={CENTER}
+            cy={CENTER}
+            r={RADIUS}
+            stroke={isDark ? '#1A1A1A' : '#E4EBE4'}
+            strokeWidth={STROKE_WIDTH}
+            fill={speedometerBg}
+            strokeDasharray={`${ARC_LENGTH} ${CIRCUMFERENCE}`}
+            strokeDashoffset={0}
+            strokeLinecap="round"
+          />
+          <Circle
+            cx={CENTER}
+            cy={CENTER}
+            r={RADIUS}
+            stroke={speedColor}
+            strokeWidth={STROKE_WIDTH}
+            fill="none"
+            strokeDasharray={`${ARC_LENGTH} ${CIRCUMFERENCE}`}
+            strokeDashoffset={dashOffset}
+            strokeLinecap="round"
+          />
+        </G>
       </Svg>
       <View style={s.speedTextWrap}>
         <Text style={[s.speedValue, { color: valueColor, fontSize: SPEEDOMETER_SIZE * 0.28 }]}>
