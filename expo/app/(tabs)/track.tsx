@@ -236,8 +236,24 @@ export default function TrackScreen() {
       borderWidth: 1,
       borderColor: isDark ? '#2A2A2A' : colors.border,
     },
+    statCardNarrow: {
+      backgroundColor: isDark ? '#1A1A1A' : colors.cardLight,
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 8,
+      flex: 1,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: isDark ? '#2A2A2A' : colors.border,
+    },
     statValue: {
       fontSize: 22,
+      fontFamily: 'Orbitron_600SemiBold',
+      color: colors.text,
+      marginBottom: 4,
+    },
+    statValueSmall: {
+      fontSize: 18,
       fontFamily: 'Orbitron_600SemiBold',
       color: colors.text,
       marginBottom: 4,
@@ -414,18 +430,26 @@ export default function TrackScreen() {
           </View>
 
           <View style={styles.statsRow}>
-            <View style={dynamicStyles.statCard}>
-              <Text style={dynamicStyles.statValue}>
+            <View style={dynamicStyles.statCardNarrow}>
+              <Text style={dynamicStyles.statValueSmall}>
                 {currentTrip?.time0to100 ? currentTrip.time0to100.toFixed(1) + 's' : '--'}
               </Text>
               <Text style={dynamicStyles.statLabel}>{getAccelerationLabel('0-100')}</Text>
             </View>
-            <View style={dynamicStyles.statCard}>
-              <Text style={dynamicStyles.statValue}>
+            <View style={dynamicStyles.statCardNarrow}>
+              <Text style={dynamicStyles.statValueSmall}>
                 {currentTrip?.time0to200 ? currentTrip.time0to200.toFixed(1) + 's' : '--'}
               </Text>
               <Text style={dynamicStyles.statLabel}>{getAccelerationLabel('0-200')}</Text>
             </View>
+            {!speedCameraBlocked && (
+              <View style={dynamicStyles.statCardNarrow}>
+                <Text style={dynamicStyles.statValueSmall}>
+                  {currentTrip?.speedCamerasDetected ?? 0}
+                </Text>
+                <Text style={dynamicStyles.statLabel}>Cameras</Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.statsRow}>
@@ -442,17 +466,6 @@ export default function TrackScreen() {
               <Text style={dynamicStyles.statLabel}>Duration</Text>
             </View>
           </View>
-
-          {!speedCameraBlocked && (
-            <View style={styles.statsRow}>
-              <View style={dynamicStyles.statCard}>
-                <Text style={dynamicStyles.statValue}>
-                  {currentTrip?.speedCamerasDetected ?? 0}
-                </Text>
-                <Text style={dynamicStyles.statLabel}>Speed Cameras</Text>
-              </View>
-            </View>
-          )}
         </View>
       </ScrollView>
 
