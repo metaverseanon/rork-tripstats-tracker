@@ -523,11 +523,14 @@ export default function UserProfileScreen() {
       const p = remoteProfileQuery.data;
       return {
         displayName: p.displayName,
+        profilePicture: p.profilePicture ?? undefined,
         country: p.country,
         city: p.city,
         carBrand: p.carBrand,
         carModel: p.carModel,
+        carPicture: p.carPicture ?? undefined,
         bio: p.bio,
+        cars: p.cars ?? undefined,
         createdAt: p.createdAt,
       };
     }

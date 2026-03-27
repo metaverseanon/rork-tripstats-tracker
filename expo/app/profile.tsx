@@ -37,7 +37,7 @@ interface AdditionalCar {
 }
 
 export default function ProfileScreen() {
-  const { user, isAuthenticated, signUp, signIn, signOut, updateProfile, updateCar, updateLocation, addCar, removeCar, setPrimaryCar, signInWithGoogle } = useUser();
+  const { user, isAuthenticated, signUp, signIn, signOut, updateProfile, updateCar, updateLocation, addCar, removeCar, setPrimaryCar, signInWithGoogle, syncImagesToBackend } = useUser();
   const { syncUnsyncedTrips } = useTrips();
   const [authMode, setAuthMode] = useState<'signup' | 'signin'>('signin');
   const { colors } = useSettings();
@@ -519,6 +519,7 @@ export default function ProfileScreen() {
         for (const car of additionalCars) {
           await addCar(car.brand, car.model, car.picture);
         }
+        void syncImagesToBackend();
         Alert.alert('Success', 'Profile updated successfully');
         router.back();
       } else if (authMode === 'signin') {
@@ -563,6 +564,7 @@ export default function ProfileScreen() {
         );
         console.log('[PROFILE] Sign-up successful, triggering trip sync...');
         void syncUnsyncedTrips();
+        void syncImagesToBackend();
         Alert.alert('Success', 'Account created successfully');
         router.back();
       }

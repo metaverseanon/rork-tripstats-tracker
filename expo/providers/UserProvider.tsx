@@ -1,11 +1,12 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { Platform } from 'react-native';
 import * as Location from 'expo-location';
 import { UserProfile, UserCar } from '@/types/user';
 import { trpcClient } from '@/lib/trpc';
 import { COUNTRIES } from '@/constants/countries';
+import { uploadProfilePicture, uploadCarPicture } from '@/lib/imageUpload';
 
 const USER_KEY = 'user_profile';
 
@@ -356,6 +357,73 @@ export const [UserProvider, useUser] = createContextHook(() => {
     await saveUser(updatedUser);
   }, []);
 
+  const syncImagesToBackend = useCallback(async () => {
+    const currentUser = userRef.current;
+    if (!currentUser) return;
+
+    console.log('[USER] Starting image sync to backend for user:', currentUser.id);
+
+    try {
+      let profilePicUrl = currentUser.profilePicture;
+      if (profilePicUrl && (profilePicUrl.startsWith('file://') || profilePicUrl.startsWith('content://'))) {
+        const uploaded = await uploadProfilePicture(profilePicUrl, currentUser.id);
+        if (uploaded) {
+          profilePicUrl = uploaded;
+          console.log('[USER] Profile picture uploaded:', uploaded.substring(0, 60));
+        }
+      }
+
+      let updatedCars: UserCar[] | undefined;
+      if (currentUser.cars && currentUser.cars.length > 0) {
+        updatedCars = [];
+        for (const car of currentUser.cars) {
+          let carPicUrl = car.picture;
+          if (carPicUrl && (carPicUrl.startsWith('file://') || carPicUrl.startsWith('content://'))) {
+            const uploaded = await uploadCarPicture(carPicUrl, currentUser.id, car.id);
+            if (uploaded) {
+              carPicUrl = uploaded;
+              console.log('[USER] Car picture uploaded for', car.brand, car.model);
+            }
+          }
+          updatedCars.push({ ...car, picture: carPicUrl });
+        }
+      }
+
+      let carPicUrl = currentUser.carPicture;
+      if (carPicUrl && (carPicUrl.startsWith('file://') || carPicUrl.startsWith('content://'))) {
+        const uploaded = await uploadCarPicture(carPicUrl, currentUser.id, 'primary');
+        if (uploaded) {
+          carPicUrl = uploaded;
+        }
+      }
+
+      const updatedUser = {
+        ...currentUser,
+        profilePicture: profilePicUrl,
+        carPicture: carPicUrl,
+        cars: updatedCars || currentUser.cars,
+      };
+      await saveUser(updatedUser);
+
+      await trpcClient.user.updateProfileImages.mutate({
+        userId: currentUser.id,
+        profilePicture: profilePicUrl || null,
+        carPicture: carPicUrl || null,
+        cars: (updatedCars || currentUser.cars || []).map(c => ({
+          id: c.id,
+          brand: c.brand,
+          model: c.model,
+          picture: c.picture,
+          isPrimary: c.isPrimary,
+        })),
+      });
+
+      console.log('[USER] Images synced to backend successfully');
+    } catch (error) {
+      console.error('[USER] Failed to sync images to backend:', error);
+    }
+  }, []);
+
   const updateCountry = useCallback(async (country: string) => {
     const currentUser = userRef.current;
     if (!currentUser) return;
@@ -427,7 +495,7 @@ export const [UserProvider, useUser] = createContextHook(() => {
     return { success: true, user: newUser };
   }, []);
 
-  return {
+  return useMemo(() => ({
     user,
     isAuthenticated: !!user,
     isLoading,
@@ -445,5 +513,6 @@ export const [UserProvider, useUser] = createContextHook(() => {
     updateCity,
     updateLocation,
     getCarDisplayName,
-  };
+    syncImagesToBackend,
+  }), [user, isLoading, signUp, signIn, signOut, signInWithGoogle, updateProfile, updateCar, addCar, removeCar, setPrimaryCar, updateProfilePicture, updateCountry, updateCity, updateLocation, getCarDisplayName, syncImagesToBackend]);
 });
