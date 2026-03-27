@@ -18,6 +18,7 @@ export interface UserProfile {
   carModel?: string;
   carPicture?: string;
   cars?: UserCar[];
+  bio?: string;
   createdAt: number;
   pushToken?: string;
   notificationsEnabled?: boolean;

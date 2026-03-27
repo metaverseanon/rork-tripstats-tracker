@@ -54,6 +54,7 @@ interface ProfileData {
   carBrand?: string;
   carModel?: string;
   carPicture?: string;
+  bio?: string;
   cars?: Array<{ id: string; brand: string; model: string; picture?: string; isPrimary?: boolean }>;
   createdAt: number;
 }
@@ -513,6 +514,7 @@ export default function UserProfileScreen() {
         carBrand: user.carBrand,
         carModel: user.carModel,
         carPicture: user.carPicture,
+        bio: user.bio,
         createdAt: user.createdAt,
       };
     }
@@ -525,6 +527,7 @@ export default function UserProfileScreen() {
         city: p.city,
         carBrand: p.carBrand,
         carModel: p.carModel,
+        bio: p.bio,
         createdAt: p.createdAt,
       };
     }
@@ -697,6 +700,9 @@ export default function UserProfileScreen() {
               </Text>
             </View>
           )}
+          {profileUser.bio ? (
+            <Text style={styles.bioText}>{profileUser.bio}</Text>
+          ) : null}
           {memberSince ? (
             <View style={styles.memberRow}>
               <Calendar size={12} color={colors.textLight} />
@@ -1011,6 +1017,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 11,
     fontFamily: 'Orbitron_400Regular',
     color: colors.textLight,
+  },
+  bioText: {
+    fontSize: 13,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    textAlign: 'center' as const,
+    marginBottom: 8,
+    paddingHorizontal: 20,
+    lineHeight: 20,
   },
   followRow: {
     flexDirection: 'row',

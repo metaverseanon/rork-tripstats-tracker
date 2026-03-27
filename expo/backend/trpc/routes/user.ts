@@ -16,6 +16,7 @@ interface StoredUser {
   city?: string;
   carBrand?: string;
   carModel?: string;
+  bio?: string;
   createdAt: number;
   welcomeEmailSent: boolean;
   pushToken?: string | null;
@@ -306,6 +307,7 @@ async function storeUserInDb(user: StoredUser): Promise<{ success: boolean; erro
       city: user.city,
       car_brand: user.carBrand,
       car_model: user.carModel,
+      bio: user.bio,
       created_at: user.createdAt,
       welcome_email_sent: user.welcomeEmailSent,
       push_token: user.pushToken,
@@ -347,6 +349,7 @@ async function updateUserInDb(userId: string, updates: Partial<StoredUser>): Pro
     if (updates.city !== undefined) dbUpdates.city = updates.city;
     if (updates.carBrand !== undefined) dbUpdates.car_brand = updates.carBrand;
     if (updates.carModel !== undefined) dbUpdates.car_model = updates.carModel;
+    if (updates.bio !== undefined) dbUpdates.bio = updates.bio;
     if (updates.welcomeEmailSent !== undefined) dbUpdates.welcome_email_sent = updates.welcomeEmailSent;
     if (updates.pushToken !== undefined) dbUpdates.push_token = updates.pushToken;
     if (updates.timezone !== undefined) dbUpdates.timezone = updates.timezone;
@@ -408,6 +411,7 @@ async function getAllUsers(): Promise<StoredUser[]> {
       city: row.city as string | undefined,
       carBrand: row.car_brand as string | undefined,
       carModel: row.car_model as string | undefined,
+      bio: row.bio as string | undefined,
       createdAt: row.created_at ? new Date(row.created_at as string).getTime() : Date.now(),
       welcomeEmailSent: row.welcome_email_sent as boolean,
       pushToken: row.push_token as string | null | undefined,
@@ -454,6 +458,7 @@ async function getUserByEmail(email: string): Promise<StoredUser | null> {
       city: row.city as string | undefined,
       carBrand: row.car_brand as string | undefined,
       carModel: row.car_model as string | undefined,
+      bio: row.bio as string | undefined,
       createdAt: row.created_at ? new Date(row.created_at as string).getTime() : Date.now(),
       welcomeEmailSent: row.welcome_email_sent as boolean,
       pushToken: row.push_token as string | null | undefined,
@@ -710,6 +715,7 @@ export const userRouter = createTRPCRouter({
           city: user.city,
           carBrand: user.carBrand,
           carModel: user.carModel,
+          bio: user.bio,
           createdAt: user.createdAt,
         },
       };
@@ -933,6 +939,17 @@ export const userRouter = createTRPCRouter({
       return { success: true };
     }),
 
+  updateBio: publicProcedure
+    .input(z.object({
+      userId: z.string(),
+      bio: z.string().max(300),
+    }))
+    .mutation(async ({ input }) => {
+      console.log("Updating bio for user:", input.userId);
+      const updated = await updateUserInDb(input.userId, { bio: input.bio });
+      return { success: updated };
+    }),
+
   updateTimezone: publicProcedure
     .input(z.object({
       userId: z.string(),
@@ -986,6 +1003,7 @@ export const userRouter = createTRPCRouter({
         city: foundUser.city,
         carBrand: foundUser.carBrand,
         carModel: foundUser.carModel,
+        bio: foundUser.bio,
         createdAt: foundUser.createdAt,
       };
     }),

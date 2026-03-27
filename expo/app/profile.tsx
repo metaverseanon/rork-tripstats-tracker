@@ -53,6 +53,7 @@ export default function ProfileScreen() {
   const [selectedBrand, setSelectedBrand] = useState(user?.carBrand || '');
   const [selectedModel, setSelectedModel] = useState(user?.carModel || '');
   const [carPicture, setCarPicture] = useState(user?.carPicture || '');
+  const [bio, setBio] = useState(user?.bio || '');
   const [profilePicLoadFailed, setProfilePicLoadFailed] = useState(false);
 
   useEffect(() => {
@@ -65,6 +66,7 @@ export default function ProfileScreen() {
       setSelectedBrand(prev => prev || user.carBrand || '');
       setSelectedModel(prev => prev || user.carModel || '');
       setCarPicture(prev => prev || user.carPicture || '');
+      setBio(prev => prev || user.bio || '');
       setProfilePicLoadFailed(false);
     }
   }, [user]);
@@ -494,7 +496,14 @@ export default function ProfileScreen() {
     setIsSubmitting(true);
     try {
       if (isAuthenticated) {
-        await updateProfile({ email, displayName, profilePicture: profilePicture || undefined });
+        await updateProfile({ email, displayName, profilePicture: profilePicture || undefined, bio: bio.trim() || undefined });
+        if (user?.id) {
+          try {
+            await trpcClient.user.updateBio.mutate({ userId: user.id, bio: bio.trim() });
+          } catch (e) {
+            console.error('Failed to sync bio to backend:', e);
+          }
+        }
         if (selectedCountry) {
           await updateLocation(selectedCountry, selectedCity);
         }
@@ -806,6 +815,24 @@ export default function ProfileScreen() {
                 {displayNameError ? (
                   <Text style={styles.errorText}>{displayNameError}</Text>
                 ) : null}
+              </View>
+            )}
+
+            {(isAuthenticated || authMode === 'signup') && (
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Bio</Text>
+                <TextInput
+                  style={[styles.input, styles.bioInput]}
+                  value={bio}
+                  onChangeText={(text) => setBio(text.slice(0, 300))}
+                  placeholder="Tell others about yourself..."
+                  placeholderTextColor={colors.textLight}
+                  multiline
+                  numberOfLines={3}
+                  maxLength={300}
+                  textAlignVertical="top"
+                />
+                <Text style={styles.charCount}>{bio.length}/300</Text>
               </View>
             )}
 
@@ -1706,6 +1733,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  bioInput: {
+    height: 80,
+    paddingTop: 14,
+  },
+  charCount: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    textAlign: 'right' as const,
+    marginTop: 4,
   },
   inputError: {
     borderColor: colors.danger,
