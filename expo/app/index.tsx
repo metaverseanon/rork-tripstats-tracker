@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Animated, Image } from 'react-native';
+import { StyleSheet, Animated, Image, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WHATS_NEW_VERSION } from './whats-new';
@@ -10,6 +10,14 @@ export default function WelcomeScreen() {
   const router = useRouter();
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const [destination, setDestination] = useState<string | null>(null);
+  const hasNavigated = useRef(false);
+
+  const navigateTo = useRef((dest: string) => {
+    if (hasNavigated.current) return;
+    hasNavigated.current = true;
+    console.log('[WELCOME] Navigating to:', dest);
+    router.replace(dest as any);
+  }).current;
 
   useEffect(() => {
     const checkOnboarding = async () => {
@@ -37,19 +45,28 @@ export default function WelcomeScreen() {
   useEffect(() => {
     if (!destination) return;
 
+    const useNative = Platform.OS !== 'web';
+
     const timer = setTimeout(() => {
       Animated.timing(fadeAnim, {
         toValue: 0,
         duration: 400,
-        useNativeDriver: true,
-      }).start(() => {
-        console.log('[WELCOME] Navigating to:', destination);
-        router.replace(destination as any);
+        useNativeDriver: useNative,
+      }).start((result) => {
+        console.log('[WELCOME] Animation finished:', result);
+        navigateTo(destination);
       });
-    }, 2000);
+
+      const fallback = setTimeout(() => {
+        console.log('[WELCOME] Fallback navigation triggered');
+        navigateTo(destination);
+      }, 1000);
+
+      return () => clearTimeout(fallback);
+    }, 1500);
 
     return () => clearTimeout(timer);
-  }, [destination, fadeAnim, router]);
+  }, [destination, fadeAnim, navigateTo]);
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
