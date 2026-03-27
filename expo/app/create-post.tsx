@@ -29,6 +29,7 @@ export default function CreatePostScreen() {
   const [text, setText] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
 
   const styles = useMemo(() => createStyles(colors), [colors]);
   const utils = trpc.useUtils();
@@ -159,8 +160,15 @@ export default function CreatePostScreen() {
         >
           <View style={styles.userRow}>
             <View style={styles.avatar}>
-              {user?.profilePicture ? (
-                <Image source={{ uri: user.profilePicture }} style={styles.avatarImage} />
+              {user?.profilePicture && !avatarError ? (
+                <Image
+                  source={{ uri: user.profilePicture }}
+                  style={styles.avatarImage}
+                  onError={() => {
+                    console.log('[CREATE_POST] Avatar image failed to load:', user.profilePicture);
+                    setAvatarError(true);
+                  }}
+                />
               ) : (
                 <Text style={styles.avatarText}>{user?.displayName?.[0]?.toUpperCase() || '?'}</Text>
               )}
