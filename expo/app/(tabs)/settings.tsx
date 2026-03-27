@@ -296,6 +296,8 @@ export default function SettingsScreen() {
     linkContent: {
       flexDirection: 'row',
       alignItems: 'center',
+      flex: 1,
+      marginRight: 8,
     },
     linkText: {
       fontSize: 16,
