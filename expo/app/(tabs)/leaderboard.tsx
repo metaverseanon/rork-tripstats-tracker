@@ -1446,7 +1446,6 @@ export default function LeaderboardScreen() {
               const first = top3[0];
               const second = top3.length > 1 ? top3[1] : null;
               const third = top3.length > 2 ? top3[2] : null;
-              const firstStats = getSecondaryStats(first);
 
               const renderPodiumUser = (trip: LeaderboardTrip, rank: number) => {
                 const isMe = trip.userId === user?.id || trip.userName === user?.displayName;
@@ -1456,6 +1455,8 @@ export default function LeaderboardScreen() {
                 const avatarSize = isFirst ? 80 : 56;
                 const ringSize = avatarSize + 8;
                 const ringColor = rank === 1 ? colors.accent : rank === 2 ? '#C0C0C0' : '#CD7F32';
+                const podiumStats = getSecondaryStats(trip);
+                const tripLocation = trip.location?.city && trip.location.city !== 'Unknown' ? trip.location.city : null;
 
                 return (
                   <TouchableOpacity
@@ -1491,6 +1492,22 @@ export default function LeaderboardScreen() {
                     {car && (
                       <Text style={styles.podiumCarText} numberOfLines={1}>{car.full}</Text>
                     )}
+                    {podiumStats.length > 0 && (
+                      <View style={styles.podiumMiniStats}>
+                        {podiumStats.slice(0, isFirst ? 3 : 2).map((stat, si) => (
+                          <View key={si} style={styles.podiumMiniStatItem}>
+                            {statIconMap[stat.iconType]}
+                            <Text style={styles.podiumMiniStatValue} numberOfLines={1}>{stat.value}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                    {tripLocation && (
+                      <View style={styles.podiumLocationChip}>
+                        <MapPin size={8} color={colors.textLight} />
+                        <Text style={styles.podiumLocationText} numberOfLines={1}>{tripLocation}</Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 );
               };
@@ -1513,18 +1530,6 @@ export default function LeaderboardScreen() {
                         </View>
                       )}
                     </View>
-
-                    {firstStats.length > 0 && (
-                      <View style={styles.podiumStatsCard}>
-                        {firstStats.slice(0, 2).map((stat, si) => (
-                          <View key={si} style={styles.podiumStatItem}>
-                            {statIconMap[stat.iconType]}
-                            <Text style={styles.podiumStatLabel}>{stat.label}</Text>
-                            <Text style={styles.podiumStatValue}>{stat.value}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    )}
                   </View>
 
                   {leaderboardData.length > 3 && (
@@ -1607,9 +1612,27 @@ export default function LeaderboardScreen() {
                         </TouchableOpacity>
                       )}
                     </View>
-                    <Text style={styles.competitorCar} numberOfLines={1}>
-                      {carInfo ? carInfo.full : (trip.location?.city && trip.location.city !== 'Unknown' ? trip.location.city : '')}
-                    </Text>
+                    {carInfo && (
+                      <Text style={styles.competitorCar} numberOfLines={1}>
+                        {carInfo.full}
+                      </Text>
+                    )}
+                    <View style={styles.competitorStatsRow}>
+                      {getSecondaryStats(trip).slice(0, 3).map((stat, si) => (
+                        <View key={si} style={styles.competitorStatChip}>
+                          {statIconMap[stat.iconType]}
+                          <Text style={styles.competitorStatText}>{stat.value}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    {trip.location?.city && trip.location.city !== 'Unknown' && (
+                      <View style={styles.competitorLocationRow}>
+                        <MapPin size={10} color={colors.textLight} />
+                        <Text style={styles.competitorLocationText} numberOfLines={1}>
+                          {trip.location.city}{trip.location.country && trip.location.country !== 'Unknown' ? `, ${trip.location.country}` : ''}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                   <View style={styles.competitorValueCol}>
                     <Text style={styles.competitorValue}>{formatValue(trip)}</Text>
@@ -4040,6 +4063,71 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   navChooserCancelText: {
     fontSize: 14,
     fontFamily: 'Orbitron_600SemiBold',
+    color: colors.textLight,
+  },
+  podiumMiniStats: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    justifyContent: 'center' as const,
+    gap: 4,
+    marginTop: 4,
+    maxWidth: 120,
+  },
+  podiumMiniStatItem: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 2,
+    backgroundColor: colors.background,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  podiumMiniStatValue: {
+    fontSize: 8,
+    fontFamily: 'Orbitron_500Medium',
+    color: colors.textLight,
+  },
+  podiumLocationChip: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 3,
+    marginTop: 2,
+  },
+  podiumLocationText: {
+    fontSize: 8,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    maxWidth: 80,
+  },
+  competitorStatsRow: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 4,
+    marginTop: 4,
+  },
+  competitorStatChip: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 3,
+    backgroundColor: colors.background,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  competitorStatText: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_500Medium',
+    color: colors.textLight,
+  },
+  competitorLocationRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    marginTop: 3,
+  },
+  competitorLocationText: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_400Regular',
     color: colors.textLight,
   },
 });
