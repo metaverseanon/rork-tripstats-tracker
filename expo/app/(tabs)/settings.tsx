@@ -900,7 +900,7 @@ export default function SettingsScreen() {
             style={styles.footerLogo}
             resizeMode="contain"
           />
-          <Text style={styles.footerText}>RedLine v1.0.0</Text>
+          <Text style={styles.footerText}>RedLine v1.5.0</Text>
         </View>
       </ScrollView>
       <Modal
