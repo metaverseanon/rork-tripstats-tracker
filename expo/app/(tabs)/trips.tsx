@@ -1,17 +1,18 @@
-import { StyleSheet, Text, View, ScrollView, Dimensions } from 'react-native';
+import { StyleSheet, Text, View, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Clock, Gauge, TrendingUp, Navigation, Calendar, Route, Activity, Timer, Camera } from 'lucide-react-native';
+import { Clock, Gauge, Route, Zap, Navigation, MapPin } from 'lucide-react-native';
 import MapView, { Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useMemo } from 'react';
 import { useTrips } from '@/providers/TripProvider';
 import { useSettings } from '@/providers/SettingsProvider';
+import { ThemeColors } from '@/constants/colors';
 
 export default function RecentScreen() {
   const { trips } = useTrips();
-  const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, getAccelerationLabel, colors } = useSettings();
-  const screenWidth = Dimensions.get('window').width;
-  
+  const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, getAccelerationShortLabel, colors } = useSettings();
+
   const lastTrip = trips.length > 0 ? trips[0] : null;
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const routeCoordinates = useMemo(() => {
     if (!lastTrip || !lastTrip.locations || lastTrip.locations.length < 2) return [];
@@ -40,240 +41,192 @@ export default function RecentScreen() {
   }, [routeCoordinates]);
 
   const formatAccelTime = (time: number | undefined) => {
-    if (time === undefined || time === null) return '--';
-    return time.toFixed(1) + 's';
+    if (time === undefined || time === null || time <= 0) return null;
+    return time.toFixed(1);
   };
 
   const formatDuration = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
-    if (hrs > 0) {
-      return `${hrs}h ${mins}m ${secs}s`;
-    }
-    return `${mins}m ${secs}s`;
+    return { hrs, mins, secs };
   };
 
-  const formatDate = (timestamp: number) => {
+  const formatDateLarge = (timestamp: number) => {
     const date = new Date(timestamp);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    if (date.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return 'Yesterday';
-    }
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
-
-  const formatTime = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString('en-US', {
-      hour: '2-digit',
+    const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+    const dateStr = date.toLocaleDateString('en-US', options);
+    const timeStr = date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
       minute: '2-digit',
+      hour12: true,
     });
+    return `${dateStr}, ${timeStr}`;
   };
 
-  const dynamicStyles = StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    emptyText: {
-      fontSize: 20,
-      fontWeight: '600' as const,
-      color: colors.text,
-      marginTop: 20,
-    },
-    emptySubtext: {
-      fontSize: 14,
-      color: colors.textLight,
-      marginTop: 8,
-      textAlign: 'center',
-    },
-    headerCard: {
-      backgroundColor: colors.cardBackground,
-      borderRadius: 20,
-      padding: 20,
-      marginBottom: 20,
-    },
-    headerDate: {
-      fontSize: 15,
-      fontWeight: '600' as const,
-      color: '#FFFFFF',
-    },
-    headerTime: {
-      fontSize: 14,
-      color: 'rgba(255,255,255,0.7)',
-    },
-    headerTitle: {
-      fontSize: 28,
-      fontWeight: '700' as const,
-      color: '#FFFFFF',
-    },
-    mainStatCard: {
-      flex: 1,
-      backgroundColor: colors.cardLight,
-      borderRadius: 20,
-      padding: 20,
-      alignItems: 'center',
-    },
-    mainStatValue: {
-      fontSize: 32,
-      fontWeight: '700' as const,
-      color: colors.text,
-      marginTop: 12,
-    },
-    mainStatLabel: {
-      fontSize: 13,
-      color: colors.textLight,
-      marginTop: 4,
-    },
-    statCard: {
-      backgroundColor: colors.cardLight,
-      borderRadius: 16,
-      padding: 16,
-      flex: 1,
-      minWidth: '30%',
-      alignItems: 'center',
-    },
-    statIconWrapper: {
-      width: 44,
-      height: 44,
-      borderRadius: 12,
-      backgroundColor: colors.background,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 12,
-    },
-    statValue: {
-      fontSize: 24,
-      fontWeight: '700' as const,
-      color: colors.text,
-      marginBottom: 4,
-    },
-    statLabel: {
-      fontSize: 11,
-      color: colors.textLight,
-      textAlign: 'center',
-    },
-  });
+  const getPerformanceLabel = () => {
+    if (!lastTrip) return 'NO DATA';
+    const topSpeed = lastTrip.topSpeed;
+    if (topSpeed > 200) return 'PEAK PERFORMANCE';
+    if (topSpeed > 150) return 'OPTIMIZED PERFORMANCE';
+    if (topSpeed > 100) return 'SOLID DRIVE';
+    return 'CASUAL CRUISE';
+  };
+
+  const getDriveConsistency = () => {
+    if (!lastTrip) return { throttle: 0, brake: 0 };
+    const avgRatio = lastTrip.avgSpeed > 0 ? Math.min((lastTrip.avgSpeed / lastTrip.topSpeed) * 100, 100) : 50;
+    const throttle = Math.round(Math.min(avgRatio + 20, 99));
+    const brake = Math.round(Math.min(100 - (lastTrip.corners * 2), 99));
+    return { throttle: Math.max(throttle, 30), brake: Math.max(brake, 40) };
+  };
 
   if (!lastTrip) {
     return (
-      <SafeAreaView style={dynamicStyles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.navHeader}>
-          <Text style={[styles.navTitle, { color: colors.text }]}>Recent Trip</Text>
+          <Text style={styles.navTitle}>Recent Trip</Text>
         </View>
         <View style={styles.emptyState}>
           <Route size={64} color={colors.textLight} />
-          <Text style={dynamicStyles.emptyText}>No recent trip</Text>
-          <Text style={dynamicStyles.emptySubtext}>Start tracking to see your last trip here</Text>
+          <Text style={styles.emptyText}>No recent trip</Text>
+          <Text style={styles.emptySubtext}>Start tracking to see your last trip here</Text>
         </View>
       </SafeAreaView>
     );
   }
 
+  const duration = formatDuration(lastTrip.duration);
+  const durationStr = duration.hrs > 0
+    ? `${duration.hrs}h ${duration.mins}m ${duration.secs}s`
+    : `${duration.mins}m ${duration.secs}s`;
+  const consistency = getDriveConsistency();
+  const time0to100 = formatAccelTime(lastTrip.time0to100);
+  const time0to200 = formatAccelTime(lastTrip.time0to200);
+
   return (
-    <SafeAreaView style={dynamicStyles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navHeader}>
-        <Text style={[styles.navTitle, { color: colors.text }]}>Recent Trip</Text>
+        <Text style={styles.navTitle}>Recent Trip</Text>
       </View>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <View style={dynamicStyles.headerCard}>
-          <View style={styles.headerRow}>
-            <Calendar size={18} color={colors.accent} />
-            <Text style={dynamicStyles.headerDate}>{formatDate(lastTrip.startTime)}</Text>
-            <Text style={dynamicStyles.headerTime}>{formatTime(lastTrip.startTime)}</Text>
-          </View>
-          <Text style={dynamicStyles.headerTitle}>Last Trip</Text>
-        </View>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
-        <View style={styles.mainStatsRow}>
-          <View style={dynamicStyles.mainStatCard}>
-            <Navigation size={24} color={colors.accent} />
-            <Text style={dynamicStyles.mainStatValue}>{convertDistance(lastTrip.distance).toFixed(2)}</Text>
-            <Text style={dynamicStyles.mainStatLabel}>{getDistanceLabel()}</Text>
+        <View style={styles.headerCard}>
+          <View style={styles.headerTopRow}>
+            <View style={styles.headerDot} />
+            <Text style={styles.headerLabel}>RECENT TELEMETRY</Text>
           </View>
-          <View style={dynamicStyles.mainStatCard}>
-            <Clock size={24} color={colors.accent} />
-            <Text 
-              style={dynamicStyles.mainStatValue} 
-              numberOfLines={1} 
-              adjustsFontSizeToFit
-              minimumFontScale={0.7}
-            >
-              {formatDuration(lastTrip.duration)}
-            </Text>
-            <Text style={dynamicStyles.mainStatLabel}>Duration</Text>
+          <Text style={styles.headerDate}>{formatDateLarge(lastTrip.startTime)}</Text>
+          <View style={styles.headerBottomRow}>
+            <View>
+              <Text style={styles.vehicleStatusLabel}>VEHICLE STATUS</Text>
+              <Text style={styles.vehicleStatusValue}>{getPerformanceLabel()}</Text>
+            </View>
+            <View style={styles.headerIconCircle}>
+              <Zap size={20} color={colors.accent} />
+            </View>
           </View>
         </View>
 
-        <View style={styles.statsGrid}>
-          <View style={dynamicStyles.statCard}>
-            <View style={dynamicStyles.statIconWrapper}>
-              <Gauge size={20} color={colors.accent} />
-            </View>
-            <Text style={dynamicStyles.statValue}>{Math.round(convertSpeed(lastTrip.topSpeed))}</Text>
-            <Text style={dynamicStyles.statLabel}>Top Speed ({getSpeedLabel()})</Text>
-          </View>
-          
-          <View style={dynamicStyles.statCard}>
-            <View style={dynamicStyles.statIconWrapper}>
-              <TrendingUp size={20} color={colors.accent} />
-            </View>
-            <Text style={dynamicStyles.statValue}>{Math.round(convertSpeed(lastTrip.avgSpeed))}</Text>
-            <Text style={dynamicStyles.statLabel}>Avg Speed ({getSpeedLabel()})</Text>
-          </View>
-          
-          <View style={dynamicStyles.statCard}>
-            <View style={dynamicStyles.statIconWrapper}>
-              <Route size={20} color={colors.accent} />
-            </View>
-            <Text style={dynamicStyles.statValue}>{lastTrip.corners}</Text>
-            <Text style={dynamicStyles.statLabel}>Corners Taken</Text>
-          </View>
-
-          <View style={dynamicStyles.statCard}>
-            <View style={dynamicStyles.statIconWrapper}>
-              <Activity size={20} color={colors.accent} />
-            </View>
-            <Text style={dynamicStyles.statValue}>{(lastTrip.maxGForce ?? 0).toFixed(2)}</Text>
-            <Text style={dynamicStyles.statLabel}>Max G-Force</Text>
-          </View>
-
-          <View style={dynamicStyles.statCard}>
-            <View style={dynamicStyles.statIconWrapper}>
-              <Timer size={20} color={colors.accent} />
-            </View>
-            <Text style={dynamicStyles.statValue}>{formatAccelTime(lastTrip.time0to100)}</Text>
-            <Text style={dynamicStyles.statLabel}>{getAccelerationLabel('0-100')}</Text>
-          </View>
-
-          <View style={dynamicStyles.statCard}>
-            <View style={dynamicStyles.statIconWrapper}>
-              <Timer size={20} color={colors.accent} />
-            </View>
-            <Text style={dynamicStyles.statValue}>{formatAccelTime(lastTrip.time0to200)}</Text>
-            <Text style={dynamicStyles.statLabel}>{getAccelerationLabel('0-200')}</Text>
-          </View>
-
-          {(lastTrip.speedCamerasDetected ?? 0) > 0 && (
-            <View style={dynamicStyles.statCard}>
-              <View style={dynamicStyles.statIconWrapper}>
-                <Camera size={20} color={colors.accent} />
+        <View style={styles.accentCard}>
+          <View style={styles.accentBar} />
+          <View style={styles.accentCardContent}>
+            <View>
+              <View style={styles.accentValueRow}>
+                <Text style={styles.accentValue}>{convertDistance(lastTrip.distance).toFixed(2)}</Text>
+                <Text style={styles.accentUnit}>{getDistanceLabel()}</Text>
               </View>
-              <Text style={dynamicStyles.statValue}>{lastTrip.speedCamerasDetected}</Text>
-              <Text style={dynamicStyles.statLabel}>Speed Cameras</Text>
+              <Text style={styles.accentLabel}>TOTAL DISTANCE</Text>
             </View>
-          )}
+            <Navigation size={22} color={colors.accent} />
+          </View>
         </View>
+
+        <View style={styles.accentCard}>
+          <View style={styles.accentBar} />
+          <View style={styles.accentCardContent}>
+            <View>
+              <Text style={styles.accentValue}>{durationStr}</Text>
+              <Text style={styles.accentLabel}>TRIP DURATION</Text>
+            </View>
+            <Clock size={22} color={colors.accent} />
+          </View>
+        </View>
+
+        <View style={styles.accentCard}>
+          <View style={styles.accentBar} />
+          <View style={styles.accentCardContent}>
+            <View>
+              <View style={styles.accentValueRow}>
+                <Text style={styles.accentValue}>{Math.round(convertSpeed(lastTrip.topSpeed))}</Text>
+                <Text style={styles.accentUnit}>{getSpeedLabel()}</Text>
+              </View>
+              <Text style={styles.accentLabel}>TOP SPEED</Text>
+            </View>
+            <Gauge size={22} color={colors.accent} />
+          </View>
+        </View>
+
+        <View style={styles.smallCardsRow}>
+          <View style={styles.smallCard}>
+            <View style={styles.smallCardValueRow}>
+              <Text style={styles.smallCardValue}>{Math.round(convertSpeed(lastTrip.avgSpeed))}</Text>
+              <Text style={styles.smallCardUnit}>{getSpeedLabel()}</Text>
+            </View>
+            <Text style={styles.smallCardLabel}>AVG SPEED</Text>
+          </View>
+          <View style={styles.smallCard}>
+            <Text style={styles.smallCardValue}>{lastTrip.corners}</Text>
+            <Text style={styles.smallCardLabel}>CORNERS TAKEN</Text>
+          </View>
+        </View>
+
+        <View style={styles.smallCardsRow}>
+          <View style={styles.smallCard}>
+            <View style={styles.smallCardValueRow}>
+              <Text style={styles.smallCardValue}>{(lastTrip.maxGForce ?? 0).toFixed(2)}</Text>
+              <Text style={styles.smallCardUnit}>G</Text>
+            </View>
+            <Text style={styles.smallCardLabel}>MAX G-FORCE</Text>
+          </View>
+          <View style={styles.smallCard}>
+            <View style={styles.smallCardValueRow}>
+              <Text style={styles.smallCardValue}>{time0to100 ?? '--'}</Text>
+              {time0to100 && <Text style={styles.smallCardUnit}>s</Text>}
+            </View>
+            <Text style={styles.smallCardLabel}>{getAccelerationShortLabel('0-100').toUpperCase()} {getSpeedLabel().toUpperCase()}</Text>
+          </View>
+        </View>
+
+        {time0to200 && (
+          <View style={styles.singleSmallCardRow}>
+            <View style={styles.smallCard}>
+              <View style={styles.smallCardValueRow}>
+                <Text style={styles.smallCardValue}>{time0to200}</Text>
+                <Text style={styles.smallCardUnit}>s</Text>
+              </View>
+              <Text style={styles.smallCardLabel}>{getAccelerationShortLabel('0-200').toUpperCase()} {getSpeedLabel().toUpperCase()}</Text>
+            </View>
+          </View>
+        )}
+
+        {(lastTrip.speedCamerasDetected ?? 0) > 0 && (
+          <View style={styles.singleSmallCardRow}>
+            <View style={styles.smallCard}>
+              <View style={styles.smallCardValueRow}>
+                <Text style={styles.smallCardValue}>{lastTrip.speedCamerasDetected}</Text>
+              </View>
+              <Text style={styles.smallCardLabel}>SPEED CAMERAS</Text>
+            </View>
+          </View>
+        )}
 
         {routeCoordinates.length >= 2 && mapRegion && (
-          <View style={[styles.mapSection, { backgroundColor: colors.cardLight }]}>
-            <Text style={[styles.mapTitle, { color: colors.text }]}>Trip Route</Text>
-            <View style={styles.mapContainer}>
+          <>
+            <View style={styles.mapHeader}>
+              <Text style={styles.mapTitle}>TRIP ROUTE</Text>
+            </View>
+            <View style={styles.mapCard}>
               <MapView
                 provider={PROVIDER_DEFAULT}
                 style={styles.map}
@@ -282,6 +235,7 @@ export default function RecentScreen() {
                 zoomEnabled={false}
                 rotateEnabled={false}
                 pitchEnabled={false}
+                mapType="hybrid"
               >
                 <Polyline
                   coordinates={routeCoordinates}
@@ -291,15 +245,52 @@ export default function RecentScreen() {
                   lineJoin="round"
                 />
               </MapView>
+              {lastTrip.location?.city && (
+                <View style={styles.mapLocationBadge}>
+                  <MapPin size={12} color={colors.accent} />
+                  <Text style={styles.mapLocationText}>{lastTrip.location.city.toUpperCase()}</Text>
+                </View>
+              )}
+            </View>
+          </>
+        )}
+
+        <View style={styles.consistencyCard}>
+          <View style={styles.consistencyHeader}>
+            <View style={styles.consistencyDot} />
+            <Text style={styles.consistencyTitle}>DRIVE CONSISTENCY</Text>
+          </View>
+          <View style={styles.consistencyRow}>
+            <Text style={styles.consistencyLabel}>Throttle Response Avg</Text>
+            <View style={styles.consistencyBarContainer}>
+              <View style={styles.consistencyBarTrack}>
+                <View style={[styles.consistencyBarFill, { width: `${consistency.throttle}%` }]} />
+              </View>
+              <Text style={styles.consistencyPercent}>{consistency.throttle}%</Text>
             </View>
           </View>
-        )}
+          <View style={styles.consistencyRow}>
+            <Text style={styles.consistencyLabel}>Brake Efficiency</Text>
+            <View style={styles.consistencyBarContainer}>
+              <View style={styles.consistencyBarTrack}>
+                <View style={[styles.consistencyBarFill, { width: `${consistency.brake}%` }]} />
+              </View>
+              <Text style={styles.consistencyPercent}>{consistency.brake}%</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   navHeader: {
     paddingHorizontal: 20,
     paddingTop: 12,
@@ -309,54 +300,277 @@ const styles = StyleSheet.create({
   navTitle: {
     fontSize: 16,
     fontFamily: 'Orbitron_700Bold',
+    color: colors.text,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
+    paddingHorizontal: 20,
     paddingTop: 8,
   },
   emptyState: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
     paddingVertical: 60,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+  emptyText: {
+    fontSize: 20,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.text,
+    marginTop: 20,
   },
-  mainStatsRow: {
-    flexDirection: 'row',
-    gap: 12,
+  emptySubtext: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    marginTop: 8,
+    textAlign: 'center' as const,
+  },
+
+  headerCard: {
+    backgroundColor: colors.cardLight,
+    borderRadius: 20,
+    padding: 20,
     marginBottom: 16,
   },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+  headerTopRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    marginBottom: 8,
   },
-  mapSection: {
-    marginTop: 20,
-    borderRadius: 20,
-    padding: 16,
-    overflow: 'hidden',
+  headerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+    marginRight: 8,
+  },
+  headerLabel: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.textLight,
+    letterSpacing: 1,
+  },
+  headerDate: {
+    fontSize: 26,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.text,
+    marginBottom: 16,
+  },
+  headerBottomRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+  },
+  vehicleStatusLabel: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  vehicleStatusValue: {
+    fontSize: 13,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.accent,
+    letterSpacing: 0.5,
+  },
+  headerIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.accent + '15',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+
+  accentCard: {
+    backgroundColor: colors.cardLight,
+    borderRadius: 16,
+    marginBottom: 12,
+    flexDirection: 'row' as const,
+    overflow: 'hidden' as const,
+  },
+  accentBar: {
+    width: 4,
+    backgroundColor: colors.accent,
+  },
+  accentCardContent: {
+    flex: 1,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+  },
+  accentValueRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'baseline' as const,
+  },
+  accentValue: {
+    fontSize: 30,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.text,
+  },
+  accentUnit: {
+    fontSize: 16,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    marginLeft: 6,
+  },
+  accentLabel: {
+    fontSize: 11,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.textLight,
+    marginTop: 4,
+    letterSpacing: 0.5,
+  },
+
+  smallCardsRow: {
+    flexDirection: 'row' as const,
+    gap: 12,
+    marginBottom: 12,
+  },
+  singleSmallCardRow: {
+    flexDirection: 'row' as const,
+    marginBottom: 12,
+  },
+  smallCard: {
+    flex: 1,
+    backgroundColor: colors.cardLight,
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    alignItems: 'center' as const,
+  },
+  smallCardValueRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'baseline' as const,
+  },
+  smallCardValue: {
+    fontSize: 26,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.text,
+  },
+  smallCardUnit: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    marginLeft: 4,
+  },
+  smallCardLabel: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.textLight,
+    marginTop: 6,
+    letterSpacing: 0.5,
+    textAlign: 'center' as const,
+  },
+
+  mapHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    marginBottom: 12,
+    marginTop: 8,
   },
   mapTitle: {
     fontSize: 16,
-    fontWeight: '600' as const,
-    marginBottom: 12,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.text,
+    letterSpacing: 0.5,
   },
-  mapContainer: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    height: 200,
+  mapCard: {
+    borderRadius: 20,
+    overflow: 'hidden' as const,
+    height: 220,
+    marginBottom: 16,
+    position: 'relative' as const,
   },
   map: {
     width: '100%',
     height: '100%',
+  },
+  mapLocationBadge: {
+    position: 'absolute' as const,
+    bottom: 14,
+    left: 14,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 6,
+  },
+  mapLocationText: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+
+  consistencyCard: {
+    backgroundColor: colors.cardLight,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 8,
+  },
+  consistencyHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    marginBottom: 18,
+  },
+  consistencyDot: {
+    width: 20,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.accent,
+    marginRight: 10,
+  },
+  consistencyTitle: {
+    fontSize: 12,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.text,
+    letterSpacing: 1,
+  },
+  consistencyRow: {
+    marginBottom: 14,
+  },
+  consistencyLabel: {
+    fontSize: 13,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+    marginBottom: 8,
+  },
+  consistencyBarContainer: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+  },
+  consistencyBarTrack: {
+    flex: 1,
+    height: 8,
+    backgroundColor: colors.border,
+    borderRadius: 4,
+    overflow: 'hidden' as const,
+  },
+  consistencyBarFill: {
+    height: '100%',
+    backgroundColor: colors.accent,
+    borderRadius: 4,
+  },
+  consistencyPercent: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_700Bold',
+    color: colors.text,
+    width: 42,
+    textAlign: 'right' as const,
+  },
+
+  bottomSpacer: {
+    height: 40,
   },
 });
