@@ -111,7 +111,7 @@ async function sendLeaderboardBeatNotifications(input: {
 
     const allUsers: { id: string; display_name: string; push_token?: string }[] = await usersResp.json();
     const usersToNotify = allUsers.filter(
-      u => beatenUserIds.includes(u.id) && u.push_token
+      u => u.id !== input.userId && beatenUserIds.includes(u.id) && u.push_token
     );
 
     if (usersToNotify.length === 0) {
