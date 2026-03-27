@@ -1,40 +1,30 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Platform, Alert, Dimensions } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Platform, Animated, Alert } from 'react-native';
 import * as ExpoLocation from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Play, Square, Map, Gauge, X, Camera } from 'lucide-react-native';
-import Svg, { Circle, G } from 'react-native-svg';
+import { Play, Square, Map, Gauge, X } from 'lucide-react-native';
 import { useTrips } from '@/providers/TripProvider';
 import { useSettings } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
 import TripShareCard from '@/components/TripShareCard';
 
-let MapViewComponent: React.ComponentType<any> | null = null;
-let PolylineComponent: React.ComponentType<any> | null = null;
-let MarkerComponent: React.ComponentType<any> | null = null;
+let MapView: React.ComponentType<any> | null = null;
+let Polyline: React.ComponentType<any> | null = null;
+
+let Marker: React.ComponentType<any> | null = null;
 
 if (Platform.OS !== 'web') {
   try {
     const Maps = require('react-native-maps');
-    MapViewComponent = Maps.default;
-    PolylineComponent = Maps.Polyline;
-    MarkerComponent = Maps.Marker;
+    MapView = Maps.default;
+    Polyline = Maps.Polyline;
+    Marker = Maps.Marker;
   } catch {
     console.log('react-native-maps not available');
   }
 }
 
 type ViewMode = 'standard' | 'map';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SPEEDOMETER_SIZE = Math.min(SCREEN_WIDTH * 0.52, 220);
-const STROKE_WIDTH = 6;
-const RADIUS = (SPEEDOMETER_SIZE - STROKE_WIDTH) / 2;
-const CENTER = SPEEDOMETER_SIZE / 2;
-const ARC_ANGLE = 270;
-const START_ANGLE = 135;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-const ARC_LENGTH = (ARC_ANGLE / 360) * CIRCUMFERENCE;
 
 export default function TrackScreen() {
   const { isTracking, currentTrip, currentSpeed, currentLocation, startTracking, stopTracking, cancelTracking, lastSavedTrip, clearLastSavedTrip, speedCameraBlocked } = useTrips();
@@ -43,6 +33,7 @@ export default function TrackScreen() {
   const [showShareCard, setShowShareCard] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('standard');
   const mapRef = useRef<any>(null);
+  const toggleAnim = useRef(new Animated.Value(0)).current;
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const locationFetched = useRef(false);
 
@@ -53,14 +44,31 @@ export default function TrackScreen() {
   }, [lastSavedTrip, isTracking]);
 
   useEffect(() => {
+    Animated.timing(toggleAnim, {
+      toValue: viewMode === 'map' ? 1 : 0,
+      duration: 250,
+      useNativeDriver: false,
+    }).start();
+  }, [viewMode, toggleAnim]);
+
+  useEffect(() => {
     if (viewMode === 'map' && !locationFetched.current && Platform.OS !== 'web') {
       locationFetched.current = true;
       void (async () => {
         try {
           const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
-          if (status !== 'granted') return;
-          const loc = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.High });
-          setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+          if (status !== 'granted') {
+            console.log('Location permission not granted');
+            return;
+          }
+          const loc = await ExpoLocation.getCurrentPositionAsync({
+            accuracy: ExpoLocation.Accuracy.High,
+          });
+          console.log('Fetched user location for map:', loc.coords.latitude, loc.coords.longitude);
+          setUserLocation({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          });
           if (mapRef.current) {
             mapRef.current.animateToRegion({
               latitude: loc.coords.latitude,
@@ -104,7 +112,11 @@ export default function TrackScreen() {
             const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
             setUserLocation(coords);
             if (mapRef.current) {
-              mapRef.current.animateToRegion({ ...coords, latitudeDelta: 0.012, longitudeDelta: 0.012 }, 300);
+              mapRef.current.animateToRegion({
+                ...coords,
+                latitudeDelta: 0.012,
+                longitudeDelta: 0.012,
+              }, 300);
             }
           },
         );
@@ -124,10 +136,16 @@ export default function TrackScreen() {
 
   const getSpeedColor = useCallback((speed: number) => {
     const maxSpeed = 200;
-    const ratio = Math.min(Math.max(speed, 0), maxSpeed) / maxSpeed;
-    const r = Math.round(34 + (204 - 34) * ratio);
-    const g = Math.round(197 + (0 - 197) * ratio);
-    const b = Math.round(94 + (0 - 94) * ratio);
+    const clampedSpeed = Math.min(Math.max(speed, 0), maxSpeed);
+    const ratio = clampedSpeed / maxSpeed;
+    
+    const startR = 0, startG = 200, startB = 83;
+    const endR = 255, endG = 71, endB = 87;
+    
+    const r = Math.round(startR + (endR - startR) * ratio);
+    const g = Math.round(startG + (endG - startG) * ratio);
+    const b = Math.round(startB + (endB - startB) * ratio);
+    
     return `rgb(${r}, ${g}, ${b})`;
   }, []);
 
@@ -136,19 +154,26 @@ export default function TrackScreen() {
       const primary = user.cars.find(c => c.isPrimary) || user.cars[0];
       return `${primary.brand} ${primary.model}`;
     }
-    if (user?.carBrand) return `${user.carBrand} ${user.carModel || ''}`;
+    if (user?.carBrand) {
+      return `${user.carBrand} ${user.carModel || ''}`;
+    }
     return undefined;
   }, [user?.cars, user?.carBrand, user?.carModel]);
 
   const handleStopTracking = useCallback(() => {
-    void stopTracking(getUserCarModel());
+    const carModel = getUserCarModel();
+    void stopTracking(carModel);
   }, [stopTracking, getUserCarModel]);
 
   const handleCancelTracking = useCallback(() => {
-    Alert.alert('Discard Trip', 'Are you sure you want to exit without saving this trip?', [
-      { text: 'Keep Tracking', style: 'cancel' },
-      { text: 'Discard', style: 'destructive', onPress: () => void cancelTracking() },
-    ]);
+    Alert.alert(
+      'Discard Trip',
+      'Are you sure you want to exit without saving this trip?',
+      [
+        { text: 'Keep Tracking', style: 'cancel' },
+        { text: 'Discard', style: 'destructive', onPress: () => void cancelTracking() },
+      ],
+    );
   }, [cancelTracking]);
 
   const toggleViewMode = useCallback(() => {
@@ -159,187 +184,120 @@ export default function TrackScreen() {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
+    if (hrs > 0) {
+      return `${hrs}h ${mins}m`;
+    }
+    return `${mins}m ${secs}s`;
   };
 
   const displaySpeed = isTracking ? Math.round(convertSpeed(currentSpeed)) : 0;
-  const speedColor = isTracking ? getSpeedColor(currentSpeed) : '#E53935';
-  const canShowMap = MapViewComponent !== null && Platform.OS !== 'web';
+  const speedColor = isTracking ? getSpeedColor(currentSpeed) : colors.success;
+  const canShowMap = MapView !== null && Platform.OS !== 'web';
 
   const routeCoords = currentTrip?.locations?.map(loc => ({
     latitude: loc.latitude,
     longitude: loc.longitude,
   })) ?? [];
 
-  const speedRatio = Math.min(displaySpeed / 300, 1);
-  const activeArcLength = speedRatio * ARC_LENGTH;
-  const dashOffset = ARC_LENGTH - activeArcLength;
-
-  const bgColor = isDark ? '#000000' : '#F2F4F6';
-  const cardBg = isDark ? '#1A1A1A' : '#FFFFFF';
-  const cardBorder = isDark ? '#2A2A2A' : '#E8EBF0';
-  const labelColor = isDark ? '#888888' : '#8E8E93';
-  const valueColor = isDark ? '#FFFFFF' : '#1A1A1A';
-  const subtitleColor = isDark ? '#555555' : '#B0B4BC';
-  const speedometerBg = isDark ? '#111111' : '#F0F5F0';
-
-  const renderSpeedometer = () => (
-    <View style={[s.speedometerWrap, { width: SPEEDOMETER_SIZE, height: SPEEDOMETER_SIZE }]}>
-      <Svg width={SPEEDOMETER_SIZE} height={SPEEDOMETER_SIZE}>
-        <G rotation={START_ANGLE} origin={`${CENTER}, ${CENTER}`}>
-          <Circle
-            cx={CENTER}
-            cy={CENTER}
-            r={RADIUS}
-            stroke={isDark ? '#1A1A1A' : '#E4EBE4'}
-            strokeWidth={STROKE_WIDTH}
-            fill={speedometerBg}
-            strokeDasharray={`${ARC_LENGTH} ${CIRCUMFERENCE}`}
-            strokeDashoffset={0}
-            strokeLinecap="round"
-          />
-          <Circle
-            cx={CENTER}
-            cy={CENTER}
-            r={RADIUS}
-            stroke={speedColor}
-            strokeWidth={STROKE_WIDTH}
-            fill="none"
-            strokeDasharray={`${ARC_LENGTH} ${CIRCUMFERENCE}`}
-            strokeDashoffset={dashOffset}
-            strokeLinecap="round"
-          />
-        </G>
-      </Svg>
-      <View style={s.speedTextWrap}>
-        <Text style={[s.speedValue, { color: valueColor, fontSize: SPEEDOMETER_SIZE * 0.28 }]}>
-          {displaySpeed}
-        </Text>
-        <Text style={[s.speedUnit, { color: labelColor }]}>{getSpeedLabel()}</Text>
-      </View>
-    </View>
-  );
-
-  const renderStatusBadge = () => (
-    <View style={[s.statusBadge, { backgroundColor: isDark ? '#1A1A1A' : '#FFFFFF', borderColor: cardBorder }]}>
-      <View style={[s.statusDot, { backgroundColor: isTracking ? '#E53935' : '#22C55E' }]} />
-      <Text style={[s.statusText, { color: labelColor }]}>
-        {isTracking ? 'TRACKING • GPS ACTIVE' : 'SYSTEM READY • GPS LOCKED'}
-      </Text>
-    </View>
-  );
-
-  const renderStatCard = (
-    label: string,
-    value: string,
-    subtitle: string,
-    flex: number = 1,
-    icon?: React.ReactNode
-  ) => (
-    <View style={[s.statCard, { backgroundColor: cardBg, borderColor: cardBorder, flex }]}>
-      <Text style={[s.statLabel, { color: labelColor }]}>{label}</Text>
-      <View style={s.statValueRow}>
-        <Text style={[s.statValue, { color: valueColor }]}>{value}</Text>
-        <Text style={[s.statSuffix, { color: subtitleColor }]}>{subtitle}</Text>
-        {icon}
-      </View>
-    </View>
-  );
-
-  const renderStandardView = () => (
-    <View style={s.contentWrap}>
-      <View style={s.speedSection}>
-        {renderSpeedometer()}
-        {renderStatusBadge()}
-      </View>
-
-      <View style={s.statsSection}>
-        <View style={s.statsRow}>
-          {renderStatCard(
-            `TOP ${getSpeedLabel().toUpperCase()}`,
-            currentTrip ? Math.round(convertSpeed(currentTrip.topSpeed)).toString() : '0',
-            'MAX'
-          )}
-          {renderStatCard(
-            `DISTANCE ${getDistanceLabel().toUpperCase()}`,
-            currentTrip ? convertDistance(currentTrip.distance).toFixed(1) : '0.0',
-            'TRIP'
-          )}
-        </View>
-
-        <View style={s.statsRow}>
-          {renderStatCard(
-            getAccelerationLabel('0-100').toUpperCase(),
-            currentTrip?.time0to100 ? currentTrip.time0to100.toFixed(2) : '--',
-            's'
-          )}
-          {!speedCameraBlocked && renderStatCard(
-            'CAMERAS',
-            (currentTrip?.speedCamerasDetected ?? 0).toString(),
-            '',
-            1,
-            <Camera size={14} color={labelColor} style={{ marginLeft: 4 }} />
-          )}
-          {renderStatCard(
-            getAccelerationLabel('0-200').toUpperCase(),
-            currentTrip?.time0to200 ? currentTrip.time0to200.toFixed(2) : '--',
-            'SEC'
-          )}
-        </View>
-
-        <View style={s.statsRow}>
-          {renderStatCard(
-            'G-FORCE',
-            currentTrip ? (currentTrip.maxGForce ?? 0).toFixed(2) : '0.00',
-            'LAT'
-          )}
-          {renderStatCard(
-            'DURATION',
-            formatDuration(currentTrip?.duration ?? 0),
-            ''
-          )}
-        </View>
-      </View>
-
-      <View style={s.buttonWrap}>
-        {!isTracking ? (
-          <TouchableOpacity
-            style={s.startButton}
-            onPress={startTracking}
-            activeOpacity={0.85}
-            testID="start-trip-button"
-          >
-            <Text style={s.startButtonText}>START TRIP</Text>
-            <Play size={18} color="#FFFFFF" fill="#FFFFFF" />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={s.stopButton}
-            onPress={handleStopTracking}
-            activeOpacity={0.85}
-            testID="stop-trip-button"
-          >
-            <Square size={18} color="#FFFFFF" fill="#FFFFFF" />
-            <Text style={s.stopButtonText}>STOP TRIP</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-  );
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDark ? '#000000' : colors.background,
+    },
+    speedometerCircle: {
+      width: 240,
+      height: 240,
+      borderRadius: 120,
+      backgroundColor: isDark ? '#1A1A1A' : colors.cardLight,
+      borderWidth: 4,
+      borderColor: speedColor,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    speedValue: {
+      fontSize: 67,
+      fontFamily: 'Orbitron_700Bold',
+      color: colors.text,
+    },
+    speedUnit: {
+      fontSize: 19,
+      fontFamily: 'Orbitron_600SemiBold',
+      color: colors.textLight,
+      textTransform: 'uppercase' as const,
+      marginTop: 4,
+    },
+    statCard: {
+      backgroundColor: isDark ? '#1A1A1A' : colors.cardLight,
+      borderRadius: 12,
+      padding: 14,
+      flex: 1,
+      minWidth: '30%',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: isDark ? '#2A2A2A' : colors.border,
+    },
+    statValue: {
+      fontSize: 22,
+      fontFamily: 'Orbitron_600SemiBold',
+      color: colors.text,
+      marginBottom: 4,
+    },
+    statLabel: {
+      fontSize: 11,
+      fontFamily: 'Orbitron_500Medium',
+      color: colors.textLight,
+      textTransform: 'uppercase' as const,
+      letterSpacing: 0.3,
+    },
+    buttonContainer: {
+      padding: 20,
+      paddingBottom: 30,
+    },
+    miniSpeedCircle: {
+      width: 140,
+      height: 140,
+      borderRadius: 70,
+      backgroundColor: 'rgba(0,0,0,0.85)',
+      borderWidth: 3,
+      borderColor: speedColor,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    miniSpeedValue: {
+      fontSize: 40,
+      fontFamily: 'Orbitron_700Bold',
+      color: '#FFFFFF',
+    },
+    miniSpeedUnit: {
+      fontSize: 12,
+      fontFamily: 'Orbitron_600SemiBold',
+      color: 'rgba(255,255,255,0.6)',
+      textTransform: 'uppercase' as const,
+      marginTop: 2,
+    },
+  });
 
   const renderMapView = () => {
-    if (!canShowMap || !MapViewComponent) return null;
+    if (!canShowMap || !MapView) return null;
+
     const effectiveLocation = currentLocation || userLocation;
-    const mapRegion = effectiveLocation
-      ? { latitude: effectiveLocation.latitude, longitude: effectiveLocation.longitude, latitudeDelta: 0.012, longitudeDelta: 0.012 }
-      : { latitude: 45.815, longitude: 15.982, latitudeDelta: 0.012, longitudeDelta: 0.012 };
+    const mapRegion = effectiveLocation ? {
+      latitude: effectiveLocation.latitude,
+      longitude: effectiveLocation.longitude,
+      latitudeDelta: 0.012,
+      longitudeDelta: 0.012,
+    } : {
+      latitude: 45.815,
+      longitude: 15.982,
+      latitudeDelta: 0.012,
+      longitudeDelta: 0.012,
+    };
 
     return (
-      <View style={mapS.container}>
-        <MapViewComponent
+      <View style={mapStyles.mapContainer}>
+        <MapView
           ref={mapRef}
-          style={mapS.map}
+          style={mapStyles.map}
           initialRegion={mapRegion}
           showsUserLocation={false}
           showsMyLocationButton={false}
@@ -348,58 +306,80 @@ export default function TrackScreen() {
           customMapStyle={isDark ? darkMapStyle : []}
           mapType="standard"
         >
-          {effectiveLocation && MarkerComponent && (
-            <MarkerComponent
-              coordinate={{ latitude: effectiveLocation.latitude, longitude: effectiveLocation.longitude }}
+          {effectiveLocation && Marker && (
+            <Marker
+              coordinate={{
+                latitude: effectiveLocation.latitude,
+                longitude: effectiveLocation.longitude,
+              }}
               anchor={{ x: 0.5, y: 0.5 }}
-              flat
+              flat={true}
             >
-              <View style={mapS.dotOuter}>
-                <View style={mapS.dotInner} />
+              <View style={mapStyles.dotOuter}>
+                <View style={mapStyles.dotInner} />
               </View>
-            </MarkerComponent>
+            </Marker>
           )}
-          {routeCoords.length > 1 && PolylineComponent && (
-            <PolylineComponent coordinates={routeCoords} strokeColor={colors.accent} strokeWidth={3} />
-          )}
-        </MapViewComponent>
 
-        <View style={mapS.speedOverlay}>
-          <View style={[mapS.miniSpeed, { borderColor: speedColor }]}>
-            <Text style={mapS.miniSpeedVal}>{displaySpeed}</Text>
-            <Text style={mapS.miniSpeedUnit}>{getSpeedLabel()}</Text>
+          {routeCoords.length > 1 && Polyline && (
+            <Polyline
+              coordinates={routeCoords}
+              strokeColor={colors.accent}
+              strokeWidth={3}
+            />
+          )}
+        </MapView>
+
+        <View style={mapStyles.speedOverlay}>
+          <View style={dynamicStyles.miniSpeedCircle}>
+            <Text style={dynamicStyles.miniSpeedValue}>{displaySpeed}</Text>
+            <Text style={dynamicStyles.miniSpeedUnit}>{getSpeedLabel()}</Text>
           </View>
         </View>
 
-        <View style={mapS.statsOverlay}>
-          <View style={mapS.statsRow}>
-            <View style={mapS.statItem}>
-              <Text style={mapS.statVal}>{currentTrip ? Math.round(convertSpeed(currentTrip.topSpeed)) : '0'}</Text>
-              <Text style={mapS.statLbl}>Top {getSpeedLabel()}</Text>
+        <View style={mapStyles.statsOverlay}>
+          <View style={mapStyles.statsRow}>
+            <View style={mapStyles.mapStatItem}>
+              <Text style={mapStyles.mapStatValue}>
+                {currentTrip ? Math.round(convertSpeed(currentTrip.topSpeed)) : '0'}
+              </Text>
+              <Text style={mapStyles.mapStatLabel}>Top {getSpeedLabel()}</Text>
             </View>
-            <View style={mapS.divider} />
-            <View style={mapS.statItem}>
-              <Text style={mapS.statVal}>{currentTrip ? convertDistance(currentTrip.distance).toFixed(2) : '0.00'}</Text>
-              <Text style={mapS.statLbl}>{getDistanceLabel()}</Text>
+            <View style={mapStyles.mapStatDivider} />
+            <View style={mapStyles.mapStatItem}>
+              <Text style={mapStyles.mapStatValue}>
+                {currentTrip ? convertDistance(currentTrip.distance).toFixed(2) : '0.00'}
+              </Text>
+              <Text style={mapStyles.mapStatLabel}>{getDistanceLabel()}</Text>
             </View>
-            <View style={mapS.divider} />
-            <View style={mapS.statItem}>
-              <Text style={mapS.statVal}>{currentTrip ? formatDuration(currentTrip.duration) : '00:00:00'}</Text>
-              <Text style={mapS.statLbl}>Duration</Text>
+            <View style={mapStyles.mapStatDivider} />
+            <View style={mapStyles.mapStatItem}>
+              <Text style={mapStyles.mapStatValue}>
+                {currentTrip ? formatDuration(currentTrip.duration) : '0:00'}
+              </Text>
+              <Text style={mapStyles.mapStatLabel}>Duration</Text>
             </View>
           </View>
         </View>
 
-        <View style={mapS.btnWrap}>
+        <View style={[mapStyles.mapButtonContainer, { backgroundColor: 'transparent' }]}>
           {!isTracking ? (
-            <TouchableOpacity style={s.startButton} onPress={startTracking} activeOpacity={0.85}>
-              <Text style={s.startButtonText}>START TRIP</Text>
-              <Play size={18} color="#FFFFFF" fill="#FFFFFF" />
+            <TouchableOpacity
+              style={[styles.button, styles.startButton]}
+              onPress={startTracking}
+              activeOpacity={0.8}
+            >
+              <Play size={24} color="#FFFFFF" fill="#FFFFFF" />
+              <Text style={styles.buttonText}>Start Trip</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={s.stopButton} onPress={handleStopTracking} activeOpacity={0.85}>
-              <Square size={18} color="#FFFFFF" fill="#FFFFFF" />
-              <Text style={s.stopButtonText}>STOP TRIP</Text>
+            <TouchableOpacity
+              style={[styles.button, styles.stopButton]}
+              onPress={handleStopTracking}
+              activeOpacity={0.8}
+            >
+              <Square size={24} color="#FFFFFF" fill="#FFFFFF" />
+              <Text style={styles.buttonText}>Stop Trip</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -407,23 +387,126 @@ export default function TrackScreen() {
     );
   };
 
-  return (
-    <SafeAreaView style={[s.container, { backgroundColor: bgColor }]} edges={['top']}>
-      <View style={s.navHeader}>
-        {canShowMap ? (
+  const renderStandardView = () => (
+    <>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.speedometerSection}>
+          <View style={dynamicStyles.speedometerCircle}>
+            <Text style={dynamicStyles.speedValue}>{displaySpeed}</Text>
+            <Text style={dynamicStyles.speedUnit}>{getSpeedLabel()}</Text>
+          </View>
+        </View>
+
+        <View style={styles.statsGrid}>
+          <View style={styles.statsRow}>
+            <View style={dynamicStyles.statCard}>
+              <Text style={dynamicStyles.statValue}>
+                {currentTrip ? Math.round(convertSpeed(currentTrip.topSpeed)) : '0'}
+              </Text>
+              <Text style={dynamicStyles.statLabel}>Top ({getSpeedLabel()})</Text>
+            </View>
+            <View style={dynamicStyles.statCard}>
+              <Text style={dynamicStyles.statValue}>
+                {currentTrip ? convertDistance(currentTrip.distance).toFixed(2) : '0.00'}
+              </Text>
+              <Text style={dynamicStyles.statLabel}>Distance ({getDistanceLabel()})</Text>
+            </View>
+          </View>
+
+          <View style={styles.statsRow}>
+            <View style={dynamicStyles.statCard}>
+              <Text style={dynamicStyles.statValue}>
+                {currentTrip?.time0to100 ? currentTrip.time0to100.toFixed(1) + 's' : '--'}
+              </Text>
+              <Text style={dynamicStyles.statLabel}>{getAccelerationLabel('0-100')}</Text>
+            </View>
+            <View style={dynamicStyles.statCard}>
+              <Text style={dynamicStyles.statValue}>
+                {currentTrip?.time0to200 ? currentTrip.time0to200.toFixed(1) + 's' : '--'}
+              </Text>
+              <Text style={dynamicStyles.statLabel}>{getAccelerationLabel('0-200')}</Text>
+            </View>
+          </View>
+
+          <View style={styles.statsRow}>
+            <View style={dynamicStyles.statCard}>
+              <Text style={dynamicStyles.statValue}>
+                {currentTrip ? (currentTrip.maxGForce ?? 0).toFixed(2) : '0.00'}
+              </Text>
+              <Text style={dynamicStyles.statLabel}>G-Force</Text>
+            </View>
+            <View style={dynamicStyles.statCard}>
+              <Text style={dynamicStyles.statValue}>
+                {currentTrip ? formatDuration(currentTrip.duration) : '0m 0s'}
+              </Text>
+              <Text style={dynamicStyles.statLabel}>Duration</Text>
+            </View>
+          </View>
+
+          {!speedCameraBlocked && (
+            <View style={styles.statsRow}>
+              <View style={dynamicStyles.statCard}>
+                <Text style={dynamicStyles.statValue}>
+                  {currentTrip?.speedCamerasDetected ?? 0}
+                </Text>
+                <Text style={dynamicStyles.statLabel}>Speed Cameras</Text>
+              </View>
+            </View>
+          )}
+        </View>
+      </ScrollView>
+
+      <View style={dynamicStyles.buttonContainer}>
+        {!isTracking ? (
           <TouchableOpacity
-            style={[s.navBtn, { backgroundColor: cardBg, borderColor: cardBorder }]}
+            style={[styles.button, styles.startButton]}
+            onPress={startTracking}
+            activeOpacity={0.8}
+          >
+            <Play size={24} color="#FFFFFF" fill="#FFFFFF" />
+            <Text style={styles.buttonText}>Start Trip</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.button, styles.stopButton]}
+            onPress={handleStopTracking}
+            activeOpacity={0.8}
+          >
+            <Square size={24} color="#FFFFFF" fill="#FFFFFF" />
+            <Text style={styles.buttonText}>Stop Trip</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </>
+  );
+
+  return (
+    <SafeAreaView style={dynamicStyles.container} edges={['top']}>
+      <View style={styles.navHeader}>
+        {canShowMap && (
+          <TouchableOpacity
+            style={[
+              styles.viewToggle,
+              { backgroundColor: isDark ? '#1A1A1A' : colors.cardLight, borderColor: isDark ? '#2A2A2A' : colors.border },
+            ]}
             onPress={toggleViewMode}
             activeOpacity={0.7}
             testID="view-mode-toggle"
           >
-            {viewMode === 'standard' ? <Map size={18} color={valueColor} /> : <Gauge size={18} color={valueColor} />}
+            {viewMode === 'standard' ? (
+              <Map size={18} color={colors.text} />
+            ) : (
+              <Gauge size={18} color={colors.text} />
+            )}
           </TouchableOpacity>
-        ) : <View style={s.navBtnPlaceholder} />}
-        <Text style={[s.navTitle, { color: valueColor }]}>Track</Text>
+        )}
+        <Text style={[styles.navTitle, { color: colors.text }]}>Track</Text>
         {isTracking ? (
           <TouchableOpacity
-            style={[s.navBtn, { backgroundColor: isDark ? '#2A1A1A' : '#FFF0F0', borderColor: isDark ? '#3A2A2A' : '#FFCCCC' }]}
+            style={[
+              styles.viewToggle,
+              { backgroundColor: isDark ? '#2A1A1A' : '#FFF0F0', borderColor: isDark ? '#3A2A2A' : '#FFCCCC' },
+            ]}
             onPress={handleCancelTracking}
             activeOpacity={0.7}
             testID="cancel-tracking-button"
@@ -431,14 +514,18 @@ export default function TrackScreen() {
             <X size={18} color="#CC0000" />
           </TouchableOpacity>
         ) : (
-          <View style={s.navBtnPlaceholder} />
+          canShowMap ? <View style={styles.viewTogglePlaceholder} /> : null
         )}
       </View>
 
       {viewMode === 'map' && canShowMap ? renderMapView() : renderStandardView()}
 
       {lastSavedTrip && (
-        <TripShareCard trip={lastSavedTrip} visible={showShareCard} onClose={handleCloseShareCard} />
+        <TripShareCard
+          trip={lastSavedTrip}
+          visible={showShareCard}
+          onClose={handleCloseShareCard}
+        />
       )}
     </SafeAreaView>
   );
@@ -457,25 +544,22 @@ const darkMapStyle = [
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1626' }] },
 ];
 
-const s = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+const styles = StyleSheet.create({
   navHeader: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 6,
-    flexDirection: 'row' as const,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 12,
     alignItems: 'center' as const,
+    flexDirection: 'row' as const,
     justifyContent: 'space-between' as const,
   },
   navTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: 'Orbitron_700Bold',
     flex: 1,
     textAlign: 'center' as const,
   },
-  navBtn: {
+  viewToggle: {
     width: 36,
     height: 36,
     borderRadius: 10,
@@ -483,130 +567,52 @@ const s = StyleSheet.create({
     justifyContent: 'center' as const,
     borderWidth: 1,
   },
-  navBtnPlaceholder: {
+  viewTogglePlaceholder: {
     width: 36,
     height: 36,
   },
-  contentWrap: {
+  scrollView: {
     flex: 1,
-    justifyContent: 'space-between' as const,
   },
-  speedSection: {
-    alignItems: 'center' as const,
-    paddingTop: 8,
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
-  speedometerWrap: {
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
+  speedometerSection: {
+    alignItems: 'center',
+    marginVertical: 20,
   },
-  speedTextWrap: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-  speedValue: {
-    fontFamily: 'Orbitron_700Bold',
-    includeFontPadding: false,
-  },
-  speedUnit: {
-    fontSize: 13,
-    fontFamily: 'Orbitron_600SemiBold',
-    textTransform: 'uppercase' as const,
-    marginTop: 2,
-    letterSpacing: 1,
-  },
-  statusBadge: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginTop: 10,
-    borderWidth: 1,
-  },
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  statusText: {
-    fontSize: 9,
-    fontFamily: 'Orbitron_600SemiBold',
-    letterSpacing: 1.2,
-  },
-  statsSection: {
-    paddingHorizontal: 14,
-    gap: 6,
+  statsGrid: {
+    gap: 10,
+    marginTop: 32,
   },
   statsRow: {
-    flexDirection: 'row' as const,
-    gap: 6,
+    flexDirection: 'row',
+    gap: 10,
   },
-  statCard: {
+  button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
     borderRadius: 12,
-    padding: 10,
-    borderWidth: 1,
-  },
-  statLabel: {
-    fontSize: 8,
-    fontFamily: 'Orbitron_600SemiBold',
-    letterSpacing: 0.8,
-    marginBottom: 4,
-  },
-  statValueRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'baseline' as const,
-  },
-  statValue: {
-    fontSize: 22,
-    fontFamily: 'Orbitron_700Bold',
-  },
-  statSuffix: {
-    fontSize: 10,
-    fontFamily: 'Orbitron_500Medium',
-    marginLeft: 4,
-    textTransform: 'uppercase' as const,
-  },
-  buttonWrap: {
-    paddingHorizontal: 14,
-    paddingBottom: 16,
-    paddingTop: 8,
+    gap: 10,
   },
   startButton: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    paddingVertical: 16,
-    borderRadius: 14,
-    backgroundColor: '#E53935',
-    gap: 10,
-  },
-  startButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontFamily: 'Orbitron_700Bold',
-    letterSpacing: 2,
+    backgroundColor: '#00C853',
   },
   stopButton: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    paddingVertical: 16,
-    borderRadius: 14,
     backgroundColor: '#CC0000',
-    gap: 10,
   },
-  stopButtonText: {
+  buttonText: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontFamily: 'Orbitron_700Bold',
-    letterSpacing: 2,
+    fontSize: 16,
+    fontFamily: 'Orbitron_600SemiBold',
   },
 });
 
-const mapS = StyleSheet.create({
-  container: {
+const mapStyles = StyleSheet.create({
+  mapContainer: {
     flex: 1,
     position: 'relative' as const,
   },
@@ -617,27 +623,6 @@ const mapS = StyleSheet.create({
     position: 'absolute' as const,
     bottom: 180,
     left: 20,
-  },
-  miniSpeed: {
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    borderWidth: 3,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-  miniSpeedVal: {
-    fontSize: 38,
-    fontFamily: 'Orbitron_700Bold',
-    color: '#FFFFFF',
-  },
-  miniSpeedUnit: {
-    fontSize: 11,
-    fontFamily: 'Orbitron_600SemiBold',
-    color: 'rgba(255,255,255,0.6)',
-    textTransform: 'uppercase' as const,
-    marginTop: 2,
   },
   statsOverlay: {
     position: 'absolute' as const,
@@ -654,28 +639,28 @@ const mapS = StyleSheet.create({
     alignItems: 'center' as const,
     justifyContent: 'space-around' as const,
   },
-  statItem: {
+  mapStatItem: {
     flex: 1,
     alignItems: 'center' as const,
   },
-  statVal: {
-    fontSize: 17,
+  mapStatValue: {
+    fontSize: 18,
     fontFamily: 'Orbitron_600SemiBold',
     color: '#FFFFFF',
   },
-  statLbl: {
-    fontSize: 9,
+  mapStatLabel: {
+    fontSize: 10,
     fontFamily: 'Orbitron_500Medium',
     color: 'rgba(255,255,255,0.5)',
     textTransform: 'uppercase' as const,
     marginTop: 2,
   },
-  divider: {
+  mapStatDivider: {
     width: 1,
-    height: 28,
+    height: 30,
     backgroundColor: 'rgba(255,255,255,0.15)',
   },
-  btnWrap: {
+  mapButtonContainer: {
     position: 'absolute' as const,
     bottom: 30,
     left: 20,
