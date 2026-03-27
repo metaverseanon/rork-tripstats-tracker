@@ -1611,6 +1611,9 @@ export default function LeaderboardScreen() {
                           )}
                         </TouchableOpacity>
                       )}
+                      <View style={styles.competitorValueInline}>
+                        <Text style={styles.competitorValue}>{formatValue(trip)}</Text>
+                      </View>
                     </View>
                     {carInfo && (
                       <Text style={styles.competitorCar} numberOfLines={1}>
@@ -1633,9 +1636,6 @@ export default function LeaderboardScreen() {
                         </Text>
                       </View>
                     )}
-                  </View>
-                  <View style={styles.competitorValueCol}>
-                    <Text style={styles.competitorValue}>{formatValue(trip)}</Text>
                   </View>
                 </TouchableOpacity>
               );
@@ -2791,14 +2791,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: 'Orbitron_400Regular',
     color: colors.textLight,
   },
-  competitorValueCol: {
-    alignItems: 'flex-end' as const,
-    gap: 2,
+  competitorValueInline: {
+    marginLeft: 'auto' as const,
+    flexShrink: 0,
   },
   competitorValue: {
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: 'Orbitron_700Bold',
-    color: colors.text,
+    color: colors.accent,
   },
   activeMeetupBannerButton: {
     flexDirection: 'row' as const,
@@ -4101,8 +4101,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   competitorStatsRow: {
     flexDirection: 'row' as const,
-    flexWrap: 'wrap' as const,
-    gap: 4,
+    gap: 6,
     marginTop: 4,
   },
   competitorStatChip: {
@@ -4110,12 +4109,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center' as const,
     gap: 3,
     backgroundColor: colors.background,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 5,
+    flex: 1,
   },
   competitorStatText: {
-    fontSize: 10,
+    fontSize: 9,
     fontFamily: 'Orbitron_500Medium',
     color: colors.textLight,
   },
