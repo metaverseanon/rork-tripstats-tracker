@@ -309,6 +309,9 @@ function RootLayoutNav() {
       <Stack.Screen name="profile" options={{ presentation: "card" }} />
       <Stack.Screen name="user-profile" options={{ presentation: "card" }} />
       <Stack.Screen name="achievements" options={{ presentation: "card" }} />
+      <Stack.Screen name="create-post" options={{ presentation: "modal" }} />
+      <Stack.Screen name="notifications" options={{ presentation: "card" }} />
+      <Stack.Screen name="my-posts" options={{ presentation: "card" }} />
     </Stack>
   );
 }

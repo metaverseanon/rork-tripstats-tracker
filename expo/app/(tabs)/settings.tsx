@@ -2,8 +2,8 @@ import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Linking, Image, S
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { router } from 'expo-router';
-import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle, Bell, Mail, MessageSquare, X, Send, Share2, Check, Trophy, Instagram, Link2, Unlink } from 'lucide-react-native';
-import { useSettings, SpeedUnit, DistanceUnit, ShareCardFields, ShareCardPage } from '@/providers/SettingsProvider';
+import { ChevronRight, Gauge, Ruler, FileText, Shield, User, Car, Sun, Moon, HelpCircle, Bell, Mail, MessageSquare, X, Send, Check, Trophy, Instagram, Link2, Unlink, ImageIcon } from 'lucide-react-native';
+import { useSettings, SpeedUnit, DistanceUnit } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
 import { useNotifications } from '@/providers/NotificationProvider';
 import { ThemeType } from '@/constants/colors';
@@ -12,9 +12,9 @@ import { useState, useEffect } from 'react';
 import { trpc } from '@/lib/trpc';
 
 export default function SettingsScreen() {
-  const { settings, colors, setSpeedUnit, setDistanceUnit, setTheme, setShareCardField, setShareCardPage } = useSettings();
+  const { settings, colors, setSpeedUnit, setDistanceUnit, setTheme } = useSettings();
   const { user, isAuthenticated, getCarDisplayName, updateSocialAccounts } = useUser();
-  const { notificationsEnabled, pushToken, registerForPushNotifications, disableNotifications } = useNotifications();
+  const { notificationsEnabled, registerForPushNotifications, disableNotifications } = useNotifications();
   const { unlockedCount, totalCount } = useAchievements();
 
   const [isTogglingNotifications, setIsTogglingNotifications] = useState(false);
@@ -579,6 +579,22 @@ export default function SettingsScreen() {
 
         {isAuthenticated && (
           <>
+            <Text style={styles.sectionTitle}>My Content</Text>
+            <View style={styles.settingsCard}>
+              <TouchableOpacity style={styles.linkItem} onPress={() => router.push('/my-posts' as any)} activeOpacity={0.7}>
+                <View style={styles.linkContent}>
+                  <View style={[styles.settingIconContainer, { backgroundColor: colors.accent + '18' }]}>
+                    <ImageIcon size={20} color={colors.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.linkText}>My Posts</Text>
+                    <Text style={styles.notificationDescription}>View and manage your posts</Text>
+                  </View>
+                </View>
+                <ChevronRight size={20} color={colors.textLight} />
+              </TouchableOpacity>
+            </View>
+
             <Text style={styles.sectionTitle}>Social Accounts</Text>
             <View style={styles.settingsCard}>
               <TouchableOpacity

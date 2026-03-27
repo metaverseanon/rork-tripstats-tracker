@@ -90,3 +90,54 @@ export async function uploadProfilePicture(localUri: string, userId: string): Pr
 export async function uploadCarPicture(localUri: string, userId: string, carId: string): Promise<string | null> {
   return uploadImage(localUri, userId, 'car', carId);
 }
+
+export async function uploadPostImage(localUri: string, userId: string, postId: string): Promise<string | null> {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    console.log('[IMAGE_UPLOAD] Supabase not configured, skipping upload');
+    return null;
+  }
+
+  if (isRemoteUrl(localUri)) {
+    return localUri;
+  }
+
+  if (!isLocalFileUri(localUri)) {
+    return null;
+  }
+
+  try {
+    const timestamp = Date.now();
+    const fileName = `${userId}/posts/${postId}_${timestamp}.jpg`;
+
+    console.log('[IMAGE_UPLOAD] Uploading post image for user', userId);
+
+    const response = await fetch(localUri);
+    const blob = await response.blob();
+    const contentType = Platform.OS === 'web' ? (blob.type || 'image/jpeg') : 'image/jpeg';
+
+    const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${BUCKET_NAME}/${fileName}`;
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+        'Content-Type': contentType,
+        'x-upsert': 'true',
+      },
+      body: blob,
+    });
+
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      console.error('[IMAGE_UPLOAD] Post image upload failed:', uploadResponse.status, errorText);
+      return null;
+    }
+
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET_NAME}/${fileName}`;
+    console.log('[IMAGE_UPLOAD] Post image uploaded:', publicUrl.substring(0, 80));
+    return publicUrl;
+  } catch (error) {
+    console.error('[IMAGE_UPLOAD] Error uploading post image:', error);
+    return null;
+  }
+}

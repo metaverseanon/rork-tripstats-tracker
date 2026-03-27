@@ -1,7 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
-import { useCallback, useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trpcClient } from '@/lib/trpc';
@@ -134,9 +134,9 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
       }
     };
 
-    loadStoredState();
-    checkPermission();
-    setupAndroidChannels();
+    void loadStoredState();
+    void checkPermission();
+    void setupAndroidChannels();
 
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
       console.log('[PUSH] Notification received in foreground:', notification.request.content.title);
@@ -217,6 +217,21 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
             },
           ]
         );
+      } else if (data?.type === 'post_rev') {
+        const fromName = (data.fromUserName as string) || 'Someone';
+        Alert.alert(
+          '🏎️ New Rev!',
+          notification.request.content.body || `${fromName} revved your post!`,
+          [
+            { text: 'Dismiss', style: 'cancel' },
+            {
+              text: 'View',
+              onPress: () => {
+                router.navigate('/(tabs)/feed' as any);
+              },
+            },
+          ]
+        );
       }
     });
 
@@ -229,7 +244,7 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
         const tryNav = (attempt: number) => {
           try {
             router.navigate('/(tabs)/leaderboard' as any);
-          } catch (e) {
+          } catch {
             if (attempt < 5) setTimeout(() => tryNav(attempt + 1), 500);
           }
         };
@@ -427,7 +442,7 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
     setPendingAction(null);
   }, []);
 
-  return {
+  return useMemo(() => ({
     pushToken,
     notificationsEnabled,
     isLoading,
@@ -439,5 +454,5 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
     scheduleLocalNotification,
     cancelAllNotifications,
     syncPushTokenToBackend,
-  };
+  }), [pushToken, notificationsEnabled, isLoading, permissionStatus, pendingAction, clearPendingAction, registerForPushNotifications, disableNotifications, scheduleLocalNotification, cancelAllNotifications, syncPushTokenToBackend]);
 });

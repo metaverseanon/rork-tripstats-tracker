@@ -9,10 +9,10 @@ import {
   RefreshControl,
   TextInput,
   Platform,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Navigation, Clock, MapPin, Search, X, UserPlus, Car, Zap, Users } from 'lucide-react-native';
-import { Image } from 'react-native';
+import { Navigation, Clock, MapPin, Search, X, UserPlus, Car, Zap, Users, Plus, Bell, Gauge } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useSettings } from '@/providers/SettingsProvider';
@@ -36,6 +36,20 @@ interface FeedItem {
   createdAt: number;
 }
 
+interface PostItem {
+  id: string;
+  userId: string;
+  userName: string;
+  userProfilePicture?: string;
+  userCarBrand?: string;
+  userCarModel?: string;
+  text?: string;
+  imageUrl?: string;
+  revCount: number;
+  isRevved: boolean;
+  createdAt: number;
+}
+
 interface SearchUser {
   id: string;
   displayName: string;
@@ -44,6 +58,10 @@ interface SearchUser {
   country?: string;
   city?: string;
 }
+
+type CombinedFeedItem =
+  | { kind: 'activity'; data: FeedItem }
+  | { kind: 'post'; data: PostItem };
 
 function formatTimeAgo(timestamp: number): string {
   const now = Date.now();
@@ -75,8 +93,14 @@ export default function FeedScreen() {
   const [isSearching, setIsSearching] = useState(false);
 
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const utils = trpc.useUtils();
 
   const feedQuery = trpc.social.getFeed.useQuery(
+    { userId: user?.id || '', limit: 30 },
+    { enabled: !!user?.id, refetchInterval: 60000 }
+  );
+
+  const postsQuery = trpc.posts.getFeedPosts.useQuery(
     { userId: user?.id || '', limit: 30 },
     { enabled: !!user?.id, refetchInterval: 60000 }
   );
@@ -91,22 +115,73 @@ export default function FeedScreen() {
     { enabled: !!user?.id }
   );
 
+  const unreadCountQuery = trpc.posts.getUnreadNotificationCount.useQuery(
+    { userId: user?.id || '' },
+    { enabled: !!user?.id, refetchInterval: 30000 }
+  );
+
+  const revPostMutation = trpc.posts.revPost.useMutation({
+    onSuccess: () => {
+      void utils.posts.getFeedPosts.invalidate();
+    },
+  });
+
+  const unrevPostMutation = trpc.posts.unrevPost.useMutation({
+    onSuccess: () => {
+      void utils.posts.getFeedPosts.invalidate();
+    },
+  });
+
   const handleRefresh = useCallback(() => {
     void feedQuery.refetch();
+    void postsQuery.refetch();
     void followCountsQuery.refetch();
-  }, [feedQuery, followCountsQuery]);
+    void unreadCountQuery.refetch();
+  }, [feedQuery, postsQuery, followCountsQuery, unreadCountQuery]);
 
   const handleUserPress = useCallback((userId: string) => {
     if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push({ pathname: '/user-profile', params: { userId } });
   }, [router]);
 
+  const handleRevPress = useCallback((postId: string, isRevved: boolean) => {
+    if (!user?.id) return;
+    if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (isRevved) {
+      unrevPostMutation.mutate({ postId, userId: user.id });
+    } else {
+      revPostMutation.mutate({ postId, userId: user.id });
+    }
+  }, [user?.id, revPostMutation, unrevPostMutation]);
+
   const toggleSearch = useCallback(() => {
     setIsSearching(prev => !prev);
     setSearchQuery('');
   }, []);
 
-  const renderFeedItem = useCallback(({ item }: { item: FeedItem }) => {
+  const combinedFeed = useMemo<CombinedFeedItem[]>(() => {
+    const items: CombinedFeedItem[] = [];
+
+    const activityData = feedQuery.data ?? [];
+    const postsData = postsQuery.data ?? [];
+
+    for (const a of activityData) {
+      items.push({ kind: 'activity', data: a });
+    }
+    for (const p of postsData) {
+      items.push({ kind: 'post', data: p });
+    }
+
+    items.sort((a, b) => {
+      const aTime = a.kind === 'activity' ? a.data.createdAt : a.data.createdAt;
+      const bTime = b.kind === 'activity' ? b.data.createdAt : b.data.createdAt;
+      return bTime - aTime;
+    });
+
+    return items;
+  }, [feedQuery.data, postsQuery.data]);
+
+  const renderActivityItem = useCallback((item: FeedItem) => {
     const initial = item.userName?.[0]?.toUpperCase() || '?';
 
     return (
@@ -114,7 +189,6 @@ export default function FeedScreen() {
         style={styles.feedCard}
         onPress={() => handleUserPress(item.userId)}
         activeOpacity={0.7}
-        testID={`feed-item-${item.id}`}
       >
         <View style={styles.feedCardHeader}>
           <View style={styles.feedAvatar}>
@@ -170,6 +244,75 @@ export default function FeedScreen() {
     );
   }, [styles, colors, convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, handleUserPress]);
 
+  const renderPostItem = useCallback((item: PostItem) => {
+    const initial = item.userName?.[0]?.toUpperCase() || '?';
+    const carDisplay = item.userCarBrand
+      ? `${item.userCarBrand}${item.userCarModel ? ` ${item.userCarModel}` : ''}`
+      : null;
+
+    return (
+      <View style={styles.feedCard}>
+        <TouchableOpacity
+          style={styles.feedCardHeader}
+          onPress={() => handleUserPress(item.userId)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.feedAvatar}>
+            {item.userProfilePicture ? (
+              <Image source={{ uri: item.userProfilePicture }} style={styles.feedAvatarImage} />
+            ) : (
+              <Text style={styles.feedAvatarText}>{initial}</Text>
+            )}
+          </View>
+          <View style={styles.feedHeaderInfo}>
+            <Text style={styles.feedUserName} numberOfLines={1}>{item.userName}</Text>
+            <Text style={styles.feedTime}>{formatTimeAgo(item.createdAt)}</Text>
+          </View>
+          {carDisplay && (
+            <View style={styles.feedCarBadge}>
+              <Car size={12} color={colors.accent} />
+              <Text style={styles.feedCarText} numberOfLines={1}>{carDisplay}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {item.text ? (
+          <View style={styles.postTextContainer}>
+            <Text style={styles.postText}>{item.text}</Text>
+          </View>
+        ) : null}
+
+        {item.imageUrl ? (
+          <Image source={{ uri: item.imageUrl }} style={styles.postImage} resizeMode="cover" />
+        ) : null}
+
+        <View style={styles.postFooter}>
+          <TouchableOpacity
+            style={[styles.revButton, item.isRevved && styles.revButtonActive]}
+            onPress={() => handleRevPress(item.id, item.isRevved)}
+            activeOpacity={0.7}
+            testID={`rev-button-${item.id}`}
+          >
+            <Gauge size={16} color={item.isRevved ? colors.accent : colors.textLight} />
+            <Text style={[styles.revCount, item.isRevved && styles.revCountActive]}>
+              {item.revCount}
+            </Text>
+            <Text style={[styles.revLabel, item.isRevved && styles.revLabelActive]}>
+              {item.revCount === 1 ? 'rev' : 'revs'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }, [styles, colors, handleUserPress, handleRevPress]);
+
+  const renderCombinedItem = useCallback(({ item }: { item: CombinedFeedItem }) => {
+    if (item.kind === 'activity') {
+      return renderActivityItem(item.data);
+    }
+    return renderPostItem(item.data);
+  }, [renderActivityItem, renderPostItem]);
+
   const renderSearchResult = useCallback(({ item }: { item: SearchUser }) => {
     const carDisplay = item.carBrand
       ? `${item.carBrand}${item.carModel ? ` ${item.carModel}` : ''}`
@@ -222,7 +365,7 @@ export default function FeedScreen() {
     </View>
   ), [styles, colors, toggleSearch]);
 
-  const feedData = feedQuery.data ?? [];
+  const unreadCount = unreadCountQuery.data?.count ?? 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -233,6 +376,19 @@ export default function FeedScreen() {
             <Text style={styles.headerStatValue}>{followCountsQuery.data?.following ?? 0}</Text>
             <Text style={styles.headerStatLabel}>Following</Text>
           </View>
+          <TouchableOpacity
+            style={styles.bellButton}
+            onPress={() => router.push('/notifications' as any)}
+            activeOpacity={0.7}
+            testID="notifications-button"
+          >
+            <Bell size={20} color={colors.text} />
+            {unreadCount > 0 && (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.searchToggle, isSearching && styles.searchToggleActive]}
             onPress={toggleSearch}
@@ -283,23 +439,23 @@ export default function FeedScreen() {
         </View>
       )}
 
-      {feedQuery.isLoading ? (
+      {(feedQuery.isLoading && postsQuery.isLoading) ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.accent} />
         </View>
       ) : (
         <FlatList
-          data={feedData}
-          renderItem={renderFeedItem}
-          keyExtractor={(item) => item.id}
+          data={combinedFeed}
+          renderItem={renderCombinedItem}
+          keyExtractor={(item) => `${item.kind}_${item.data.id}`}
           contentContainerStyle={[
             styles.feedList,
-            feedData.length === 0 && styles.feedListEmpty,
+            combinedFeed.length === 0 && styles.feedListEmpty,
           ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
-              refreshing={feedQuery.isRefetching}
+              refreshing={feedQuery.isRefetching || postsQuery.isRefetching}
               onRefresh={handleRefresh}
               tintColor={colors.accent}
             />
@@ -307,6 +463,15 @@ export default function FeedScreen() {
           ListEmptyComponent={emptyFeed}
         />
       )}
+
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => router.push('/create-post' as any)}
+        activeOpacity={0.8}
+        testID="create-post-fab"
+      >
+        <Plus size={26} color="#FFFFFF" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -347,6 +512,34 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 9,
     fontFamily: 'Orbitron_400Regular',
     color: colors.textLight,
+  },
+  bellButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.cardLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    position: 'relative',
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  bellBadgeText: {
+    fontSize: 10,
+    fontFamily: 'Orbitron_700Bold',
+    color: '#FFFFFF',
   },
   searchToggle: {
     width: 36,
@@ -446,7 +639,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   feedList: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 20,
+    paddingBottom: 90,
   },
   feedListEmpty: {
     flex: 1,
@@ -476,6 +669,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: colors.accent + '40',
+    overflow: 'hidden',
   },
   feedAvatarImage: {
     width: 40,
@@ -564,6 +758,56 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     height: 18,
     backgroundColor: colors.border,
   },
+  postTextContainer: {
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+  },
+  postText: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.text,
+    lineHeight: 22,
+  },
+  postImage: {
+    width: '100%',
+    height: 280,
+  },
+  postFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  revButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: colors.background,
+  },
+  revButtonActive: {
+    backgroundColor: colors.accent + '15',
+  },
+  revCount: {
+    fontSize: 14,
+    fontFamily: 'Orbitron_600SemiBold',
+    color: colors.textLight,
+  },
+  revCountActive: {
+    color: colors.accent,
+  },
+  revLabel: {
+    fontSize: 12,
+    fontFamily: 'Orbitron_400Regular',
+    color: colors.textLight,
+  },
+  revLabelActive: {
+    color: colors.accent,
+  },
   emptyContainer: {
     alignItems: 'center',
     paddingHorizontal: 40,
@@ -596,5 +840,21 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Orbitron_600SemiBold',
     color: '#FFFFFF',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
   },
 });
