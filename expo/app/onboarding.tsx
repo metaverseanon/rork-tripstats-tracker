@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { Activity, Crown, Compass, UserCheck, ChevronRight, Flame, Target, Radio, Trophy, Star } from 'lucide-react-native';
+import { Activity, Crown, Compass, UserCheck, ChevronRight, Flame, Target, Radio, Trophy, Star, MessageSquare, Award } from 'lucide-react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ONBOARDING_KEY = 'onboarding_completed';
@@ -57,6 +57,24 @@ const pages: OnboardingPage[] = [
     highlight: 'Achievements',
     description: 'Complete driving challenges across speed, distance, streaks and more. Track your progress and show off your badges.',
     gradient: ['#0a0a00', '#000000'],
+  },
+  {
+    id: 'feed',
+    icon: <MessageSquare size={48} color="#FFFFFF" strokeWidth={1.5} />,
+    decorIcon: <Flame size={20} color="#CC0000" />,
+    title: 'Share On',
+    highlight: 'The Feed',
+    description: 'Post your best runs, share drive highlights, and see what other drivers are up to in real time.',
+    gradient: ['#0a0000', '#000000'],
+  },
+  {
+    id: 'challenges',
+    icon: <Award size={48} color="#FFFFFF" strokeWidth={1.5} />,
+    decorIcon: <Target size={20} color="#CC0000" />,
+    title: 'Complete',
+    highlight: 'Challenges',
+    description: 'Take on speed, distance, and streak challenges. Earn badges and show off your driving milestones.',
+    gradient: ['#0d0d00', '#000000'],
   },
   {
     id: 'ping',
