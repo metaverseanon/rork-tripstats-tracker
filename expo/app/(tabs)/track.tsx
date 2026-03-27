@@ -27,7 +27,7 @@ if (Platform.OS !== 'web') {
 type ViewMode = 'standard' | 'map';
 
 export default function TrackScreen() {
-  const { isTracking, currentTrip, currentSpeed, currentLocation, startTracking, stopTracking, cancelTracking, lastSavedTrip, clearLastSavedTrip } = useTrips();
+  const { isTracking, currentTrip, currentSpeed, currentLocation, startTracking, stopTracking, cancelTracking, lastSavedTrip, clearLastSavedTrip, speedCameraBlocked } = useTrips();
   const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, getAccelerationLabel, colors } = useSettings();
   const { user } = useUser();
   const [showShareCard, setShowShareCard] = useState(false);
@@ -443,14 +443,16 @@ export default function TrackScreen() {
             </View>
           </View>
 
-          <View style={styles.statsRow}>
-            <View style={dynamicStyles.statCard}>
-              <Text style={dynamicStyles.statValue}>
-                {currentTrip?.speedCamerasDetected ?? 0}
-              </Text>
-              <Text style={dynamicStyles.statLabel}>Speed Cameras</Text>
+          {!speedCameraBlocked && (
+            <View style={styles.statsRow}>
+              <View style={dynamicStyles.statCard}>
+                <Text style={dynamicStyles.statValue}>
+                  {currentTrip?.speedCamerasDetected ?? 0}
+                </Text>
+                <Text style={dynamicStyles.statLabel}>Speed Cameras</Text>
+              </View>
             </View>
-          </View>
+          )}
         </View>
       </ScrollView>
 

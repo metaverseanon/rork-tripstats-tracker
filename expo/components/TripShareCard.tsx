@@ -21,6 +21,7 @@ import * as Sharing from 'expo-sharing';
 import { TripStats } from '@/types/trip';
 import { useTrips } from '@/providers/TripProvider';
 import { useSettings } from '@/providers/SettingsProvider';
+import { isSpeedCameraRestricted } from '@/constants/speedCameras';
 
 type TimePeriod = 'today' | 'week' | 'month' | 'year' | 'all';
 
@@ -50,6 +51,7 @@ export default function TripShareCard({ trip, visible, onClose, timePeriod = 'to
   const { trips } = useTrips();
   const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, getAccelerationLabel, settings } = useSettings();
   const shareFields = settings.shareCardFields;
+  const tripInRestrictedCountry = isSpeedCameraRestricted(trip.location?.country);
   const sharePages = settings.shareCardPages;
   const isLight = settings.theme === 'light';
 
@@ -287,9 +289,9 @@ export default function TripShareCard({ trip, visible, onClose, timePeriod = 'to
     if (shareFields.corners) items.push({ value: `${trip.corners} time${trip.corners !== 1 ? 's' : ''}`, label: 'Corners taken' });
     if (shareFields.avgSpeed) items.push({ value: `${Math.round(convertSpeed(trip.avgSpeed))} ${speedLabel}`, label: 'Avg speed' });
     if (shareFields.acceleration) items.push({ value: trip.time0to100 ? `${trip.time0to100.toFixed(1)}s` : '--', label: getAccelerationLabel('0-100') });
-    if (shareFields.speedCameras && (trip.speedCamerasDetected ?? 0) > 0) items.push({ value: `${trip.speedCamerasDetected}`, label: 'Speed cameras' });
+    if (shareFields.speedCameras && !tripInRestrictedCountry && (trip.speedCamerasDetected ?? 0) > 0) items.push({ value: `${trip.speedCamerasDetected}`, label: 'Speed cameras' });
     return items;
-  }, [shareFields, distanceValue, distanceLabel, trip, speedLabel, convertSpeed, getAccelerationLabel]);
+  }, [shareFields, distanceValue, distanceLabel, trip, speedLabel, convertSpeed, getAccelerationLabel, tripInRestrictedCountry]);
 
   const routeStatsItems = useMemo(() => {
     const items: { value: string; label: string }[] = [];
@@ -297,9 +299,9 @@ export default function TripShareCard({ trip, visible, onClose, timePeriod = 'to
     if (shareFields.duration) items.push({ value: formatDuration(trip.duration), label: 'Time' });
     if (shareFields.avgSpeed) items.push({ value: `${Math.round(convertSpeed(trip.avgSpeed))} ${speedLabel}`, label: 'Avg Speed' });
     if (shareFields.corners) items.push({ value: `${trip.corners}`, label: 'Corners' });
-    if (shareFields.speedCameras && (trip.speedCamerasDetected ?? 0) > 0) items.push({ value: `${trip.speedCamerasDetected}`, label: 'Cameras' });
+    if (shareFields.speedCameras && !tripInRestrictedCountry && (trip.speedCamerasDetected ?? 0) > 0) items.push({ value: `${trip.speedCamerasDetected}`, label: 'Cameras' });
     return items;
-  }, [shareFields, distanceValue, distanceLabel, trip, speedLabel, convertSpeed]);
+  }, [shareFields, distanceValue, distanceLabel, trip, speedLabel, convertSpeed, tripInRestrictedCountry]);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>

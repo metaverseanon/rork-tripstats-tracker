@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Alert, AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TripStats, Location as LocationType, TripLocation } from '@/types/trip';
-import { getNearbyCameras } from '@/constants/speedCameras';
+import { getNearbyCameras, isSpeedCameraRestricted } from '@/constants/speedCameras';
 import { trpcClient } from '@/lib/trpc';
 
 const TRIPS_KEY = 'trips';
@@ -137,6 +137,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
   const time0to300 = useRef<number | null>(null);
   const detectedCameraIds = useRef<Set<string>>(new Set());
   const speedCamerasCount = useRef<number>(0);
+  const currentCountry = useRef<string | null>(null);
+  const [speedCameraBlocked, setSpeedCameraBlocked] = useState(false);
   const currentSpeedRef = useRef<number>(0);
   const lastLocationUpdateTime = useRef<number>(0);
   const staleSpeedInterval = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -470,12 +472,14 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     let distance = tripData.distance;
     let corners = tripData.corners;
 
-    const nearbyCameras = getNearbyCameras(newLocation.latitude, newLocation.longitude);
-    for (const camera of nearbyCameras) {
-      if (!detectedCameraIds.current.has(camera.id)) {
-        detectedCameraIds.current.add(camera.id);
-        speedCamerasCount.current++;
-        console.log('[SPEED_CAMERA] Detected camera:', camera.id, camera.description);
+    if (!isSpeedCameraRestricted(currentCountry.current)) {
+      const nearbyCameras = getNearbyCameras(newLocation.latitude, newLocation.longitude);
+      for (const camera of nearbyCameras) {
+        if (!detectedCameraIds.current.has(camera.id)) {
+          detectedCameraIds.current.add(camera.id);
+          speedCamerasCount.current++;
+          console.log('[SPEED_CAMERA] Detected camera:', camera.id, camera.description);
+        }
       }
     }
 
@@ -555,12 +559,14 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     let distance = tripData.distance;
     let corners = tripData.corners;
 
-    const nearbyCameras = getNearbyCameras(newLocation.latitude, newLocation.longitude);
-    for (const camera of nearbyCameras) {
-      if (!detectedCameraIds.current.has(camera.id)) {
-        detectedCameraIds.current.add(camera.id);
-        speedCamerasCount.current++;
-        console.log('[SPEED_CAMERA] Detected camera:', camera.id, camera.description);
+    if (!isSpeedCameraRestricted(currentCountry.current)) {
+      const nearbyCameras = getNearbyCameras(newLocation.latitude, newLocation.longitude);
+      for (const camera of nearbyCameras) {
+        if (!detectedCameraIds.current.has(camera.id)) {
+          detectedCameraIds.current.add(camera.id);
+          speedCamerasCount.current++;
+          console.log('[SPEED_CAMERA] Detected camera:', camera.id, camera.description);
+        }
       }
     }
 
@@ -1074,6 +1080,26 @@ export const [TripProvider, useTrips] = createContextHook(() => {
       time0to300.current = null;
       detectedCameraIds.current = new Set();
       speedCamerasCount.current = 0;
+      currentCountry.current = null;
+      setSpeedCameraBlocked(false);
+
+      if (Platform.OS !== 'web') {
+        try {
+          const loc = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.High });
+          const geoResults = await ExpoLocation.reverseGeocodeAsync({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          });
+          if (geoResults.length > 0 && geoResults[0].country) {
+            currentCountry.current = geoResults[0].country;
+            const blocked = isSpeedCameraRestricted(geoResults[0].country);
+            setSpeedCameraBlocked(blocked);
+            console.log('[GEOFENCE] Country:', geoResults[0].country, 'Speed cameras blocked:', blocked);
+          }
+        } catch (e) {
+          console.warn('[GEOFENCE] Failed to detect country at start:', e);
+        }
+      }
 
       await startLocationUpdates(newTrip.startTime);
     } catch (error) {
@@ -1264,6 +1290,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     time0to300.current = null;
     detectedCameraIds.current = new Set();
     speedCamerasCount.current = 0;
+    currentCountry.current = null;
+    setSpeedCameraBlocked(false);
     lastLocationUpdateTime.current = 0;
     pendingLocationsRef.current = [];
   }, [currentTrip, trips]);
@@ -1326,6 +1354,8 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     time0to300.current = null;
     detectedCameraIds.current = new Set();
     speedCamerasCount.current = 0;
+    currentCountry.current = null;
+    setSpeedCameraBlocked(false);
     lastLocationUpdateTime.current = 0;
     pendingLocationsRef.current = [];
   }, []);
@@ -1396,5 +1426,6 @@ export const [TripProvider, useTrips] = createContextHook(() => {
     getUniqueCarModels,
     clearLastSavedTrip,
     syncUnsyncedTrips,
+    speedCameraBlocked,
   };
 });

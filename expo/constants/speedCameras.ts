@@ -9,6 +9,18 @@ export interface SpeedCamera {
 
 export const SPEED_CAMERA_DETECTION_RADIUS_KM = 0.08;
 
+export const SPEED_CAMERA_RESTRICTED_COUNTRIES = [
+  'Germany',
+  'Switzerland',
+];
+
+export const isSpeedCameraRestricted = (country: string | undefined | null): boolean => {
+  if (!country) return false;
+  return SPEED_CAMERA_RESTRICTED_COUNTRIES.some(
+    (restricted) => restricted.toLowerCase() === country.toLowerCase()
+  );
+};
+
 export const SPEED_CAMERAS: SpeedCamera[] = [
   { id: 'hr-zg-slavonska-1', latitude: 45.7988, longitude: 15.9820, speedLimit: 60, description: 'Zagreb - Slavonska avenija' },
   { id: 'hr-zg-slavonska-2', latitude: 45.7975, longitude: 16.0015, speedLimit: 60, description: 'Zagreb - Slavonska avenija east' },
