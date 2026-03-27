@@ -1,70 +1,66 @@
-export type ThemeType = 'light' | 'dark';
+export type ThemeType = 'dark' | 'light';
 
 export interface ThemeColors {
   background: string;
-  cardBackground: string;
+  card: string;
   cardLight: string;
   text: string;
   textLight: string;
-  textInverted: string;
-  primary: string;
+  textMuted: string;
+  border: string;
   accent: string;
   success: string;
-  warning: string;
   danger: string;
-  border: string;
-  tabBarBackground: string;
-  tabBarInactive: string;
-  tabBarActive: string;
-  logo: string;
+  warning: string;
+  tint: string;
+  tabIconDefault: string;
+  tabIconSelected: string;
 }
 
-export const LOGOS = {
-  light: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/ff02ss0junnzhsmxc7y5t',
-  dark: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/88i29a3ot5yzdi1xhkc39',
-  splash: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/qemybdck5v2ljrs9z5m28',
-};
-
-export const lightTheme: ThemeColors = {
-  background: '#F5F5F7',
-  cardBackground: '#1C1C1E',
-  cardLight: '#FFFFFF',
-  text: '#1C1C1E',
-  textLight: '#8E8E93',
-  textInverted: '#FFFFFF',
-  primary: '#1C1C1E',
-  accent: '#CC0000',
-  success: '#34C759',
-  warning: '#FF9500',
-  danger: '#FF3B30',
-  border: '#E5E5EA',
-  tabBarBackground: '#FFFFFF',
-  tabBarInactive: '#8E8E93',
-  tabBarActive: '#1C1C1E',
-  logo: LOGOS.light,
-};
-
-export const darkTheme: ThemeColors = {
+const darkColors: ThemeColors = {
   background: '#000000',
-  cardBackground: '#1C1C1E',
-  cardLight: '#2C2C2E',
+  card: '#1A1A1A',
+  cardLight: '#1A1A1A',
   text: '#FFFFFF',
+  textLight: '#999999',
+  textMuted: '#666666',
+  border: '#2A2A2A',
+  accent: '#00C853',
+  success: '#00C853',
+  danger: '#CC0000',
+  warning: '#FF9500',
+  tint: '#00C853',
+  tabIconDefault: '#666666',
+  tabIconSelected: '#00C853',
+};
+
+const lightColors: ThemeColors = {
+  background: '#F2F4F6',
+  card: '#FFFFFF',
+  cardLight: '#F0F2F5',
+  text: '#1A1A1A',
   textLight: '#8E8E93',
-  textInverted: '#000000',
-  primary: '#FFFFFF',
-  accent: '#CC0000',
-  success: '#30D158',
-  warning: '#FF9F0A',
-  danger: '#FF453A',
-  border: '#38383A',
-  tabBarBackground: '#1C1C1E',
-  tabBarInactive: '#8E8E93',
-  tabBarActive: '#FFFFFF',
-  logo: LOGOS.dark,
+  textMuted: '#AEAEB2',
+  border: '#E5E5EA',
+  accent: '#00C853',
+  success: '#00C853',
+  danger: '#CC0000',
+  warning: '#FF9500',
+  tint: '#00C853',
+  tabIconDefault: '#AEAEB2',
+  tabIconSelected: '#00C853',
 };
 
 export const getThemeColors = (theme: ThemeType): ThemeColors => {
-  return theme === 'dark' ? darkTheme : lightTheme;
+  return theme === 'dark' ? darkColors : lightColors;
 };
 
-export default lightTheme;
+export default {
+  light: {
+    text: lightColors.text,
+    background: lightColors.background,
+    tint: lightColors.tint,
+    tabIconDefault: lightColors.tabIconDefault,
+    tabIconSelected: lightColors.tabIconSelected,
+  },
+};
