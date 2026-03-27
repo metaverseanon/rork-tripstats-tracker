@@ -312,6 +312,7 @@ function RootLayoutNav() {
       <Stack.Screen name="create-post" options={{ presentation: "modal" }} />
       <Stack.Screen name="notifications" options={{ presentation: "card" }} />
       <Stack.Screen name="my-posts" options={{ presentation: "card" }} />
+      <Stack.Screen name="whats-new" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="challenge-complete" options={{ presentation: "modal", headerShown: false }} />
     </Stack>
   );
