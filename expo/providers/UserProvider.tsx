@@ -131,6 +131,32 @@ export const [UserProvider, useUser] = createContextHook(() => {
         const userData = JSON.parse(stored);
         userRef.current = userData;
         setUser(userData);
+
+        if (userData.id) {
+          try {
+            const backendProfile = await trpcClient.user.getPublicProfile.query({ userId: userData.id });
+            if (backendProfile) {
+              const merged = { ...userData };
+              if (backendProfile.profilePicture && !userData.profilePicture) {
+                merged.profilePicture = backendProfile.profilePicture;
+              }
+              if (backendProfile.carPicture && !userData.carPicture) {
+                merged.carPicture = backendProfile.carPicture;
+              }
+              if (backendProfile.bio && !userData.bio) {
+                merged.bio = backendProfile.bio;
+              }
+              if (JSON.stringify(merged) !== JSON.stringify(userData)) {
+                console.log('[USER] Synced missing fields from backend');
+                userRef.current = merged;
+                setUser(merged);
+                await AsyncStorage.setItem(USER_KEY, JSON.stringify(merged));
+              }
+            }
+          } catch (syncError) {
+            console.log('[USER] Backend sync skipped:', syncError);
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to load user:', error);
