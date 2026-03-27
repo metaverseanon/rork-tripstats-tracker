@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Gauge, Trophy, Clock, Settings, Newspaper } from "lucide-react-native";
+import { Gauge, Trophy, Clock, Settings, Newspaper, BarChart3 } from "lucide-react-native";
 import React from "react";
 import { useSettings } from "@/providers/SettingsProvider";
 
@@ -60,7 +60,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="recap"
         options={{
-          href: null,
+          title: "Recap",
+          tabBarIcon: ({ color, size }) => <BarChart3 size={size} color={color} />,
         }}
       />
     </Tabs>

@@ -763,7 +763,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   shareButton: {
-    backgroundColor: '#00C853',
+    backgroundColor: '#E53935',
   },
   actionButtonText: {
     fontFamily: 'Orbitron_600SemiBold',
