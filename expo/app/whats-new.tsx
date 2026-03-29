@@ -14,7 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { MessageSquare, Award, Target, Flame, Sparkles, ChevronRight, X } from 'lucide-react-native';
 
 const WHATS_NEW_VERSION_KEY = 'whats_new_seen_version';
-export const CURRENT_APP_VERSION = '1.5.0';
+export const CURRENT_APP_VERSION = '2.1.0';
 
 interface Feature {
   id: string;
