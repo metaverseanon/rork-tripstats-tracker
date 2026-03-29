@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ONBOARDING_KEY = 'onboarding_completed';
 const WHATS_NEW_VERSION_KEY = 'whats_new_seen_version';
-const CURRENT_APP_VERSION = '2.1.0';
+const CURRENT_APP_VERSION = '1.5.0';
 
 export default function WelcomeScreen() {
   const router = useRouter();
