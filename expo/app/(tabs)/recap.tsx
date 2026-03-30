@@ -66,7 +66,7 @@ export default function RecapScreen() {
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const weekDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    weekDate.setDate(weekDate.getDate() - weekDate.getDay());
+    weekDate.setDate(weekDate.getDate() - ((weekDate.getDay() + 6) % 7));
     const startOfWeek = weekDate.getTime();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
     const startOfYear = new Date(now.getFullYear(), 0, 1).getTime();

@@ -754,7 +754,7 @@ export default function LeaderboardScreen() {
       case 'today':
         return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
       case 'week':
-        const dayOfWeek = now.getDay();
+        const dayOfWeek = (now.getDay() + 6) % 7;
         const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
         return startOfWeek.getTime();
       case 'month':

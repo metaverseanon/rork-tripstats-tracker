@@ -398,7 +398,7 @@ async function getTotalDistanceLeaderboard(input: {
           startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
           break;
         case "week": {
-          const dayOfWeek = now.getDay();
+          const dayOfWeek = (now.getDay() + 6) % 7;
           startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek).getTime();
           break;
         }
@@ -618,7 +618,7 @@ export const tripsRouter = createTRPCRouter({
               startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
               break;
             case "week": {
-              const dayOfWeek = now.getDay();
+              const dayOfWeek = (now.getDay() + 6) % 7;
               startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek).getTime();
               break;
             }
