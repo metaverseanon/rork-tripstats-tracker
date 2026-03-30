@@ -375,7 +375,7 @@ async function getTotalDistanceLeaderboard(input: {
 }): Promise<SyncedTrip[]> {
   try {
     let url = getSupabaseRestUrl("trips");
-    const params: string[] = ["select=id,user_id,user_name,user_profile_picture,start_time,end_time,distance,duration,avg_speed,top_speed,corners,car_model,acceleration,max_g_force,country,city,time_0_to_100,time_0_to_200,time_0_to_300", "distance=gt.0"];
+    const params: string[] = ["select=id,user_id,user_name,user_profile_picture,start_time,end_time,distance,duration,avg_speed,top_speed,corners,car_model,acceleration,max_g_force,country,city,time_0_to_100,time_0_to_200,time_0_to_300,route_points", "distance=gt.0"];
 
     if (input.country) {
       params.push(`country=eq.${encodeURIComponent(input.country)}`);
@@ -594,7 +594,7 @@ export const tripsRouter = createTRPCRouter({
         let url = getSupabaseRestUrl("trips");
         const params: string[] = [];
         
-        params.push("select=id,user_id,user_name,user_profile_picture,start_time,end_time,distance,duration,avg_speed,top_speed,corners,car_model,acceleration,max_g_force,country,city,time_0_to_100,time_0_to_200,time_0_to_300");
+        params.push("select=id,user_id,user_name,user_profile_picture,start_time,end_time,distance,duration,avg_speed,top_speed,corners,car_model,acceleration,max_g_force,country,city,time_0_to_100,time_0_to_200,time_0_to_300,route_points");
 
         if (input.country) {
           params.push(`country=eq.${encodeURIComponent(input.country)}`);
