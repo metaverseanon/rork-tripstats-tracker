@@ -33,6 +33,8 @@ interface FeedItem {
   duration: number;
   country?: string;
   city?: string;
+  revCount: number;
+  isRevved: boolean;
   createdAt: number;
 }
 
@@ -132,6 +134,18 @@ export default function FeedScreen() {
     },
   });
 
+  const revActivityMutation = trpc.social.revActivity.useMutation({
+    onSuccess: () => {
+      void utils.social.getFeed.invalidate();
+    },
+  });
+
+  const unrevActivityMutation = trpc.social.unrevActivity.useMutation({
+    onSuccess: () => {
+      void utils.social.getFeed.invalidate();
+    },
+  });
+
   const handleRefresh = useCallback(() => {
     void feedQuery.refetch();
     void postsQuery.refetch();
@@ -153,6 +167,16 @@ export default function FeedScreen() {
       revPostMutation.mutate({ postId, userId: user.id });
     }
   }, [user?.id, revPostMutation, unrevPostMutation]);
+
+  const handleActivityRevPress = useCallback((activityId: string, isRevved: boolean) => {
+    if (!user?.id) return;
+    if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (isRevved) {
+      unrevActivityMutation.mutate({ activityId, userId: user.id });
+    } else {
+      revActivityMutation.mutate({ activityId, userId: user.id });
+    }
+  }, [user?.id, revActivityMutation, unrevActivityMutation]);
 
   const toggleSearch = useCallback(() => {
     setIsSearching(prev => !prev);
@@ -240,9 +264,28 @@ export default function FeedScreen() {
             <Text style={styles.feedStatValue}>{formatDuration(item.duration)}</Text>
           </View>
         </View>
+
+        {item.userId !== user?.id && (
+          <View style={styles.postFooter}>
+            <TouchableOpacity
+              style={[styles.revButton, item.isRevved && styles.revButtonActive]}
+              onPress={() => handleActivityRevPress(item.id, item.isRevved)}
+              activeOpacity={0.7}
+              testID={`activity-rev-button-${item.id}`}
+            >
+              <Gauge size={16} color={item.isRevved ? colors.accent : colors.textLight} />
+              <Text style={[styles.revCount, item.isRevved && styles.revCountActive]}>
+                {item.revCount}
+              </Text>
+              <Text style={[styles.revLabel, item.isRevved && styles.revLabelActive]}>
+                {item.revCount === 1 ? 'rev' : 'revs'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </TouchableOpacity>
     );
-  }, [styles, colors, convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, handleUserPress]);
+  }, [styles, colors, convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, handleUserPress, handleActivityRevPress, user?.id]);
 
   const renderPostItem = useCallback((item: PostItem) => {
     const initial = item.userName?.[0]?.toUpperCase() || '?';

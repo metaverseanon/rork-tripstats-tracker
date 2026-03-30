@@ -80,6 +80,13 @@ interface ActivityFeedRow {
   created_at: number;
 }
 
+interface ActivityRevRow {
+  id: string;
+  activity_id: string;
+  user_id: string;
+  created_at: number;
+}
+
 export const socialRouter = createTRPCRouter({
   follow: publicProcedure
     .input(z.object({
@@ -393,6 +400,25 @@ export const socialRouter = createTRPCRouter({
           });
         }
 
+        const activityIds = feedRows.map(r => r.id);
+        let activityRevCounts: Record<string, number> = {};
+        let userActivityRevs: Set<string> = new Set();
+
+        if (activityIds.length > 0) {
+          const actIdFilter = activityIds.map(id => `"${id}"`).join(",");
+          const revsUrl = `${getSupabaseRestUrl("activity_revs")}?activity_id=in.(${actIdFilter})&select=activity_id,user_id`;
+          const revsResp = await fetch(revsUrl, { method: "GET", headers: getSupabaseHeaders() });
+          if (revsResp.ok) {
+            const revRows: ActivityRevRow[] = await revsResp.json();
+            for (const rev of revRows) {
+              activityRevCounts[rev.activity_id] = (activityRevCounts[rev.activity_id] || 0) + 1;
+              if (rev.user_id === input.userId) {
+                userActivityRevs.add(rev.activity_id);
+              }
+            }
+          }
+        }
+
         return feedRows.map(row => ({
           id: row.id,
           userId: row.user_id,
@@ -406,6 +432,8 @@ export const socialRouter = createTRPCRouter({
           duration: row.duration ?? 0,
           country: row.country,
           city: row.city,
+          revCount: activityRevCounts[row.id] || 0,
+          isRevved: userActivityRevs.has(row.id),
           createdAt: row.created_at,
         }));
       } catch (error) {
@@ -574,6 +602,137 @@ export const socialRouter = createTRPCRouter({
       } catch (error) {
         console.error("[SOCIAL] Challenges leaderboard error:", error);
         return [];
+      }
+    }),
+
+  revActivity: publicProcedure
+    .input(z.object({
+      activityId: z.string(),
+      userId: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      console.log("[SOCIAL] Rev activity:", input.activityId, "by user:", input.userId);
+      if (!isDbConfigured()) return { success: false, error: "Database not configured" };
+
+      try {
+        const checkUrl = `${getSupabaseRestUrl("activity_revs")}?activity_id=eq.${encodeURIComponent(input.activityId)}&user_id=eq.${encodeURIComponent(input.userId)}&limit=1`;
+        const checkResp = await fetch(checkUrl, { method: "GET", headers: getSupabaseHeaders() });
+        if (checkResp.ok) {
+          const existing = await checkResp.json();
+          if (existing.length > 0) {
+            return { success: true, alreadyRevved: true };
+          }
+        }
+
+        const id = `actrev_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const row = {
+          id,
+          activity_id: input.activityId,
+          user_id: input.userId,
+          created_at: Date.now(),
+        };
+
+        const resp = await fetch(getSupabaseRestUrl("activity_revs"), {
+          method: "POST",
+          headers: getSupabaseHeaders(),
+          body: JSON.stringify(row),
+        });
+
+        if (!resp.ok) {
+          const err = await resp.text();
+          console.error("[SOCIAL] Activity rev insert failed:", err);
+          return { success: false, error: "Failed to rev activity" };
+        }
+
+        const activityUrl = `${getSupabaseRestUrl("activity_feed")}?id=eq.${encodeURIComponent(input.activityId)}&select=user_id&limit=1`;
+        const actResp = await fetch(activityUrl, { method: "GET", headers: getSupabaseHeaders() });
+        if (actResp.ok) {
+          const actData = await actResp.json();
+          const actOwnerId = actData[0]?.user_id;
+          if (actOwnerId && actOwnerId !== input.userId) {
+            const userUrl = `${getSupabaseRestUrl("users")}?id=eq.${encodeURIComponent(input.userId)}&select=display_name&limit=1`;
+            const userResp = await fetch(userUrl, { method: "GET", headers: getSupabaseHeaders() });
+            let fromName = "Someone";
+            if (userResp.ok) {
+              const userData = await userResp.json();
+              fromName = userData[0]?.display_name || "Someone";
+            }
+
+            const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const notifRow = {
+              id: notifId,
+              user_id: actOwnerId,
+              type: "activity_rev",
+              from_user_id: input.userId,
+              post_id: null,
+              message: `${fromName} revved your drive log`,
+              read: false,
+              created_at: Date.now(),
+            };
+
+            fetch(getSupabaseRestUrl("notifications"), {
+              method: "POST",
+              headers: getSupabaseHeaders(),
+              body: JSON.stringify(notifRow),
+            }).catch(err => console.error("[SOCIAL] Activity rev notification error:", err));
+
+            const ownerUrl = `${getSupabaseRestUrl("users")}?id=eq.${encodeURIComponent(actOwnerId)}&select=push_token&limit=1`;
+            fetch(ownerUrl, { method: "GET", headers: getSupabaseHeaders() })
+              .then(async r => {
+                if (!r.ok) return;
+                const data = await r.json();
+                const pushToken = data[0]?.push_token;
+                if (!pushToken) return;
+                await fetch(EXPO_PUSH_URL, {
+                  method: "POST",
+                  headers: { Accept: "application/json", "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    to: pushToken,
+                    title: "\uD83C\uDFC1 New Rev!",
+                    body: `${fromName} revved your drive log!`,
+                    sound: "default",
+                    data: { type: "activity_rev", fromUserId: input.userId },
+                    channelId: "default",
+                    priority: "high",
+                  }),
+                });
+              })
+              .catch(err => console.error("[SOCIAL] Activity rev push error:", err));
+          }
+        }
+
+        console.log("[SOCIAL] Activity rev created:", id);
+        return { success: true };
+      } catch (error) {
+        console.error("[SOCIAL] Activity rev error:", error);
+        return { success: false, error: "Network error" };
+      }
+    }),
+
+  unrevActivity: publicProcedure
+    .input(z.object({
+      activityId: z.string(),
+      userId: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      console.log("[SOCIAL] Unrev activity:", input.activityId, "by user:", input.userId);
+      if (!isDbConfigured()) return { success: false, error: "Database not configured" };
+
+      try {
+        const url = `${getSupabaseRestUrl("activity_revs")}?activity_id=eq.${encodeURIComponent(input.activityId)}&user_id=eq.${encodeURIComponent(input.userId)}`;
+        const resp = await fetch(url, { method: "DELETE", headers: getSupabaseHeaders() });
+
+        if (!resp.ok) {
+          const err = await resp.text();
+          console.error("[SOCIAL] Activity unrev failed:", err);
+          return { success: false, error: "Failed to unrev activity" };
+        }
+
+        console.log("[SOCIAL] Activity unrevved");
+        return { success: true };
+      } catch (error) {
+        console.error("[SOCIAL] Activity unrev error:", error);
+        return { success: false, error: "Network error" };
       }
     }),
 
