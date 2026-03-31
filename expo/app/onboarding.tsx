@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { Activity, Crown, Compass, UserCheck, ChevronRight, Flame, Target, Radio, Trophy, Star, MessageSquare, Award } from 'lucide-react-native';
+import { Activity, Crown, Compass, UserCheck, ChevronRight, Flame, Target, Radio, Trophy, Star, MessageSquare, Award, Eye } from 'lucide-react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ONBOARDING_KEY = 'onboarding_completed';
@@ -174,7 +174,7 @@ export default function OnboardingScreen() {
     }
   };
 
-  const completeOnboarding = async () => {
+  const completeOnboarding = async (destination: string = '/(tabs)/track') => {
     try {
       await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
     } catch (e) {
@@ -186,8 +186,16 @@ export default function OnboardingScreen() {
       duration: 300,
       useNativeDriver: true,
     }).start(() => {
-      router.replace('/(tabs)/track' as any);
+      router.replace(destination as any);
     });
+  };
+
+  const browseFirst = async () => {
+    if (Platform.OS !== 'web') {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    console.log('[ONBOARDING] User chose to browse first');
+    void completeOnboarding('/(tabs)/leaderboard');
   };
 
   const skipOnboarding = async () => {
@@ -308,11 +316,23 @@ export default function OnboardingScreen() {
             testID="onboarding-next"
           >
             <Text style={styles.nextButtonText}>
-              {isLastPage ? "Let's Go" : 'Continue'}
+              {isLastPage ? "Create Account" : 'Continue'}
             </Text>
             {!isLastPage && <ChevronRight size={20} color="#FFFFFF" />}
           </TouchableOpacity>
         </Animated.View>
+
+        {isLastPage && (
+          <TouchableOpacity
+            onPress={browseFirst}
+            style={styles.browseButton}
+            activeOpacity={0.7}
+            testID="onboarding-browse"
+          >
+            <Eye size={16} color="#8E8E93" />
+            <Text style={styles.browseText}>Browse first without account</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </Animated.View>
   );
@@ -460,5 +480,18 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700' as const,
     letterSpacing: 0.5,
+  },
+  browseButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 8,
+    paddingVertical: 12,
+  },
+  browseText: {
+    color: '#8E8E93',
+    fontSize: 14,
+    fontWeight: '500' as const,
+    letterSpacing: 0.3,
   },
 });

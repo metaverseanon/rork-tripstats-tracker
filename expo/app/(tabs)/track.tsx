@@ -8,6 +8,7 @@ import { useTrips } from '@/providers/TripProvider';
 import { useSettings } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
 import TripShareCard from '@/components/TripShareCard';
+import AuthGate from '@/components/AuthGate';
 
 let MapView: React.ComponentType<any> | null = null;
 let Polyline: React.ComponentType<any> | null = null;
@@ -56,6 +57,7 @@ export default function TrackScreen() {
   const toggleAnim = useRef(new Animated.Value(0)).current;
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const locationFetched = useRef(false);
+  const [showAuthGate, setShowAuthGate] = useState(false);
 
   useEffect(() => {
     if (lastSavedTrip && !isTracking) {
@@ -331,7 +333,13 @@ export default function TrackScreen() {
         {!isTracking ? (
           <TouchableOpacity
             style={[sStyles.actionButton, sStyles.startButton]}
-            onPress={startTracking}
+            onPress={() => {
+              if (!user) {
+                setShowAuthGate(true);
+                return;
+              }
+              void startTracking();
+            }}
             activeOpacity={0.8}
             testID="start-trip-button"
           >
@@ -416,7 +424,7 @@ export default function TrackScreen() {
 
         <View style={[mapStyles.mapButtonContainer, { backgroundColor: 'transparent' }]}>
           {!isTracking ? (
-            <TouchableOpacity style={[sStyles.actionButton, sStyles.startButton]} onPress={startTracking} activeOpacity={0.8}>
+            <TouchableOpacity style={[sStyles.actionButton, sStyles.startButton]} onPress={() => { if (!user) { setShowAuthGate(true); return; } void startTracking(); }} activeOpacity={0.8}>
               <Play size={24} color="#FFFFFF" fill="#FFFFFF" />
               <Text style={sStyles.buttonText}>START TRIP</Text>
             </TouchableOpacity>
@@ -464,6 +472,12 @@ export default function TrackScreen() {
       {lastSavedTrip && (
         <TripShareCard trip={lastSavedTrip} visible={showShareCard} onClose={handleCloseShareCard} />
       )}
+
+      <AuthGate
+        visible={showAuthGate}
+        onClose={() => setShowAuthGate(false)}
+        feature="track your drives and save stats"
+      />
     </SafeAreaView>
   );
 }

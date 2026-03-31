@@ -6,6 +6,7 @@ import { StyleSheet, Platform, View, Text, TouchableOpacity } from "react-native
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { TripProvider } from "@/providers/TripProvider";
+import { AnalyticsProvider, useAnalytics } from "@/providers/AnalyticsProvider";
 import { AchievementProvider } from "@/providers/AchievementProvider";
 import { SettingsProvider } from "@/providers/SettingsProvider";
 import { UserProvider, useUser } from "@/providers/UserProvider";
@@ -206,6 +207,28 @@ const queryClient = new QueryClient({
   },
 });
 
+function AnalyticsSync() {
+  const { user } = useUser();
+  const { identify, track } = useAnalytics();
+  const trackedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!trackedRef.current) {
+      trackedRef.current = true;
+      track('app_opened');
+    }
+  }, [track]);
+
+  useEffect(() => {
+    if (user?.id) {
+      identify(user.id);
+      track('user_signed_in', { userId: user.id });
+    }
+  }, [user?.id, identify, track]);
+
+  return null;
+}
+
 function PushTokenSync() {
   const { user } = useUser();
   const { pushToken, notificationsEnabled, syncPushTokenToBackend } = useNotifications();
@@ -369,7 +392,9 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <SettingsProvider>
             <UserProvider>
+              <AnalyticsProvider>
               <NotificationProvider>
+                <AnalyticsSync />
                 <PushTokenSync />
                 <LocationSync />
                 <AchievementProvider>
@@ -382,6 +407,7 @@ export default function RootLayout() {
                 </TripProvider>
                 </AchievementProvider>
               </NotificationProvider>
+              </AnalyticsProvider>
             </UserProvider>
           </SettingsProvider>
         </QueryClientProvider>

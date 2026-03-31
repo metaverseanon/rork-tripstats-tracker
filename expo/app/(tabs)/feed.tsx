@@ -19,6 +19,7 @@ import { useSettings } from '@/providers/SettingsProvider';
 import { useUser } from '@/providers/UserProvider';
 import { trpc } from '@/lib/trpc';
 import { ThemeColors } from '@/constants/colors';
+import AuthGate from '@/components/AuthGate';
 
 interface FeedItem {
   id: string;
@@ -93,6 +94,8 @@ export default function FeedScreen() {
   const { convertSpeed, convertDistance, getSpeedLabel, getDistanceLabel, colors } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [showAuthGate, setShowAuthGate] = useState(false);
+  const [authGateFeature, setAuthGateFeature] = useState('');
 
   const styles = useMemo(() => createStyles(colors), [colors]);
   const utils = trpc.useUtils();
@@ -158,8 +161,21 @@ export default function FeedScreen() {
     router.push({ pathname: '/user-profile', params: { userId } });
   }, [router]);
 
+  const requireAuth = useCallback((feature: string, action: () => void) => {
+    if (!user?.id) {
+      setAuthGateFeature(feature);
+      setShowAuthGate(true);
+      return;
+    }
+    action();
+  }, [user?.id]);
+
   const handleRevPress = useCallback((postId: string, isRevved: boolean) => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setAuthGateFeature('rev posts and interact with drivers');
+      setShowAuthGate(true);
+      return;
+    }
     if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (isRevved) {
       unrevPostMutation.mutate({ postId, userId: user.id });
@@ -169,7 +185,11 @@ export default function FeedScreen() {
   }, [user?.id, revPostMutation, unrevPostMutation]);
 
   const handleActivityRevPress = useCallback((activityId: string, isRevved: boolean) => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setAuthGateFeature('rev drives and interact with drivers');
+      setShowAuthGate(true);
+      return;
+    }
     if (Platform.OS !== 'web') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (isRevved) {
       unrevActivityMutation.mutate({ activityId, userId: user.id });
@@ -505,12 +525,18 @@ export default function FeedScreen() {
 
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => router.push('/create-post' as any)}
+        onPress={() => requireAuth('create posts and share with the community', () => router.push('/create-post' as any))}
         activeOpacity={0.8}
         testID="create-post-fab"
       >
         <Plus size={26} color="#FFFFFF" />
       </TouchableOpacity>
+
+      <AuthGate
+        visible={showAuthGate}
+        onClose={() => setShowAuthGate(false)}
+        feature={authGateFeature}
+      />
     </View>
   );
 }
